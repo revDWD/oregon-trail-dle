@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  const TRAIL_MILES = 2040;
+  const CONFIG = window.OTDLE_CONFIG;
+  const TRAIL_MILES = CONFIG.trailMiles;
   const MAX_ENTRY_MILES = 1000;
   const MAP_PROJECTION = {
     phi1: 29.5 * Math.PI / 180,
@@ -28,20 +29,9 @@
     { id: "bison", name: "bison", icon: "🦬" }
   ];
   let campaignState = null;
-  const LANDMARKS = [
-    { miles: 0, name: "Independence, Missouri", shortName: "Independence", state: "MO", coordinates: [-94.4155, 39.0911], description: "The historic starting point of the Oregon Trail, just west of the Missouri River." },
-    { miles: 300, name: "Fort Kearny", shortName: "Fort Kearny", state: "NE", coordinates: [-98.9962, 40.6642], description: "A major supply stop on the Platte River in Nebraska." },
-    { miles: 510, name: "Chimney Rock", shortName: "Chimney Rock", state: "NE", coordinates: [-103.3496, 41.7033], markerOffset: [12, -17], description: "A prominent natural landmark that guided travelers across the Nebraska plains." },
-    { miles: 560, name: "Scotts Bluff", shortName: "Scotts Bluff", state: "NE", coordinates: [-103.6672, 41.8358], markerOffset: [12, 17], description: "A striking bluff and landmark along the North Platte River." },
-    { miles: 640, name: "Fort Laramie", shortName: "Fort Laramie", state: "WY", coordinates: [-104.5472, 42.2097], markerOffset: [-12, -17], description: "An important trading post and resupply point in present-day Wyoming." },
-    { miles: 920, name: "Independence Rock", shortName: "Independence Rock", state: "WY", coordinates: [-107.1147, 42.4933], description: "A granite landmark on the Sweetwater River, traditionally reached by Independence Day." },
-    { miles: 1020, name: "South Pass", shortName: "South Pass", state: "WY", coordinates: [-108.8868, 42.3533], description: "The broad Rocky Mountain crossing that opened the route west." },
-    { miles: 1120, name: "Fort Bridger", shortName: "Fort Bridger", state: "WY", coordinates: [-110.3888, 41.3172], description: "A key supply stop in the Green River valley." },
-    { miles: 1300, name: "Fort Hall", shortName: "Fort Hall", state: "ID", coordinates: [-112.4383, 43.0324], description: "A Hudson's Bay Company post near the Snake River in present-day Idaho." },
-    { miles: 1830, name: "Blue Mountains", shortName: "Blue Mountains", state: "OR", coordinates: [-118, 45.3], description: "A challenging mountain crossing on the final approach to the Columbia River." },
-    { miles: 1950, name: "The Dalles", shortName: "The Dalles", state: "OR", coordinates: [-121.1787, 45.5946], markerOffset: [10, -12], description: "A Columbia River passage and key stopping point before the final leg." },
-    { miles: TRAIL_MILES, name: "Oregon City, Oregon", shortName: "Oregon City", state: "OR", coordinates: [-122.6068, 45.3573], markerOffset: [-2, 14], description: "The traditional destination of the Oregon Trail in the Willamette Valley." }
-  ];
+  // Copied because getRouteModel rewrites miles to match the drawn route.
+  const LANDMARKS = CONFIG.landmarks.map((landmark) => ({ ...landmark }));
+
 
   function localDateString(date) {
     const year = date.getFullYear();
@@ -68,8 +58,11 @@
   let storageWarning = false;
 
   function emptyStore() {
-    return { entries: [], hunts: [] };
+    return { entries: [], hunts: [], journal: [] };
   }
+
+  const JOURNAL_TYPES = ["landmark", "seasonStart", "seasonComplete", "achievement", "event"];
+  const MAX_JOURNAL = 1000;
 
   const HUNT_LOCATION_IDS = HUNT_LOCATIONS.map((item) => item.id);
   const HUNT_ANIMAL_IDS = HUNT_ANIMALS.map((item) => item.id);
@@ -113,7 +106,49 @@
     // Only the last hunt may still be waiting for a pick.
     const open = hunts.findIndex((hunt) => hunt.selected === null);
     if (open !== -1) hunts.length = open + 1;
-    return { entries, hunts };
+    const journal = [];
+    const journalKeys = new Set();
+    (Array.isArray(parsed.journal) ? parsed.journal : []).forEach((item) => {
+      if (!item || typeof item !== "object" || journal.length >= MAX_JOURNAL) return;
+      if (typeof item.key !== "string" || !item.key || item.key.length > 80 || journalKeys.has(item.key)) return;
+      if (!JOURNAL_TYPES.includes(item.type) || typeof item.title !== "string" || !item.title) return;
+      if (typeof item.date !== "string" || !parseDate(item.date)) return;
+      const season = Math.floor(Number(item.season));
+      journalKeys.add(item.key);
+      journal.push({
+        key: item.key,
+        type: item.type,
+        season: Number.isFinite(season) && season >= 1 ? season : 1,
+        date: item.date,
+        title: item.title.slice(0, 120),
+        text: typeof item.text === "string" ? item.text.slice(0, 300) : ""
+      });
+    });
+    return { entries, hunts, journal };
+  }
+
+  // Saves are stored as { version, timestamp, gameState }. Add an entry to SAVE_MIGRATIONS[n] to upgrade
+  // a version-n gameState to version n+1 whenever the store shape changes, then bump SAVE_VERSION.
+  const SAVE_VERSION = 1;
+  const SAVE_MIGRATIONS = {};
+
+  function migrateGameState(gameState, version) {
+    let state = gameState;
+    for (let v = version; v < SAVE_VERSION; v += 1) {
+      if (SAVE_MIGRATIONS[v]) state = SAVE_MIGRATIONS[v](state);
+    }
+    return state;
+  }
+
+  // Accepts the versioned envelope or the original unversioned { entries, hunts } save; returns a clean store or null.
+  function parseSave(raw) {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.gameState && typeof parsed.gameState === "object") {
+      const version = Number(parsed.version);
+      if (!Number.isInteger(version) || version < 1) return null;
+      return sanitizeStore(migrateGameState(parsed.gameState, version));
+    }
+    return sanitizeStore(parsed);
   }
 
   function loadStore() {
@@ -127,7 +162,7 @@
     }
     if (!raw) return emptyStore();
     try {
-      const clean = sanitizeStore(JSON.parse(raw));
+      const clean = parseSave(raw);
       if (clean) return clean;
     } catch {
       // fall through to the recovery copy below
@@ -138,16 +173,39 @@
     } catch {
       storageWarning = true;
     }
+    console.warn("Oregon Trail DLE: the saved journey could not be read; starting fresh. A copy was kept for recovery.");
     return emptyStore();
   }
 
+  // Every state change calls saveStore directly after the (single) mutation, so writes are already one small
+  // synchronous call per user action; no debounce is needed.
   // If the browser blocks storage, keep working in memory for this visit and warn the user.
   function saveStore(store) {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SAVE_VERSION, timestamp: new Date().toISOString(), gameState: store }));
       memoryStore = null;
     } catch {
       memoryStore = store;
+      storageWarning = true;
+      console.warn("Oregon Trail DLE: browser storage is unavailable; progress will only last for this visit.");
+    }
+  }
+
+  function hasSave() {
+    if (memoryStore) return memoryStore.entries.length > 0 || memoryStore.hunts.length > 0;
+    try {
+      return window.localStorage.getItem(STORAGE_KEY) !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  function clearSave() {
+    memoryStore = null;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(`${STORAGE_KEY}:unreadable`);
+    } catch {
       storageWarning = true;
     }
   }
@@ -158,10 +216,55 @@
     return values[0] % max;
   }
 
+  function round2(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function daysBetween(startDate, endDate) {
+    return Math.round((parseDate(endDate) - parseDate(startDate)) / 86400000) + 1;
+  }
+
+  // Seasons are derived from lifetime miles: season n covers lifetime miles (n-1)*TRAIL_MILES to n*TRAIL_MILES.
+  // Nothing is reset, so lifetime totals and past seasons always stay intact.
+  function computeSeasons(entries) {
+    const sorted = entries.slice().sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    const seasons = [];
+    const steps = [];
+    const ensure = (number) => {
+      while (seasons.length < number) seasons.push({ number: seasons.length + 1, startDate: null, completedDate: null, days: null });
+      return seasons[number - 1];
+    };
+    ensure(1);
+    let total = 0;
+    sorted.forEach((entry) => {
+      const before = total;
+      total = round2(total + entry.miles);
+      steps.push({ miles: total, date: entry.date });
+      for (let number = Math.floor(before / TRAIL_MILES) + 1; (number - 1) * TRAIL_MILES < total; number++) {
+        const season = ensure(number);
+        if (!season.startDate) season.startDate = entry.date;
+        if (total >= number * TRAIL_MILES && !season.completedDate) {
+          season.completedDate = entry.date;
+          season.days = daysBetween(season.startDate, entry.date);
+        }
+      }
+    });
+    ensure(Math.floor(total / TRAIL_MILES) + 1);
+    // The date on which lifetime miles first reached a threshold (null if not yet reached).
+    const dateAtMiles = (miles) => {
+      const step = steps.find((item) => item.miles >= miles);
+      return step ? step.date : null;
+    };
+    return { seasons, total, dateAtMiles };
+  }
+
   function buildState() {
     const store = loadStore();
     const entries = store.entries.map((entry) => ({ ...entry, miles: Number(entry.miles) }));
     const groupMiles = Math.round(sumMiles(entries) * 100) / 100;
+    const { seasons, dateAtMiles } = computeSeasons(entries);
+    const season = Math.floor(groupMiles / TRAIL_MILES) + 1;
+    const seasonMiles = round2(groupMiles - (season - 1) * TRAIL_MILES);
     const earned = Math.floor(groupMiles / 5);
     const last = store.hunts[store.hunts.length - 1];
     const active = last && last.selected === null ? { milestoneMiles: last.milestoneMiles } : null;
@@ -169,17 +272,31 @@
     const recent = finished[finished.length - 1];
     let streak = 0;
     for (let i = finished.length - 1; i >= 0 && finished[i].succeeded; i--) streak++;
+    const food = finished.reduce((total, hunt) => total + hunt.food, 0);
+    const won = finished.filter((hunt) => hunt.succeeded).length;
     return {
       participant: { miles: groupMiles },
       groupMiles,
+      season,
+      seasonMiles,
+      seasons,
+      dateAtMiles,
+      journal: store.journal.slice(),
+      metrics: {
+        lifetimeMiles: groupMiles,
+        seasonsCompleted: season - 1,
+        huntsWon: won,
+        foodGathered: food,
+        entriesLogged: entries.length
+      },
       entries,
       hunt: {
         earned,
         completed: finished.length,
-        won: finished.filter((hunt) => hunt.succeeded).length,
+        won,
         streak,
         remaining: Math.max(earned - store.hunts.length, 0),
-        food: finished.reduce((total, hunt) => total + hunt.food, 0),
+        food,
         groupMiles,
         active,
         recent: recent ? {
@@ -237,6 +354,65 @@
     saveStore(store);
   }
 
+  function fillTemplate(template, values) {
+    return template.replace(/\{(\w+)\}/g, (match, name) => (values[name] === undefined ? match : String(values[name])));
+  }
+
+  function makeRecord(key, type, season, date, values) {
+    const message = CONFIG.messages[type];
+    return { key, type, season, date, title: fillTemplate(message.title, values), text: fillTemplate(message.text, values) };
+  }
+
+  // Lists every journey-log record the current progress has earned, driven entirely by CONFIG.
+  // Keys are stable ids, so a record is only ever announced once even if entries are later deleted.
+  function evaluateJourney(state) {
+    getRouteModel();
+    const today = localDateString(new Date());
+    const records = [];
+    state.seasons.forEach((season) => {
+      const number = season.number;
+      const base = (number - 1) * TRAIL_MILES;
+      const finished = number < state.season;
+      if (number > 1) {
+        const previous = state.seasons[number - 2];
+        records.push(makeRecord(`season:${number}:start`, "seasonStart", number, previous.completedDate || today, { season: number }));
+      }
+      LANDMARKS.forEach((landmark) => {
+        if (landmark.miles <= 0 || landmark.miles >= TRAIL_MILES) return;
+        if (!finished && state.seasonMiles < landmark.miles) return;
+        records.push(makeRecord(`season:${number}:landmark:${landmark.id}`, "landmark", number, state.dateAtMiles(base + landmark.miles) || today, { ...landmark, season: number }));
+      });
+      if (finished) {
+        records.push(makeRecord(`season:${number}:complete`, "seasonComplete", number, season.completedDate || today, { season: number, days: season.days }));
+      }
+    });
+    CONFIG.achievements.forEach((achievement) => {
+      if (!(state.metrics[achievement.metric] >= achievement.threshold)) return;
+      let date = today;
+      if (achievement.metric === "lifetimeMiles") date = state.dateAtMiles(achievement.threshold) || today;
+      if (achievement.metric === "seasonsCompleted") date = (state.seasons[achievement.threshold - 1] || {}).completedDate || today;
+      records.push(makeRecord(`achievement:${achievement.id}`, "achievement", state.season, date, achievement));
+    });
+    CONFIG.events.forEach((event) => {
+      const miles = sumMiles(state.entries.filter((entry) => entry.date >= event.start && entry.date <= event.end));
+      if (miles < event.goalMiles) return;
+      records.push(makeRecord(`event:${event.id}`, "event", state.season, today > event.end ? event.end : today, { ...event, miles: formatNumber(miles), goal: formatNumber(event.goalMiles) }));
+    });
+    return records.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Appends newly earned records to the saved journey log and returns them so the UI can celebrate.
+  function recordProgress() {
+    const store = loadStore();
+    const known = new Set(store.journal.map((item) => item.key));
+    const fresh = evaluateJourney(buildState()).filter((record) => !known.has(record.key));
+    if (!fresh.length) return [];
+    store.journal.push(...fresh);
+    if (store.journal.length > MAX_JOURNAL) store.journal.splice(0, store.journal.length - MAX_JOURNAL);
+    saveStore(store);
+    return fresh;
+  }
+
   function exportBackup() {
     const blob = new Blob([JSON.stringify({ app: "oregon-trail-dle", version: 1, ...loadStore() }, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
@@ -251,7 +427,7 @@
   function importBackup(text) {
     let clean = null;
     try {
-      clean = sanitizeStore(JSON.parse(text));
+      clean = parseSave(text);
     } catch {
       clean = null;
     }
@@ -687,7 +863,7 @@
     });
   }
 
-  function renderTrail(totalMiles) {
+  function renderTrail(totalMiles, lifetimeMiles) {
     getRouteModel();
     const progressMiles = Math.min(totalMiles, TRAIL_MILES);
     const percent = Math.min(Math.round((progressMiles / TRAIL_MILES) * 100), 100);
@@ -698,7 +874,7 @@
     const nextLandmark = LANDMARKS[currentIndex + 1];
 
     document.querySelectorAll("[data-total-miles]").forEach((element) => {
-      element.textContent = formatNumber(totalMiles);
+      element.textContent = formatNumber(lifetimeMiles);
     });
     document.querySelectorAll("[data-trail-mileage]").forEach((element) => {
       element.textContent = `${formatNumber(progressMiles)} of ${formatNumber(TRAIL_MILES)} miles`;
@@ -793,7 +969,7 @@
     const recent = entries.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 3);
     const recentContainer = document.querySelector("[data-recent-entries]");
     if (recentContainer) renderEntryList(recentContainer, recent, "Your first entry is waiting. Log some miles to get underway.");
-    renderTrail(state.groupMiles);
+    renderTrail(state.seasonMiles, state.groupMiles);
   }
 
   function renderProgress(state) {
@@ -822,7 +998,80 @@
     const sortedEntries = entries.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
     const history = document.querySelector("[data-history-entries]");
     if (history) renderEntryList(history, sortedEntries, "No miles logged yet. Add your first entry to begin your journey.", true);
-    renderTrail(state.groupMiles);
+    renderTrail(state.seasonMiles, state.groupMiles);
+    renderSeasonHistory(state);
+    renderJourneyLog(state);
+  }
+
+  function renderSeasonHistory(state) {
+    const list = document.querySelector("[data-season-history]");
+    if (!list) return;
+    list.replaceChildren();
+    state.seasons.forEach((season) => {
+      const item = document.createElement("li");
+      const label = document.createElement("strong");
+      label.textContent = `Season ${season.number}: `;
+      const text = document.createElement("span");
+      if (season.completedDate) text.textContent = `Completed in ${formatNumber(season.days, 0)} ${season.days === 1 ? "day" : "days"}`;
+      else if (season.startDate) text.textContent = `In progress (${formatNumber(state.seasonMiles)} of ${formatNumber(TRAIL_MILES)} miles)`;
+      else text.textContent = "Not started";
+      item.append(label, text);
+      list.append(item);
+    });
+  }
+
+  function renderJourneyLog(state) {
+    const list = document.querySelector("[data-journey-log]");
+    if (!list) return;
+    list.replaceChildren();
+    if (!state.journal.length) {
+      const empty = document.createElement("li");
+      empty.textContent = "Milestones you reach will be recorded here.";
+      list.append(empty);
+      return;
+    }
+    state.journal.slice().reverse().forEach((record) => {
+      const item = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = record.title;
+      const date = document.createElement("time");
+      date.dateTime = record.date;
+      date.textContent = ` ${formatDate(record.date)}`;
+      item.append(title, date);
+      if (record.text) {
+        const text = document.createElement("p");
+        text.textContent = record.text;
+        item.append(text);
+      }
+      list.append(item);
+    });
+  }
+
+  // Generic banner for any newly recorded journey-log records (landmarks, achievements, seasons, events).
+  function showCelebration(records) {
+    document.querySelector("[data-celebration]")?.remove();
+    const main = document.querySelector("main");
+    if (!records.length || !main) return;
+    const latest = records[records.length - 1];
+    const banner = document.createElement("div");
+    banner.className = "celebration";
+    banner.dataset.celebration = "";
+    banner.setAttribute("role", "status");
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = latest.title;
+    const text = document.createElement("p");
+    text.textContent = records.length > 1
+      ? `${latest.text} (${records.length - 1} more milestone${records.length === 2 ? "" : "s"} recorded in your journey log.)`
+      : latest.text;
+    body.append(title, text);
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "button button-secondary button-small";
+    close.textContent = "Dismiss";
+    close.addEventListener("click", () => banner.remove());
+    banner.append(body, close);
+    main.prepend(banner);
   }
 
   function setFieldError(field, message) {
@@ -897,6 +1146,7 @@
   }
 
   function refreshCampaign() {
+    const fresh = recordProgress();
     const state = buildState();
     campaignState = state;
     renderSharedSummary(state);
@@ -904,6 +1154,7 @@
     if (page === "home") renderHome(state);
     if (page === "progress") renderProgress(state);
     renderCamp({ ...state.hunt, groupMiles: state.groupMiles });
+    if (fresh.length) showCelebration(fresh);
   }
 
   let huntBusy = false;
@@ -982,10 +1233,16 @@
       }
       showStorageWarning();
     });
+    document.querySelector("[data-reset-save]")?.addEventListener("click", () => {
+      if (!window.confirm("Start a new game? This permanently erases the miles, hunts and food saved in this browser. Download a backup first if you want to keep them.")) return;
+      clearSave();
+      refreshCampaign();
+      say("Saved journey erased. You are back at Independence.");
+    });
   }
 
   if (window.__OTDLE_EXPOSE__) {
-    window.__OTDLE_EXPOSE__.api = { buildState, addEntry, startHunt, resolveHunt, deleteEntry, importBackup, sanitizeStore };
+    window.__OTDLE_EXPOSE__.api = { buildState, addEntry, startHunt, resolveHunt, deleteEntry, importBackup, sanitizeStore, hasSave, clearSave, recordProgress, evaluateJourney };
   }
 
   document.addEventListener("DOMContentLoaded", () => {

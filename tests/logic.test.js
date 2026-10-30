@@ -6,19 +6,95 @@ import vm from "node:vm";
 import { webcrypto } from "node:crypto";
 
 const source = await readFile(fileURLToPath(new URL("../assets/js/script.js", import.meta.url)), "utf8");
+const configSource = await readFile(fileURLToPath(new URL("../assets/js/trail-config.js", import.meta.url)), "utf8");
 
 function load(initial) {
   const data = new Map(initial ? [["oregon-trail-dle:v1", initial]] : []);
   const localStorage = {
     getItem: (key) => (data.has(key) ? data.get(key) : null),
-    setItem: (key, value) => data.set(key, String(value))
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: (key) => data.delete(key)
   };
   const expose = {};
   const window = { localStorage, crypto: webcrypto, __OTDLE_EXPOSE__: expose };
   const document = { addEventListener() {}, querySelectorAll: () => [], querySelector: () => null, body: { dataset: {} } };
-  vm.runInNewContext(source, { window, document, Intl, Math, Date, JSON, Number, Set, Map, Uint32Array, Error, Array, Object, String, Boolean, Element: class {} });
+  const console = { warn() {} };
+  const context = vm.createContext({ window, document, console, Intl, Math, Date, JSON, Number, Set, Map, Uint32Array, Error, Array, Object, String, Boolean, Element: class {} });
+  vm.runInContext(configSource, context);
+  vm.runInContext(source, context);
   return { api: expose.api, data };
 }
+
+test("landmark milestones and achievements are recorded once, with historical dates", () => {
+  const { api } = load();
+  api.addEntry(350, "2026-01-01", "");
+  const first = api.recordProgress();
+  assert.ok(first.some((r) => r.key === "season:1:landmark:fort_kearny" && r.date === "2026-01-01"));
+  assert.ok(first.some((r) => r.key === "achievement:miles_100"));
+  assert.equal(api.recordProgress().length, 0);
+  api.deleteEntry(api.buildState().entries[0].id);
+  assert.equal(api.recordProgress().length, 0);
+  assert.ok(api.buildState().journal.length >= 3);
+});
+
+test("completing the trail starts a new season and keeps lifetime totals", () => {
+  const { api } = load();
+  api.addEntry(1000, "2026-01-01", "");
+  api.addEntry(1000, "2026-01-03", "");
+  api.addEntry(140, "2026-01-05", "");
+  let state = api.buildState();
+  assert.equal(state.season, 2);
+  assert.equal(state.seasonMiles, 100);
+  assert.equal(state.groupMiles, 2140);
+  assert.equal(state.seasons[0].days, 5);
+  assert.equal(state.seasons[1].completedDate, null);
+  const keys = api.recordProgress().map((r) => r.key);
+  assert.ok(keys.includes("season:1:complete") && keys.includes("season:2:start") && keys.includes("achievement:oregon_complete"));
+  assert.equal(new Set(keys).size, keys.length);
+  api.addEntry(1000, "2026-01-06", "");
+  api.addEntry(940, "2026-01-06", "");
+  state = api.buildState();
+  assert.equal(state.season, 3);
+  assert.equal(state.seasons[1].days, 2);
+  assert.equal(state.groupMiles, 4080);
+});
+
+test("journal entries survive sanitizing; bad ones are dropped", () => {
+  const raw = JSON.stringify({ entries: [], hunts: [], journal: [
+    { key: "a", type: "landmark", season: 1, date: "2026-01-01", title: "ok", text: "t" },
+    { key: "a", type: "landmark", season: 1, date: "2026-01-01", title: "dup" },
+    { key: "b", type: "bogus", date: "2026-01-01", title: "x" },
+    { key: "c", type: "event", date: "nope", title: "x" }
+  ] });
+  const { api } = load(raw);
+  assert.equal(JSON.stringify(api.buildState().journal.map((r) => r.key)), '["a"]');
+});
+
+test("saves are versioned, round-trip, and can be cleared", () => {
+  const { api, data } = load();
+  assert.equal(api.hasSave(), false);
+  api.addEntry(12, "2026-01-01", "walk");
+  assert.equal(api.hasSave(), true);
+  const saved = JSON.parse(data.get("oregon-trail-dle:v1"));
+  assert.equal(saved.version, 1);
+  assert.ok(!Number.isNaN(Date.parse(saved.timestamp)));
+  assert.equal(saved.gameState.entries[0].miles, 12);
+  const reloaded = load(data.get("oregon-trail-dle:v1"));
+  assert.equal(reloaded.api.buildState().groupMiles, 12);
+  api.clearSave();
+  assert.equal(api.hasSave(), false);
+  assert.equal(api.buildState().groupMiles, 0);
+});
+
+test("legacy unversioned saves still load and corrupt envelopes fall back safely", () => {
+  const legacy = load(JSON.stringify({ entries: [{ id: "a", miles: 7, date: "2026-01-01" }], hunts: [] }));
+  assert.equal(legacy.api.buildState().groupMiles, 7);
+  for (const raw of ["{not json", JSON.stringify({ version: "x", gameState: {} }), JSON.stringify({ version: 1, gameState: { entries: 5 } })]) {
+    const { api, data } = load(raw);
+    assert.equal(api.buildState().groupMiles, 0);
+    assert.equal(data.get("oregon-trail-dle:v1:unreadable"), raw);
+  }
+});
 
 test("every 5 miles earns exactly one hunt", () => {
   const { api } = load();

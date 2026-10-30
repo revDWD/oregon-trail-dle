@@ -8,6 +8,7 @@
   <title>Progress | Oregon Trail DLE</title>
   <link rel="stylesheet" href="../assets/css/style.css">
   <script src="../assets/js/us-states.js" defer></script>
+  <script src="../assets/js/trail-config.js" defer></script>
   <script src="../assets/js/script.js" defer></script>
 </head>
 <body data-page="progress">
@@ -138,6 +139,20 @@
       </div>
     </section>
 
+    <section class="section-block journey-section" aria-labelledby="seasons-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Season history</p>
+          <h2 id="seasons-heading">Seasons and journey log</h2>
+        </div>
+      </div>
+      <ul class="journey-list" data-season-history></ul>
+      <h3>Journey log</h3>
+      <ul class="journey-list" data-journey-log>
+        <li>Milestones you reach will be recorded here.</li>
+      </ul>
+    </section>
+
     <section class="section-block backup-section" aria-labelledby="backup-heading">
       <div class="section-heading">
         <div>
@@ -151,6 +166,7 @@
         <label class="button button-secondary button-small backup-restore">Restore from backup
           <input type="file" accept="application/json,.json" data-import-backup hidden>
         </label>
+        <button class="button button-secondary button-small" type="button" data-reset-save>New game / reset save</button>
       </div>
       <p class="form-message" data-backup-message role="status" aria-live="polite"></p>
     </section>

@@ -9,6 +9,8 @@
   <link rel="stylesheet" href="assets/css/style.css">
   <script src="assets/js/us-states.js" defer></script>
   <script src="assets/js/trail-config.js" defer></script>
+  <script src="assets/js/supabase-config.js" defer></script>
+  <script src="assets/js/community.js" defer></script>
   <script src="assets/js/script.js" defer></script>
 </head>
 <body data-page="home">
@@ -33,6 +35,24 @@
         <p>Every mile you move brings your wagon closer to Oregon City.</p>
       </div>
       <a class="button button-primary" href="pages/log-mileage.html">Log today's miles <span aria-hidden="true">→</span></a>
+    </section>
+
+    <section class="trail-card community-card" aria-labelledby="community-heading" data-community-panel>
+      <div class="trail-card-heading">
+        <div>
+          <p class="eyebrow">Everyone, one wagon</p>
+          <h2 id="community-heading">Community Expedition</h2>
+        </div>
+        <span class="distance-chip" data-community-status role="status">Connecting...</span>
+      </div>
+      <div class="community-stats">
+        <div><span>Community miles traveled</span><strong data-community-miles>--</strong></div>
+        <div><span>Current landmark</span><strong data-community-landmark>--</strong></div>
+        <div><span>Trail completion</span><strong data-community-percent>--</strong></div>
+        <div><span>Contributions</span><strong data-community-contributions>--</strong></div>
+      </div>
+      <h3 class="community-recent-heading">Recent contributions</h3>
+      <ul class="journey-list" data-community-recent aria-live="polite"></ul>
     </section>
 
     <section class="trail-card map-hero-card" aria-labelledby="map-heading">

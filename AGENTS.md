@@ -11,8 +11,8 @@ Guidance for AI coding agents. Read this first; it should get you productive in 
 **Goals:** Make logging miles fun and low-friction; work offline; keep data private on-device; stay trivially hostable.
 
 **Non-goals (do not add unless explicitly asked):**
-- Accounts, login, multi-user / "trail party" / shared or leaderboard features (an earlier collaborative design was removed; tests forbid that wording in HTML).
-- A backend, database, API calls, analytics, or any network request.
+- A backend, database, API calls, or analytics **beyond the explicitly requested Supabase community progress** (`assets/js/community.js` is the only file allowed to use the network; `script.js` must not call `fetch(`). Community totals must never be stored in localStorage. Only the public anon key may appear in the repo; never the `service_role` key.
+- Accounts, login, per-user leaderboards. (Anonymous community-wide miles are now a feature; HTML still must not use the forbidden wording below.)
 - A build step, bundler, framework, or runtime dependencies.
 - Real-time GPS/fitness-device integration.
 

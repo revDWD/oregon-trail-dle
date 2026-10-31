@@ -8,9 +8,11 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const read = (relativePath) => readFile(path.join(root, relativePath), "utf8");
 const pages = ["index.html", "pages/log-mileage.html", "pages/progress.html"];
 
-test("the site is static: no server, database, or network calls", async () => {
+test("the site is static: no server or database, and only community.js touches the network", async () => {
   const client = await read("assets/js/script.js");
   assert.doesNotMatch(client, /fetch\(|XMLHttpRequest|\/api\//);
+  const community = await read("assets/js/community.js");
+  assert.doesNotMatch(community, /localStorage\.(get|set)Item\((?!SOURCE_KEY)/);
   for (const gone of ["server", "db"]) {
     await assert.rejects(access(path.join(root, gone)));
   }

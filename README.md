@@ -88,3 +88,6 @@ Open `index.html` in a browser, or serve the folder with any static file server 
 The route follows an approximate polyline of the emigrant trail through Independence, Fort Kearny, Chimney Rock, Scotts Bluff, Fort Laramie, Independence Rock, South Pass, Fort Bridger, Fort Hall, the Blue Mountains, The Dalles, and Oregon City (not for navigation). Landmark mileposts are derived from the drawn route length scaled to 2,040 miles, so one mile covers the same map distance everywhere and the wagon moves at a steady pace. State shapes in `assets/js/us-states.js` are a simplified Albers projection adapted from [us-atlas](https://github.com/topojson/us-atlas), whose geometry is derived from U.S. Census Bureau cartographic boundaries. Rivers and mountain ranges are hand-placed and approximate, drawn at their real latitude/longitude through the same projection; trail mileage and the route are approximate too.
 
 
+
+> Deploy note: script tags carry a ?v=N query string. Bump N in all three pages when you change a JS file so browsers don't run cached old code.
+

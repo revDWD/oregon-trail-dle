@@ -923,7 +923,7 @@
         if (!marker || !map.contains(marker)) return;
         try {
           if (!campaignState) return;
-          selectLandmark(Number(marker.dataset.landmarkIndex), campaignState.groupMiles, map);
+          selectLandmark(Number(marker.dataset.landmarkIndex), displayMiles(campaignState), map);
         } catch (error) {
           showAppError(error);
         }
@@ -952,7 +952,7 @@
 
   function renderSharedSummary(state) {
     document.querySelectorAll("[data-group-miles]").forEach((element) => {
-      element.textContent = formatNumber(state.groupMiles);
+      element.textContent = formatNumber(communitySnapshot && communitySnapshot.totalMiles !== undefined ? communitySnapshot.totalMiles : state.groupMiles);
     });
     const days = new Set(state.entries.map((entry) => entry.date)).size;
     document.querySelectorAll("[data-avg-pace]").forEach((element) => {
@@ -967,6 +967,10 @@
     return round2(total - Math.floor(total / TRAIL_MILES) * TRAIL_MILES);
   }
 
+  function displayMiles(state) {
+    return communitySnapshot && communitySnapshot.totalMiles !== undefined ? communitySeasonMiles(communitySnapshot.totalMiles) : state.seasonMiles;
+  }
+
   function renderTrailForState(state) {
     if (communitySnapshot && communitySnapshot.totalMiles !== undefined) {
       renderTrail(communitySeasonMiles(communitySnapshot.totalMiles), communitySnapshot.totalMiles);
@@ -978,7 +982,10 @@
   function renderCommunity(snapshot, reason) {
     const panel = document.querySelector("[data-community-panel]");
     if (snapshot && snapshot.totalMiles !== undefined) communitySnapshot = snapshot;
-    if (campaignState) renderTrailForState(campaignState);
+    if (campaignState) {
+      renderTrailForState(campaignState);
+      renderSharedSummary(campaignState);
+    }
     if (!panel) return;
     const set = (name, text) => {
       const element = panel.querySelector(`[data-community-${name}]`);

@@ -3,6 +3,6 @@
 // row-level-security policies in supabase/schema.sql. NEVER put a service_role key here.
 // Leave blank to run in local-only mode (the community panel shows "not connected").
 window.OTDLE_SUPABASE = {
-  url: "",     // e.g. "https://abcdefghijkl.supabase.co"
+  url: "https://eojzvyyhzdapwgsrtyne.supabase.co",
   anonKey: ""  // the project's anon / publishable key
 };

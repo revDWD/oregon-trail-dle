@@ -314,8 +314,9 @@ begin
 end $$;
 
 -- Aggregates only: no activity rows, notes, types or goals leave the database. Counts activities dated
--- within the challenge window. "This week" is Monday-based on the database (UTC) date.
-create or replace function public.at_leaderboard(p_challenge uuid)
+-- within the challenge window. "This week" starts at p_week_start (the caller's local Monday), or the
+-- database (UTC) Monday when omitted.
+create or replace function public.at_leaderboard(p_challenge uuid, p_week_start date default null)
 returns table (
   user_id uuid, display_name text, role text,
   total_credited_miles numeric, week_credited_miles numeric, activity_count bigint, last_activity_date date
@@ -323,7 +324,7 @@ returns table (
 declare
   v_start date;
   v_end date;
-  v_week date := date_trunc('week', current_date)::date;
+  v_week date := coalesce(p_week_start, date_trunc('week', current_date)::date);
 begin
   if auth.uid() is null then raise exception 'Not authenticated' using errcode = '28000'; end if;
   if not exists (select 1 from public.at_challenge_members m where m.challenge_id = p_challenge and m.user_id = auth.uid()) then
@@ -372,6 +373,21 @@ begin
      where m.challenge_id = p_challenge;
 end $$;
 
+-- The signed-in user's own totals. SECURITY INVOKER: Row Level Security limits it to their own rows.
+create or replace function public.at_my_summary(p_week_start date default null)
+returns table (
+  total_credited_miles numeric, activity_count bigint, week_credited_miles numeric,
+  first_activity_date date, active_dates date[]
+) language sql stable security invoker set search_path = '' as $$
+  select coalesce(sum(a.credited_miles), 0)::numeric,
+         count(a.id),
+         coalesce(sum(a.credited_miles) filter (where a.activity_date >= coalesce(p_week_start, date_trunc('week', current_date)::date)), 0)::numeric,
+         min(a.activity_date),
+         coalesce(array_agg(distinct a.activity_date) filter (where a.activity_date >= current_date - 120), '{}')
+    from public.at_activities a
+   where a.user_id = (select auth.uid())
+$$;
+
 -- Functions are executable by signed-in users only (never anon / public).
 revoke all on function public.at_handle_new_user() from public, anon, authenticated;
 revoke all on function public.at_activities_prepare() from public, anon, authenticated;
@@ -380,12 +396,14 @@ revoke all on function public.at_create_challenge(text, text, date) from public,
 revoke all on function public.at_join_challenge(text) from public, anon;
 revoke all on function public.at_leave_challenge(uuid) from public, anon;
 revoke all on function public.at_get_invite_code(uuid) from public, anon;
-revoke all on function public.at_leaderboard(uuid) from public, anon;
+revoke all on function public.at_leaderboard(uuid, date) from public, anon;
+revoke all on function public.at_my_summary(date) from public, anon;
 revoke all on function public.at_challenge_summary(uuid) from public, anon;
 grant execute on function public.at_ensure_profile() to authenticated;
 grant execute on function public.at_create_challenge(text, text, date) to authenticated;
 grant execute on function public.at_join_challenge(text) to authenticated;
 grant execute on function public.at_leave_challenge(uuid) to authenticated;
 grant execute on function public.at_get_invite_code(uuid) to authenticated;
-grant execute on function public.at_leaderboard(uuid) to authenticated;
+grant execute on function public.at_leaderboard(uuid, date) to authenticated;
+grant execute on function public.at_my_summary(date) to authenticated;
 grant execute on function public.at_challenge_summary(uuid) to authenticated;

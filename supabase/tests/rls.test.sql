@@ -68,7 +68,7 @@ select t.ok(not exists (
   select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname like 'at\_%' and p.prosecdef
      and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) cfg where cfg like 'search_path=%')), 'every SECURITY DEFINER function pins search_path');
-select t.ok(not has_function_privilege('anon', 'public.at_leaderboard(uuid)', 'execute'), 'anon cannot execute the leaderboard');
+select t.ok(not has_function_privilege('anon', 'public.at_leaderboard(uuid, date)', 'execute') and not has_function_privilege('anon', 'public.at_my_summary(date)', 'execute'), 'anon cannot execute the leaderboard');
 
 -- Anonymous visitors ------------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', '', false) \gset
@@ -79,6 +79,7 @@ select t.fails('select * from public.at_challenges', '42501', 'anon cannot read 
 select t.fails($$insert into public.at_activities (activity_date, activity_type, actual_miles) values (current_date, 'walking', 1)$$, '42501', 'anon cannot insert');
 select t.fails($$select public.at_leaderboard('aaaaaaaa-0000-4000-8000-000000000001')$$, '42501', 'anon cannot call the leaderboard');
 select t.fails($$select public.at_create_challenge('x')$$, '42501', 'anon cannot create challenges');
+select t.fails($$select * from public.at_my_summary()$$, '42501', 'anon cannot read summaries');
 reset role;
 
 -- A valid token whose user id is missing behaves like signed-out for RPCs ------------------------------
@@ -146,6 +147,10 @@ delete from public.at_conversion_rules where effective_from = current_date - 1;
 set role authenticated;
 
 select t.ok(t.count('select 1 from public.at_activities') = 3, 'alice sees her own three activities');
+select t.ok((select total_credited_miles from public.at_my_summary()) = 12, 'summary totals own credited miles (3 + 5 + 4)');
+select t.ok((select activity_count from public.at_my_summary()) = 3, 'summary counts own activities');
+select t.ok(cardinality((select active_dates from public.at_my_summary())) = 2, 'summary lists distinct recent active dates');
+select t.ok((select week_credited_miles from public.at_my_summary(current_date - 30)) = 12, 'week start is caller supplied');
 select t.fails($$update public.at_profiles set display_name = '<script>' where id = auth.uid()$$, '23514', 'display names reject markup');
 update public.at_profiles set weekly_goal_miles = 25 where id = auth.uid();
 
@@ -205,6 +210,7 @@ select t.ok(not exists (select 1 from public.at_leaderboard(:'chal') l where to_
 select t.ok((select total_credited_miles from public.at_challenge_summary(:'chal')) = 12, 'group total = 12');
 select t.ok((select member_count from public.at_challenge_summary(:'chal')) = 2, 'group member count');
 select t.ok(t.count('select 1 from public.at_activities') = 2, 'bob still sees only his own activities');
+select t.ok((select total_credited_miles from public.at_my_summary()) = 4, 'bob summary excludes other users');
 
 -- Bob leaves: access ends, activities remain his
 select public.at_leave_challenge(:'chal');

@@ -154,3 +154,9 @@ pages/progress.html ────┘     home loads assets/js/us-states.js first
 - Map hooks: `data-route-donner`, `data-landmark-donner`; home `data-donner-card`; journal `data-journal-filters` and `data-trail-journal`; hunt `data-hunt-mute`.
 - `pages/progress.html` loads `supabase-config.js`, `trail-story.js` and `community.js` to show the community Trail Journal; it must not contain `data-trail-map` or `data-community-panel`.
 - Donner stops must stay in ascending miles order (tested); `hunt-game.js` may not reference extra globals at load time. Typography floor: 13px captions, 16px body (override block at the end of `style.css`).
+
+## Phase 5 notes
+
+- New hooks: `data-camp-news`, `data-camp-roster`, `data-camp-person`, `data-camp-name`. The camp SVG rebuilds only when its signature changes; keep CSS animations on inner groups so attribute transforms are not overridden.
+- `trail-story.js` helpers (`weatherFor`, `timeOfDay`, `campPeople`, `latestHunt`, `celebrationAt`) must stay pure with no `Date` (test sandbox).
+- `hunt-game.js`: `newRound(random, {biome, weather})` defaults to a clear prairie; adding animals changes `pickAnimal` weights, so update tests.

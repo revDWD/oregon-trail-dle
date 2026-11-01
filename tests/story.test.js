@@ -203,3 +203,51 @@ test("community client sends name and food, sanitizes names, and summarizes the 
   assert.equal(last.largest[0].name, "David");
   assert.equal(last.contributors.length, 2);
 });
+
+test("weather and time of day are deterministic, with snow only in the mountains", () => {
+  const { story } = loadStory();
+  assert.equal(story.weatherFor(500, 20000).id, story.weatherFor(500, 20000).id);
+  for (let day = 0; day < 200; day += 1) {
+    assert.notEqual(story.weatherFor(500, day).id, "snow");
+  }
+  const seen = new Set();
+  for (let day = 0; day < 200; day += 1) seen.add(story.weatherFor(1600, day).id);
+  assert.ok(seen.has("snow"));
+  assert.equal(story.timeOfDay(2), "night");
+  assert.equal(story.timeOfDay(12), "day");
+});
+
+test("camp people, fresh hunts and celebrations come from the community log", () => {
+  const { story } = loadStory();
+  const now = Date.parse("2025-01-02T12:00:00Z");
+  const rows = [
+    { id: 2, name: "Sarah", kind: "food", miles: 0, food: 84, timestamp: "2025-01-02T10:00:00Z" },
+    { id: 1, name: "David", kind: "miles", miles: 30, food: 0, timestamp: "2025-01-01T10:00:00Z" }
+  ];
+  const people = story.campPeople(rows, [], null);
+  assert.equal(people.map((person) => person.name).sort().join(","), "David,Sarah");
+  assert.equal(people.find((person) => person.name === "Sarah").food, 84);
+  assert.equal(story.latestHunt(rows, now).fresh, true);
+  assert.equal(story.latestHunt(rows, now + 7 * 3600 * 1000).fresh, false);
+  assert.ok(story.celebrationAt(330));
+  assert.equal(story.celebrationAt(100), null);
+});
+
+test("hunt: new animals and grounds have distinct weights and herds flee together", () => {
+  const hunt = loadHunt();
+  assert.ok(hunt.ANIMALS.turkey && hunt.ANIMALS.elk);
+  assert.ok(hunt.ANIMALS.turkey.food < hunt.ANIMALS.elk.food);
+  assert.equal(Object.keys(hunt.BIOMES).length, 6);
+  assert.equal(hunt.biomeForMiles(0), "grassland");
+  const seen = new Set();
+  for (let i = 0; i < 200; i += 1) seen.add(hunt.pickAnimal(() => i / 200, "mountains"));
+  assert.ok(!seen.has("buffalo"));
+  const state = hunt.newRound(() => 0.5, { biome: "forest", weather: "rain" });
+  assert.equal(state.biome, "forest");
+  state.animals.push({ kind: "deer", x: 100, y: 100, dir: 1, herdId: 1 }, { kind: "deer", x: 300, y: 150, dir: 1, herdId: 1 });
+  state.aim = { x: 105, y: 105 };
+  hunt.fire(state);
+  state.aim = { x: 0, y: 0 };
+  hunt.fire(state);
+  assert.ok(state.ammo < hunt.AMMO);
+});

@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Track your miles as you make your way west along the Oregon Trail.">
   <title>Oregon Trail DLE | Your journey west</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=7">
-  <script src="assets/js/us-states.js?v=7" defer></script>
-  <script src="assets/js/trail-config.js?v=7" defer></script>
-  <script src="assets/js/supabase-config.js?v=7" defer></script>
-  <script src="assets/js/trail-story.js?v=7" defer></script>
-  <script src="assets/js/community.js?v=7" defer></script>
-  <script src="assets/js/script.js?v=7" defer></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=8">
+  <script src="assets/js/us-states.js?v=8" defer></script>
+  <script src="assets/js/trail-config.js?v=8" defer></script>
+  <script src="assets/js/supabase-config.js?v=8" defer></script>
+  <script src="assets/js/trail-story.js?v=8" defer></script>
+  <script src="assets/js/community.js?v=8" defer></script>
+  <script src="assets/js/script.js?v=8" defer></script>
 </head>
 <body data-page="home">
   <header class="site-header">
@@ -112,8 +112,11 @@
           <h2 id="camp-heading">Community camp</h2>
         </div>
       </div>
-      <svg class="camp-svg" viewBox="0 0 400 160" role="img" aria-labelledby="camp-caption" shape-rendering="crispEdges"></svg>
+      <svg class="camp-svg" viewBox="0 0 400 160" role="group" aria-labelledby="camp-caption" shape-rendering="crispEdges"></svg>
+      <p class="camp-news" data-camp-news aria-live="polite"></p>
       <p class="camp-caption" id="camp-caption" data-camp-caption>The camp grows as the community travels and hunts.</p>
+      <ul class="camp-roster" data-camp-roster aria-label="Settlers in camp"></ul>
+      <p class="camp-person" data-camp-person aria-live="polite"></p>
     </section>
 
     <section class="trail-card donner-card" aria-labelledby="donner-heading" data-donner-card hidden>

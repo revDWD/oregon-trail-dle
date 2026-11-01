@@ -2469,3 +2469,153 @@ body {
     transition: none;
   }
 }
+
+/* ---- Community camp diorama (Phase 5): sky, light, motion, weather ---- */
+.camp-svg {
+  overflow: hidden;
+}
+
+.camp-svg .camp-sky { fill: #cfe0e8; }
+.camp-svg.stage-mid .camp-sky { fill: #f1d6a0; }
+.camp-svg.stage-late .camp-sky { fill: #e9b872; }
+.camp-svg.weather-rain .camp-sky { fill: #9fb0b8; }
+.camp-svg.weather-fog .camp-sky { fill: #cdd3d2; }
+.camp-svg.weather-snow .camp-sky { fill: #dde4ea; }
+.camp-svg[data-time="dawn"] .camp-sky { fill: #f3c9a4; }
+.camp-svg[data-time="dusk"] .camp-sky { fill: #d98e68; }
+.camp-svg[data-time="night"] .camp-sky { fill: #1c2a4a; }
+
+.camp-sun { fill: #ffe08a; }
+.camp-moon { fill: #f4f0d8; display: none; }
+.camp-star { opacity: 0; }
+.camp-dark { fill: #0b1b3a; opacity: 0; pointer-events: none; }
+.camp-svg[data-time="dawn"] .camp-dark { opacity: 0.1; }
+.camp-svg[data-time="dusk"] .camp-dark { opacity: 0.22; }
+.camp-svg[data-time="night"] .camp-dark { opacity: 0.45; }
+.camp-svg[data-time="night"] .camp-sun,
+.camp-svg[data-time="dusk"] .camp-sun { display: none; }
+.camp-svg[data-time="night"] .camp-moon { display: block; }
+.camp-svg[data-time="night"] .camp-star { opacity: 0.9; animation: camp-twinkle 3s ease-in-out infinite; }
+
+.camp-glow { fill: #ffb347; opacity: 0.07; animation: camp-pulse 2.4s ease-in-out infinite; }
+.camp-svg[data-time="night"] .camp-glow,
+.camp-svg[data-time="dusk"] .camp-glow { opacity: 0.32; }
+.camp-lantern { fill: #ffd86a; opacity: 0; }
+.camp-svg[data-time="night"] .camp-lantern { opacity: 0.4; animation: camp-pulse 3.2s ease-in-out infinite; }
+.camp-svg[data-time="dusk"] .camp-lantern { opacity: 0.25; }
+.camp-dark ~ .camp-weather { pointer-events: none; }
+
+.camp-glow,
+.camp-lantern,
+.camp-flame,
+.camp-smoke,
+.camp-cloud,
+.camp-wagon,
+.camp-grass,
+.camp-wander,
+.camp-flag,
+.camp-tail,
+.camp-gust,
+.camp-fog-bank,
+.camp-drops,
+.camp-mover {
+  transform-box: fill-box;
+}
+
+.camp-glow,
+.camp-lantern { transform-origin: 50% 50%; }
+.camp-flame { transform-origin: 50% 100%; animation: camp-flicker 0.7s ease-in-out infinite alternate; }
+.camp-flame.f1 { animation-duration: 0.55s; animation-delay: -0.2s; }
+.camp-flame.f2 { animation-duration: 0.9s; animation-delay: -0.4s; }
+.camp-smoke { opacity: 0; animation: camp-smoke 4s ease-out infinite; animation-delay: var(--delay, 0s); }
+.camp-cloud { transform: translate(-60px, var(--y, 20px)); animation: camp-drift 120s linear infinite; animation-delay: var(--delay, 0s); }
+.weather-windy .camp-cloud { animation-duration: 40s; }
+.weather-windy .camp-flame { animation-duration: 0.3s; }
+.camp-wagon { animation: camp-sway 3.4s ease-in-out infinite; animation-delay: var(--delay, 0s); }
+.camp-grass { transform-origin: 50% 100%; animation: camp-grass 4s ease-in-out infinite; animation-delay: var(--delay, 0s); }
+.weather-windy .camp-grass { animation-duration: 1.4s; }
+.camp-wander { animation: camp-wander 22s ease-in-out infinite alternate; animation-delay: var(--delay, 0s); }
+.camp-tail { transform-origin: 100% 50%; animation: camp-wag 0.6s ease-in-out infinite alternate; }
+.camp-mover { animation: camp-stroll var(--dur, 12s) ease-in-out infinite alternate; animation-delay: var(--delay, 0s); }
+.camp-settler.is-sit .camp-mover,
+.camp-settler.is-tend .camp-mover { animation: camp-bob 2.6s ease-in-out infinite; animation-delay: var(--delay, 0s); }
+.camp-settler.is-returning .camp-mover { animation: camp-arrive 7s ease-out 1 both; }
+.camp-flag { transform-origin: 50% 0; animation: camp-flutter 1.2s ease-in-out infinite alternate; animation-delay: var(--delay, 0s); }
+.camp-new-crate { animation: camp-pop 0.8s ease-out 1 both; }
+.camp-gust { animation: camp-gust 1.6s linear infinite; }
+.camp-drops { animation: camp-fall 0.5s linear infinite; }
+.camp-weather-snow .camp-drops { animation: camp-fall 3.2s linear infinite; }
+.camp-fog-bank { animation: camp-fog 30s ease-in-out infinite alternate; }
+.camp-fog-slow { animation-duration: 46s; }
+
+.camp-settler { cursor: pointer; outline: none; }
+.camp-settler:focus-visible .camp-hit,
+.camp-settler.is-selected .camp-hit { stroke: #fff6dc; stroke-width: 1; stroke-dasharray: 2 2; }
+.camp-name {
+  font-family: Georgia, serif;
+  font-size: 9px;
+  font-weight: 700;
+  fill: #fff6dc;
+  stroke: #2a1d12;
+  stroke-width: 2.5px;
+  paint-order: stroke;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.camp-settler:hover .camp-name,
+.camp-settler:focus-visible .camp-name,
+.camp-settler.is-selected .camp-name { opacity: 1; }
+.camp-board { stroke: #704b32; stroke-width: 1.5; }
+.camp-banner-text { font-family: Georgia, serif; font-size: 11px; font-weight: 700; fill: #293629; }
+
+.camp-news {
+  margin: 12px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--green-dark);
+}
+.camp-news:empty { display: none; }
+.camp-roster { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.camp-roster:empty { display: none; }
+.camp-roster-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.camp-roster-button[aria-pressed="true"] { border-color: var(--green); background: var(--green); color: #f6edd2; }
+.camp-roster-button:focus-visible { outline: 3px solid var(--rust); outline-offset: 2px; }
+.camp-person { margin: 10px 0 0; min-height: 1.5em; font-size: 0.9375rem; color: var(--ink); }
+
+@keyframes camp-flicker { from { transform: scale(1, 0.85) translateX(-0.5px); } to { transform: scale(1.08, 1.12) translateX(0.5px); } }
+@keyframes camp-smoke { 0% { opacity: 0; transform: translate(0, 0) scale(0.6); } 20% { opacity: 0.7; } 100% { opacity: 0; transform: translate(10px, -46px) scale(1.8); } }
+@keyframes camp-drift { to { transform: translate(470px, var(--y, 20px)); } }
+@keyframes camp-sway { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.6px); } }
+@keyframes camp-grass { 0%, 100% { transform: skewX(-6deg); } 50% { transform: skewX(6deg); } }
+@keyframes camp-wander { to { transform: translateX(var(--walk, 12px)); } }
+@keyframes camp-wag { to { transform: rotate(-25deg); } }
+@keyframes camp-stroll { to { transform: translateX(var(--walk, 0px)); } }
+@keyframes camp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@keyframes camp-arrive { from { transform: translateX(-150px); } to { transform: translateX(0); } }
+@keyframes camp-flutter { to { transform: rotate(9deg); } }
+@keyframes camp-pop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes camp-gust { from { transform: translateX(-30px); opacity: 0; } 30% { opacity: 1; } to { transform: translateX(440px); opacity: 0; } }
+@keyframes camp-fall { to { transform: translateY(40px); } }
+@keyframes camp-fog { to { transform: translateX(80px); } }
+@keyframes camp-pulse { 0%, 100% { transform: scale(0.93); } 50% { transform: scale(1.07); } }
+@keyframes camp-twinkle { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .camp-svg *,
+  .hunt-canvas {
+    animation: none !important;
+  }
+  .camp-cloud { transform: translate(40px, var(--y, 20px)); }
+}

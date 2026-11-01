@@ -1163,60 +1163,318 @@
 
   const SVG_NS = "http://www.w3.org/2000/svg";
 
-  function pixel(parent, x, y, width, height, color) {
+  let campSelected = null;
+  let campPeopleList = [];
+
+  function pixel(parent, x, y, width, height, color, className) {
     const rect = document.createElementNS(SVG_NS, "rect");
     rect.setAttribute("x", String(x));
     rect.setAttribute("y", String(y));
     rect.setAttribute("width", String(width));
     rect.setAttribute("height", String(height));
     rect.setAttribute("fill", color);
+    if (className) rect.setAttribute("class", className);
     parent.append(rect);
+    return rect;
   }
 
-  // Pixel-art camp built from rectangles; the counts come from OTDLE_STORY.campScale(community totals).
-  function renderCampScene(scene, scale) {
+  // Living camp diorama. Counts and people come from OTDLE_STORY (community totals and the recent log);
+  // motion is pure CSS (see "Community camp diorama" in style.css) so it stays light and honors reduced motion.
+  function svgEl(parent, name, attrs) {
+    const element = document.createElementNS(SVG_NS, name);
+    Object.keys(attrs || {}).forEach((key) => element.setAttribute(key, String(attrs[key])));
+    parent.append(element);
+    return element;
+  }
+
+  function decor(parent, className, attrs) {
+    return svgEl(parent, "g", { class: className, "aria-hidden": "true", ...attrs });
+  }
+
+  function drawFigure(parent, seed, pose) {
+    const shirt = ["#9a3f2b", "#3f6f8f", "#5f7f3f", "#7a5a8a", "#b07a2a"][seed % 5];
+    const hat = ["#3b2a18", "#6b4a2b", "#d9c7a0"][seed % 3];
+    pixel(parent, 0, 0, 6, 2, hat);
+    pixel(parent, 1, 2, 4, 3, "#f0c9a0");
+    if (pose === "sit") {
+      pixel(parent, 0, 5, 6, 5, shirt);
+      pixel(parent, 0, 10, 9, 2, "#3b2a18");
+      return;
+    }
+    pixel(parent, 0, 5, 6, 6, shirt);
+    pixel(parent, 0, 11, 2, 3, "#3b2a18");
+    pixel(parent, 4, 11, 2, 3, "#3b2a18");
+    if (pose === "carry") {
+      pixel(parent, -1, -6, 8, 6, "#b98a4a");
+      pixel(parent, -1, -6, 8, 2, "#7a5230");
+    } else if (pose === "tend") {
+      pixel(parent, 7, 5, 1, 9, "#6b4a2b");
+      pixel(parent, 6, 4, 3, 2, "#8d8a80");
+    } else if (pose === "returning") {
+      pixel(parent, 6, 6, 7, 5, "#7a5a3a");
+      pixel(parent, 11, 5, 2, 2, "#4a3520");
+    }
+  }
+
+  function drawCritter(parent, kind, x, y, delay, distance) {
+    const spot = svgEl(decor(parent, "camp-critter"), "g", { transform: `translate(${x} ${y})` });
+    const mover = svgEl(spot, "g", { class: `camp-wander camp-${kind}`, style: `--walk:${distance}px;--delay:-${delay}s` });
+    if (kind === "ox") {
+      pixel(mover, 0, 0, 15, 8, "#5a3d2a");
+      pixel(mover, 13, -1, 6, 6, "#4a3220");
+      pixel(mover, 14, -3, 1, 2, "#e8dcc0");
+      pixel(mover, 18, -3, 1, 2, "#e8dcc0");
+      pixel(mover, 2, 8, 2, 4, "#2f2119");
+      pixel(mover, 11, 8, 2, 4, "#2f2119");
+    } else if (kind === "horse") {
+      pixel(mover, 0, 0, 14, 7, "#8a5a34");
+      pixel(mover, 12, -4, 4, 8, "#8a5a34");
+      pixel(mover, 14, -5, 4, 3, "#6f4527");
+      pixel(mover, 2, 7, 2, 5, "#4a3018");
+      pixel(mover, 10, 7, 2, 5, "#4a3018");
+      pixel(mover, -3, 0, 3, 6, "#3b2412", "camp-tail");
+    } else {
+      pixel(mover, 0, 0, 8, 4, "#c9a26b");
+      pixel(mover, 7, -2, 4, 4, "#b58b55");
+      pixel(mover, 0, 4, 2, 2, "#8a6a40");
+      pixel(mover, 6, 4, 2, 2, "#8a6a40");
+      pixel(mover, -2, -1, 2, 2, "#c9a26b", "camp-tail");
+    }
+  }
+
+  function drawWeather(svg, weatherId) {
+    const layer = decor(svg, `camp-weather camp-weather-${weatherId}`);
+    if (weatherId === "rain" || weatherId === "snow") {
+      const flakes = weatherId === "snow";
+      const drops = svgEl(layer, "g", { class: "camp-drops" });
+      for (let band = 0; band < 5; band += 1) {
+        for (let i = 0; i < 12; i += 1) {
+          const x = (i * 37 + band * 13) % 400;
+          const y = band * 40 + ((i * 17) % 40);
+          if (flakes) pixel(drops, x, y, 2, 2, "#ffffff");
+          else pixel(drops, x, y, 1, 6, "#dbe9f0");
+        }
+      }
+    } else if (weatherId === "fog") {
+      [[-60, 70, 300, 30], [-50, 76, 280, 18], [-40, 81, 260, 8]].forEach(([x, y, w, h]) => pixel(layer, x, y, w, h, "rgba(240, 244, 244, 0.2)", "camp-fog-bank"));
+      [[170, 100, 300, 44], [180, 108, 280, 28], [190, 116, 260, 12]].forEach(([x, y, w, h]) => pixel(layer, x, y, w, h, "rgba(240, 244, 244, 0.2)", "camp-fog-bank camp-fog-slow"));
+    } else if (weatherId === "windy") {
+      for (let i = 0; i < 6; i += 1) pixel(layer, (i * 83) % 380, 30 + i * 17, 16, 1, "rgba(255, 255, 255, 0.7)", "camp-gust");
+    }
+  }
+
+  function renderCampScene(scene, scale, context) {
     const svg = scene.querySelector("svg");
     if (!svg) return;
+    const { time, weather, people, hunt, celebration } = context;
+    const signature = JSON.stringify([scale, time, weather.id, people.map((p) => [p.name, p.miles, p.food, p.activity]), celebration && celebration.name]);
+    if (svg.dataset.campSignature === signature) return;
+    svg.dataset.campSignature = signature;
     svg.replaceChildren();
-    pixel(svg, 0, 0, 400, 110, scale.stage === "late" ? "#e9b872" : scale.stage === "mid" ? "#f1d6a0" : "#cfe0e8");
-    pixel(svg, 0, 110, 400, 50, "#8a6b3f");
-    pixel(svg, 0, 110, 400, 4, "#6f8f4e");
+    svg.setAttribute("role", "group");
+    svg.dataset.time = time;
+    svg.setAttribute("class", `camp-svg stage-${scale.stage} weather-${weather.id}`);
 
+    const sky = decor(svg, "camp-sky-layer");
+    pixel(sky, 0, 0, 400, 112, "#cfe0e8", "camp-sky");
+    for (let i = 0; i < 16; i += 1) pixel(sky, (i * 53 + 17) % 396, 6 + ((i * 29) % 60), 2, 2, "#fff6c8", "camp-star");
+    svgEl(sky, "circle", { cx: 340, cy: 26, r: 9, class: "camp-sun" });
+    svgEl(sky, "circle", { cx: 340, cy: 26, r: 7, class: "camp-moon" });
+    [[30, 14], [210, 26], [300, 10]].forEach(([x, y], i) => {
+      const cloud = svgEl(sky, "g", { class: "camp-cloud", style: `--delay:-${i * 31}s;--y:${y}px` });
+      pixel(cloud, 0, 4, 34, 6, "#ffffff");
+      pixel(cloud, 6, 0, 18, 6, "#ffffff");
+    });
+    pixel(sky, 0, 100, 400, 10, "#a9b49c");
+    for (let x = 0; x < 400; x += 10) pixel(sky, x, 94 + Math.round(Math.sin(x / 31) * 4 + 4), 10, 16, "#98a58c");
+
+    const ground = decor(svg, "camp-ground");
+    pixel(ground, 0, 110, 400, 50, "#8a6b3f", "camp-soil");
+    pixel(ground, 0, 110, 400, 4, "#6f8f4e", "camp-grass-line");
+    for (let i = 0; i < 24; i += 1) {
+      const blade = svgEl(ground, "g", { class: "camp-grass", style: `--delay:-${(i * 7) % 5}s`, transform: `translate(${(i * 47 + 11) % 392} ${116 + ((i * 13) % 40)})` });
+      pixel(blade, 0, 0, 1, 3, "#6f8f4e");
+      pixel(blade, 2, -1, 1, 4, "#7fa05a");
+    }
+
+    const camp = decor(svg, "camp-structures");
     for (let i = 0; i < scale.tents; i += 1) {
       const x = 20 + (i % 5) * 62 + Math.floor(i / 5) * 24;
       const y = 78 - Math.floor(i / 5) * 10;
-      pixel(svg, x + 12, y, 4, 4, "#d9c7a0");
-      pixel(svg, x + 8, y + 4, 12, 4, "#d9c7a0");
-      pixel(svg, x + 4, y + 8, 20, 4, "#d9c7a0");
-      pixel(svg, x, y + 12, 28, 8, "#c9b185");
-      pixel(svg, x + 11, y + 14, 6, 6, "#5b4528");
+      const tent = svgEl(camp, "g", { class: "camp-tent", transform: `translate(${x} ${y})` });
+      pixel(tent, 12, 0, 4, 4, "#d9c7a0");
+      pixel(tent, 8, 4, 12, 4, "#d9c7a0");
+      pixel(tent, 4, 8, 20, 4, "#d9c7a0");
+      pixel(tent, 0, 12, 28, 8, "#c9b185");
+      pixel(tent, 11, 14, 6, 6, "#5b4528", "camp-flap");
     }
 
     for (let i = 0; i < scale.wagons; i += 1) {
       const x = 16 + i * 46;
-      pixel(svg, x + 4, 100, 30, 4, "#f5efe0");
-      pixel(svg, x, 104, 36, 6, "#7a5230");
-      pixel(svg, x + 4, 112, 6, 6, "#3b2a18");
-      pixel(svg, x + 26, 112, 6, 6, "#3b2a18");
+      const wagon = svgEl(camp, "g", { class: "camp-wagon", style: `--delay:-${i * 1.3}s`, transform: `translate(${x} 0)` });
+      pixel(wagon, 4, 100, 30, 4, "#f5efe0");
+      pixel(wagon, 0, 104, 36, 6, "#7a5230");
+      pixel(wagon, 4, 112, 6, 6, "#3b2a18", "camp-wheel");
+      pixel(wagon, 26, 112, 6, 6, "#3b2a18", "camp-wheel");
+      if (i < 3) {
+        pixel(wagon, 36, 105, 3, 4, "#ffd86a", "camp-lantern-lamp");
+        svgEl(wagon, "circle", { cx: 37, cy: 107, r: 13, class: "camp-lantern" });
+      }
     }
+
+    for (let i = 0; i < scale.oxen; i += 1) drawCritter(svg, "ox", 30 + i * 34, 119 + (i % 2) * 4, i * 3, 10 + i * 3);
+    for (let i = 0; i < scale.horses; i += 1) drawCritter(svg, "horse", 292 + i * 30, 118 + (i % 2) * 5, i * 4 + 1, 12);
+    for (let i = 0; i < scale.dogs; i += 1) drawCritter(svg, "dog", 205, 141, 2, 22);
 
     const fireX = 188;
-    pixel(svg, fireX, 128, 24, 4, "#4a3520");
-    for (let level = 0; level < scale.fire; level += 1) {
-      pixel(svg, fireX + 6 + level * 2, 124 - level * 6, 12 - level * 4, 6, level === 0 ? "#d9622b" : "#f2b632");
+    const fire = decor(svg, `camp-fire${celebration ? " is-celebrating" : ""}`);
+    svgEl(fire, "circle", { cx: fireX + 12, cy: 124, r: celebration ? 46 : 34, class: "camp-glow" });
+    pixel(fire, fireX, 128, 24, 4, "#4a3520");
+    pixel(fire, fireX + 3, 126, 18, 3, "#6b4a2b");
+    const level = Math.min(scale.fire + (celebration ? 1 : 0), 4);
+    for (let i = 0; i < level; i += 1) {
+      pixel(fire, fireX + 6 + i * 2, 124 - i * 6, Math.max(12 - i * 4, 4), 6, i === 0 ? "#d9622b" : "#f2b632", `camp-flame f${i % 3}`);
     }
+    for (let i = 0; i < 4; i += 1) pixel(fire, fireX + 8 + (i % 2) * 6, 100 - i * 2, 4, 4, "rgba(220, 220, 214, 0.55)", "camp-smoke");
+    fire.lastElementChild.style.setProperty("--delay", "-3s");
+    fire.querySelectorAll(".camp-smoke").forEach((puff, i) => puff.style.setProperty("--delay", `-${i}s`));
 
-    for (let i = 0; i < scale.settlers; i += 1) {
-      const x = 140 + ((i * 29) % 130);
-      const y = 134 + (i % 3) * 6;
-      pixel(svg, x, y, 4, 4, "#f0c9a0");
-      pixel(svg, x, y + 4, 4, 6, i % 2 ? "#3f6f8f" : "#9a3f2b");
-    }
-
+    const supplies = decor(svg, "camp-supplies-layer");
     for (let i = 0; i < scale.crates; i += 1) {
-      pixel(svg, 300 + (i % 4) * 14, 136 - Math.floor(i / 4) * 10, 12, 8, "#b98a4a");
-      pixel(svg, 300 + (i % 4) * 14, 136 - Math.floor(i / 4) * 10, 12, 2, "#7a5230");
+      pixel(supplies, 300 + (i % 4) * 14, 140 - Math.floor(i / 4) * 10, 12, 8, "#b98a4a");
+      pixel(supplies, 300 + (i % 4) * 14, 140 - Math.floor(i / 4) * 10, 12, 2, "#7a5230");
     }
+    if (hunt && hunt.fresh) {
+      pixel(supplies, 164, 140, 10, 7, "#9b6a3a", "camp-new-crate");
+      pixel(supplies, 164, 140, 10, 2, "#6b4a2b", "camp-new-crate");
+    }
+
+    const crowd = decor(svg, "camp-crowd");
+    for (let i = people.length; i < scale.settlers; i += 1) {
+      const figure = svgEl(crowd, "g", { class: "camp-extra", transform: `translate(${140 + ((i * 29) % 130)} ${134 + (i % 3) * 6})` });
+      drawFigure(figure, i + 2, "stand");
+    }
+
+    people.forEach((person, index) => {
+      const pose = person.activity === "walk" ? "stand" : person.activity;
+      let x = 40 + (person.seed % 280);
+      let y = 132 + (person.seed % 3) * 5;
+      if (pose === "sit") { x = [158, 222, 140, 240][index % 4]; y = 136; }
+      if (pose === "tend") { x = 16 + (index % Math.max(scale.wagons, 1)) * 46 + 38; y = 106; }
+      if (pose === "returning") { x = 168; y = 134; }
+      const walks = pose === "stand" || pose === "carry" ? 14 + (person.seed % 18) : 0;
+      const spot = svgEl(svg, "g", {
+        class: `camp-settler is-${person.activity}`,
+        transform: `translate(${x} ${y})`,
+        role: "button",
+        tabindex: "0",
+        "data-camp-name": person.name,
+        "aria-pressed": "false",
+        "aria-label": `${person.name}, settler. Show details.`
+      });
+      const mover = svgEl(spot, "g", { class: "camp-mover", style: `--walk:${walks}px;--delay:-${person.seed % 9}s;--dur:${9 + (person.seed % 6)}s` });
+      pixel(mover, -5, -8, 18, 24, "transparent", "camp-hit");
+      drawFigure(mover, person.seed, pose);
+      const label = svgEl(mover, "text", { x: 3, y: -10, class: "camp-name", "text-anchor": "middle" });
+      label.textContent = person.name;
+    });
+
+    if (celebration) {
+      const banner = decor(svg, "camp-banner");
+      pixel(banner, 88, 50, 3, 62, "#6b4a2b");
+      pixel(banner, 309, 50, 3, 62, "#6b4a2b");
+      ["#9b482e", "#d29a35", "#315b3d", "#547985"].forEach((color, c) => {
+        for (let i = c; i < 15; i += 4) {
+          const flag = svgEl(banner, "polygon", { points: `0,0 13,0 6.5,13`, fill: color, class: "camp-flag", transform: `translate(${92 + i * 14.4} ${54 + Math.round(Math.sin(i / 2.2) * 3 + 3)})`, style: `--delay:-${i * 0.2}s` });
+          flag.setAttribute("stroke", "#2a1d12");
+          flag.setAttribute("stroke-width", "0.6");
+        }
+      });
+      const board = svgEl(banner, "rect", { x: 112, y: 20, width: 176, height: 24, rx: 2, class: "camp-board" });
+      board.setAttribute("fill", "#f0e5c8");
+      const title = svgEl(banner, "text", { x: 200, y: 36, class: "camp-banner-text", "text-anchor": "middle" });
+      title.textContent = `Welcome to ${celebration.name}!`;
+    }
+
+    svgEl(svg, "rect", { x: 0, y: 0, width: 400, height: 160, class: "camp-dark", "aria-hidden": "true" });
+    drawWeather(svg, weather.id);
+  }
+
+  function selectCampPerson(scene, name) {
+    campSelected = name;
+    const story = scene.querySelector("[data-camp-person]");
+    const person = campPeopleList.find((item) => item.name === name);
+    scene.querySelectorAll("[data-camp-name]").forEach((node) => {
+      const on = node.dataset.campName === name;
+      node.classList.toggle("is-selected", on);
+      node.setAttribute("aria-pressed", String(on));
+    });
+    if (!story) return;
+    if (!person) {
+      story.textContent = campPeopleList.length ? "Select a settler to see their story." : "Log miles or go hunting to bring settlers to camp.";
+      return;
+    }
+    const parts = [`${person.name} has contributed ${formatNumber(person.miles)} mi${person.food > 0 ? ` and ${formatNumber(person.food, 0)} lbs of food` : ""}.`];
+    parts.push(person.latest.kind === "hunt"
+      ? `Latest: hunted ${formatNumber(person.latest.food, 0)} lbs on ${formatWhen(person.latest.timestamp)}.`
+      : `Latest: traveled ${formatNumber(person.latest.miles)} mi on ${formatWhen(person.latest.timestamp)}.`);
+    parts.push(`First seen ${formatWhen(person.firstSeen)} in the recent log.`);
+    story.textContent = parts.join(" ");
+  }
+
+  function renderCampRoster(scene, people) {
+    campPeopleList = people;
+    const roster = scene.querySelector("[data-camp-roster]");
+    if (roster && roster.dataset.names !== people.map((p) => p.name).join("|")) {
+      roster.dataset.names = people.map((p) => p.name).join("|");
+      roster.replaceChildren();
+      people.forEach((person) => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "camp-roster-button";
+        button.dataset.campName = person.name;
+        button.setAttribute("aria-pressed", "false");
+        button.textContent = person.name;
+        item.append(button);
+        roster.append(item);
+      });
+    }
+    if (!scene.dataset.campBound) {
+      scene.dataset.campBound = "1";
+      scene.addEventListener("click", (event) => {
+        const target = event.target.closest ? event.target.closest("[data-camp-name]") : null;
+        if (target) selectCampPerson(scene, target.dataset.campName);
+      });
+      scene.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const target = event.target.closest ? event.target.closest(".camp-settler") : null;
+        if (!target) return;
+        event.preventDefault();
+        selectCampPerson(scene, target.dataset.campName);
+      });
+    }
+    selectCampPerson(scene, people.some((p) => p.name === campSelected) ? campSelected : null);
+  }
+
+  // Time of day follows the visitor's clock; weather follows the UTC date and trail region so all visitors agree.
+  // ?preview=night,rain (any time/weather ids) is a harmless way to look at the other states.
+  function campContext(snapshot, story) {
+    const now = Date.now();
+    let time = story.timeOfDay(new Date(now).getHours());
+    let weather = story.weatherFor(snapshot.totalMiles, Math.floor(now / 86400000));
+    try {
+      const preview = (new URLSearchParams(window.location.search).get("preview") || "").split(",");
+      preview.forEach((token) => {
+        if (["dawn", "day", "dusk", "night"].includes(token)) time = token;
+        else if (["clear", "windy", "rain", "fog", "snow"].includes(token)) weather = story.weatherInfo(token);
+      });
+    } catch (error) {
+      time = time || "day";
+    }
+    const hunt = story.latestHunt(snapshot.journal, now);
+    const people = story.campPeople(snapshot.journal, snapshot.contributors, hunt && hunt.fresh ? hunt.name : null, 8);
+    return { time, weather, hunt, people, celebration: story.celebrationAt(snapshot.totalMiles) };
   }
 
   function listItem(text, className) {
@@ -1315,7 +1573,17 @@
 
     document.querySelectorAll("[data-camp-scene]").forEach((scene) => {
       const scale = story.campScale(snapshot.totalMiles, totalFood);
-      renderCampScene(scene, scale);
+      const context = campContext(snapshot, story);
+      renderCampScene(scene, scale, context);
+      renderCampRoster(scene, context.people);
+      const news = scene.querySelector("[data-camp-news]");
+      if (news) {
+        const lines = [];
+        if (context.celebration) lines.push(`The wagon train has reached ${context.celebration.name}! The camp is celebrating.`);
+        if (context.hunt && context.hunt.fresh) lines.push(`Just in: ${context.hunt.name} returned from the hunt with ${formatNumber(context.hunt.food, 0)} lbs of game.`);
+        lines.push(context.weather.text);
+        news.textContent = lines.join(" ");
+      }
       const caption = scene.querySelector("[data-camp-caption]");
       if (caption) {
         caption.textContent = `${scale.wagons} ${scale.wagons === 1 ? "wagon" : "wagons"}, ${scale.settlers} settlers, ${scale.tents} ${scale.tents === 1 ? "tent" : "tents"} and ${formatNumber(totalFood, 0)} lbs of food at camp.`;

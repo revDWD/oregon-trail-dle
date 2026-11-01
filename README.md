@@ -108,3 +108,12 @@ The route follows an approximate polyline of the emigrant trail through Independ
 
 
 > Deploy note: HTML uses versioned `?v=N` asset URLs to refresh cached code/styles after a release. Bump the version in the affected pages whenever JavaScript or CSS changes.
+
+## Living camp, weather and hunting grounds (Phase 5)
+
+- **Camp diorama:** the community camp is an animated SVG: flickering fires, rising smoke, swaying wagons, lantern glow at night (visitor's local clock), wandering oxen, horses and dogs. Wagons, tents, animals and supply crates grow with real community miles and food. Animations pause under prefers-reduced-motion.
+- **Settlers:** recent and top contributors appear as named settlers. Select one (or its roster button) to see miles, food, first seen and latest contribution. Stats come from the latest 200 log rows. Names are public; nothing else personal is shown.
+- **Hunters return:** a hunt logged within 6 hours walks into camp with a crate and a news line.
+- **Weather:** deterministic from the UTC day and trail region (clear, windy, rain, fog, snow in the mountains), so every visitor sees the same sky. Preview with `?preview=night,rain`.
+- **Celebrations:** for 40 miles after a landmark the camp shows bunting, a welcome board and a bigger fire.
+- **Hunt:** adds turkey and elk, six grounds (prairie, grassland, forest, riverbank, foothills, mountain edge) chosen by trail position, herds that flee together, grazing, and rain, fog, wind and snow. Test with `pages/hunt.html?biome=forest&weather=rain`.

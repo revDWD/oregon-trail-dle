@@ -2,7 +2,7 @@
 
 ## 🌐 Live site: [revdwd.github.io/oregon-trail-dle](https://revdwd.github.io/oregon-trail-dle/)
 
-> **About this project:** an experiment in using AI to build interesting web use cases. It is a small, dependency-free static site made to see how far AI-assisted development can go with a playful idea: a fitness tracker with a game layer.
+> **About this project:** This project is an experiment in using AI to build interesting web use cases. It is a small, dependency-free static site made to see how far AI-assisted development can go with a small need: a fitness tracker with a game layer. It now uses supabase to persist community mileage as it is entered. Lots of improvements still to be made here. 
 
 A fitness-tracker-meets-game that follows a 2,040-mile Oregon Trail. Contribute the miles you walk, run, or ride, watch the community wagon travel from Independence, Missouri, to Oregon City, Oregon, and use every 5 miles in your private journal to unlock a food-hunting minigame.
 

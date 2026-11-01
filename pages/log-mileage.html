@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Add a new entry to your Oregon Trail mileage journal.">
   <title>Log miles | Oregon Trail DLE</title>
-  <link rel="stylesheet" href="../assets/css/style.css?v=5">
-  <script src="../assets/js/trail-config.js?v=5" defer></script>
-  <script src="../assets/js/supabase-config.js?v=5" defer></script>
-  <script src="../assets/js/community.js?v=5" defer></script>
-  <script src="../assets/js/script.js?v=5" defer></script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=6">
+  <script src="../assets/js/trail-config.js?v=6" defer></script>
+  <script src="../assets/js/supabase-config.js?v=6" defer></script>
+  <script src="../assets/js/community.js?v=6" defer></script>
+  <script src="../assets/js/script.js?v=6" defer></script>
 </head>
 <body data-page="log">
   <header class="site-header">
@@ -42,8 +42,12 @@
         </div>
       </div>
       <div class="notice" data-storage-status role="status" hidden></div>
-      <p class="notice storage-notice">Miles are sent to the Community Expedition. Notes, hunts, and food are saved in this browser.</p>
+      <p class="notice storage-notice">Your name and miles are posted to the Community Expedition journal. Notes stay in this browser.</p>
       <form class="mileage-form" data-mileage-form novalidate>
+        <div class="form-field">
+          <label for="traveler">Your name <span class="optional">(optional, shown publicly)</span></label>
+          <input id="traveler" name="traveler" type="text" maxlength="24" autocomplete="nickname" placeholder="Traveler">
+        </div>
         <div class="form-row">
           <div class="form-field">
             <label for="miles">Miles traveled</label>

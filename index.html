@@ -6,12 +6,13 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Track your miles as you make your way west along the Oregon Trail.">
   <title>Oregon Trail DLE | Your journey west</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=5">
-  <script src="assets/js/us-states.js?v=5" defer></script>
-  <script src="assets/js/trail-config.js?v=5" defer></script>
-  <script src="assets/js/supabase-config.js?v=5" defer></script>
-  <script src="assets/js/community.js?v=5" defer></script>
-  <script src="assets/js/script.js?v=5" defer></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <script src="assets/js/us-states.js?v=6" defer></script>
+  <script src="assets/js/trail-config.js?v=6" defer></script>
+  <script src="assets/js/supabase-config.js?v=6" defer></script>
+  <script src="assets/js/trail-story.js?v=6" defer></script>
+  <script src="assets/js/community.js?v=6" defer></script>
+  <script src="assets/js/script.js?v=6" defer></script>
 </head>
 <body data-page="home">
   <header class="site-header">
@@ -29,16 +30,26 @@
 
   <main class="page-shell">
     <div class="notice" data-storage-status role="alert" hidden></div>
-    <section class="map-hero-head" aria-labelledby="journey-heading">
-      <div>
-        <p class="eyebrow">Oregon Trail · 1843</p>
-        <h1 id="journey-heading">Community Expedition</h1>
-        <p>Every contributed mile moves the wagon west.</p>
+    <section class="trail-card community-card" aria-labelledby="journey-heading" data-community-panel>
+      <div class="map-hero-head">
+        <div>
+          <p class="eyebrow">Oregon Trail · 1843</p>
+          <h1 id="journey-heading">Community Expedition</h1>
+          <p>One wagon train heading west. Every visitor moves it forward.</p>
+        </div>
+        <a class="button button-primary" href="pages/log-mileage.html">Log miles <span aria-hidden="true">→</span></a>
       </div>
-      <a class="button button-primary" href="pages/log-mileage.html">Log today's miles <span aria-hidden="true">→</span></a>
+      <div class="fitness-progress">
+        <div><span>Community progress</span><strong><span data-total-miles>--</span> of 2,040 miles</strong></div>
+        <strong class="fitness-percent" data-progress-label>Loading…</strong>
+        <div class="progress-track" role="progressbar" aria-label="Oregon Trail distance completed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progressbar>
+          <span class="progress-fill" data-progress-fill></span>
+        </div>
+      </div>
+      <p class="community-status-line"><span class="distance-chip" data-community-status role="status">Loading community progress…</span></p>
     </section>
 
-    <section class="trail-card map-hero-card" aria-labelledby="map-heading">
+    <section class="trail-card map-hero-card" aria-labelledby="map-heading" data-trail-map>
         <div class="trail-card-heading">
           <div>
             <p class="eyebrow">Missouri to Oregon</p>
@@ -46,7 +57,7 @@
           </div>
           <span class="distance-chip">The community's route west</span>
         </div>
-        <div class="trail-map" data-trail-map>
+        <div class="trail-map">
           <svg class="trail-svg us-map" viewBox="0 0 1000 570" role="group" aria-labelledby="home-map-title home-map-desc">
             <title id="home-map-title">Community progress on the Oregon Trail</title>
             <desc id="home-map-desc">A map of the community expedition from Independence, Missouri, to Oregon City, Oregon. Select a numbered landmark for details.</desc>
@@ -72,13 +83,6 @@
             Community wagon
           </span>
         </div>
-        <div class="fitness-progress">
-          <div><span>Community progress</span><strong><span data-total-miles>--</span> of 2,040 miles</strong></div>
-          <strong class="fitness-percent" data-progress-label>Loading…</strong>
-          <div class="progress-track" role="progressbar" aria-label="Oregon Trail distance completed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progressbar>
-            <span class="progress-fill" data-progress-fill></span>
-          </div>
-        </div>
         <div class="map-readout">
           <div><span>Current location</span><strong data-map-current>Independence, Missouri</strong></div>
           <div><span>Next landmark</span><strong data-next-landmark>Fort Kearny</strong><small data-next-distance>300 miles ahead</small></div>
@@ -88,28 +92,74 @@
           <strong data-landmark-name>Independence, Missouri</strong>
           <span data-landmark-mileage>Trailhead · mile 0</span>
           <span data-landmark-distance>Select a numbered marker or waypoint to explore the route.</span>
+          <dl class="landmark-facts">
+            <div><dt>Why it mattered</dt><dd data-landmark-importance></dd></div>
+            <div><dt>On the Oregon Trail</dt><dd data-landmark-relevance></dd></div>
+            <div><dt>Fun fact</dt><dd data-landmark-funfact></dd></div>
+          </dl>
         </div>
         <div class="landmark-list" data-landmark-list aria-label="Oregon Trail landmarks"></div>
         <p class="map-disclaimer">State boundaries use Census-derived geography. Rivers and mountain ranges are hand-placed and approximate, as is the trail mileage.</p>
     </section>
 
-    <section class="trail-card community-card" aria-labelledby="community-heading" data-community-panel>
+    <section class="trail-card camp-scene-card" aria-labelledby="camp-heading" data-camp-scene>
       <div class="trail-card-heading">
         <div>
-          <p class="eyebrow">One trail, many travelers</p>
-          <h2 id="community-heading">Community Expedition</h2>
+          <p class="eyebrow">The wagon train at rest</p>
+          <h2 id="camp-heading">Community camp</h2>
         </div>
-        <span class="distance-chip" data-community-status role="status">Loading community progress…</span>
+      </div>
+      <svg class="camp-svg" viewBox="0 0 400 160" role="img" aria-labelledby="camp-caption" shape-rendering="crispEdges"></svg>
+      <p class="camp-caption" id="camp-caption" data-camp-caption>The camp grows as the community travels and hunts.</p>
+    </section>
+
+    <section class="trail-card event-card" aria-labelledby="event-heading" data-event-card hidden>
+      <p class="eyebrow">Trail event · <span data-event-mile></span></p>
+      <h2 id="event-heading" data-event-title></h2>
+      <p data-event-text></p>
+      <p class="event-education"><strong>History:</strong> <span data-event-education></span></p>
+    </section>
+
+    <section class="trail-card community-card" aria-labelledby="stats-heading">
+      <div class="trail-card-heading">
+        <div>
+          <p class="eyebrow">By the numbers</p>
+          <h2 id="stats-heading">Community statistics</h2>
+        </div>
       </div>
       <div class="community-stats" aria-live="polite" aria-busy="true">
         <div><span>Community miles traveled</span><strong data-community-miles>Loading…</strong></div>
+        <div><span>Food stores</span><strong data-community-food>Loading…</strong></div>
         <div><span>Current landmark</span><strong data-community-landmark>Loading…</strong></div>
         <div><span>Trail completion</span><strong data-community-percent>Loading…</strong></div>
         <div><span>Contributions</span><strong data-community-contributions>Loading…</strong></div>
       </div>
-      <h3 class="community-recent-heading">Recent contributions</h3>
+      <a class="text-link" href="pages/hunt.html">Hunt to stock the wagons <span aria-hidden="true">→</span></a>
+    </section>
+
+    <section class="trail-card" aria-labelledby="journal-heading">
+      <div class="trail-card-heading">
+        <div>
+          <p class="eyebrow">Newest first</p>
+          <h2 id="journal-heading">Trail journal</h2>
+        </div>
+      </div>
+      <ul class="journey-list trail-journal" data-trail-journal aria-live="polite"></ul>
+    </section>
+
+    <section class="trail-card contributors-card" aria-labelledby="contributors-heading">
+      <div class="trail-card-heading">
+        <div>
+          <p class="eyebrow">Working together</p>
+          <h2 id="contributors-heading">Latest contributors</h2>
+        </div>
+      </div>
+      <h3 class="community-recent-heading">Latest contributions</h3>
       <ul class="journey-list" data-community-recent aria-live="polite"></ul>
-      <a class="text-link" href="pages/hunt.html">Visit the hunting grounds <span aria-hidden="true">→</span></a>
+      <h3 class="community-recent-heading">Largest contributions</h3>
+      <ul class="journey-list" data-community-largest></ul>
+      <h3 class="community-recent-heading">Most active travelers</h3>
+      <ul class="journey-list" data-community-contributors></ul>
     </section>
 
     <section class="section-block recent-section" aria-labelledby="recent-heading">

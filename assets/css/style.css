@@ -2120,3 +2120,108 @@ h2,
     font-size: 12px;
   }
 }
+
+/* ---- Phase 3: camp scene, trail journal, landmark cards, hunting game ---- */
+.camp-svg,
+.hunt-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(112, 75, 50, 0.35);
+  image-rendering: pixelated;
+}
+
+.hunt-canvas {
+  aspect-ratio: 16 / 9;
+  background: #e9d7a8;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.hunt-canvas:focus-visible {
+  outline: 3px solid var(--rust);
+  outline-offset: 3px;
+}
+
+.camp-caption,
+.hunt-help {
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.hunt-send {
+  margin-top: 20px;
+  gap: 10px;
+}
+
+.trail-journal {
+  display: grid;
+  gap: 4px;
+}
+
+.journal-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(112, 75, 50, 0.2);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.5;
+}
+
+.journal-entry small {
+  flex: none;
+  color: var(--leather);
+}
+
+.journal-entry.is-landmark,
+.journal-entry.is-milestone,
+.journal-entry.is-event {
+  font-weight: 600;
+  color: var(--green);
+}
+
+.event-card h2 {
+  margin: 4px 0 8px;
+}
+
+.event-education {
+  padding-top: 10px;
+  border-top: 1px solid rgba(112, 75, 50, 0.25);
+  font-size: 0.95rem;
+}
+
+.landmark-facts {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.landmark-facts dt {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--leather);
+}
+
+.landmark-facts dd {
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+
+.landmark-facts dd:empty,
+.landmark-facts div:has(dd:empty) {
+  display: none;
+}
+
+.community-status-line {
+  margin: 12px 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journal-entry {
+    transition: none;
+  }
+}

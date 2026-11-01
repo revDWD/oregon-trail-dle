@@ -12,7 +12,7 @@ test("the site is static: no server or database, and only community.js touches t
   const client = await read("assets/js/script.js");
   assert.doesNotMatch(client, /fetch\(|XMLHttpRequest|\/api\//);
   const community = await read("assets/js/community.js");
-  assert.doesNotMatch(community, /localStorage\.(get|set)Item\((?!SOURCE_KEY)/);
+  assert.doesNotMatch(community, /localStorage\.(get|set)Item\((?!SOURCE_KEY|NAME_KEY)/);
   for (const gone of ["server", "db"]) {
     await assert.rejects(access(path.join(root, gone)));
   }
@@ -25,8 +25,6 @@ test("miles and hunts persist in localStorage and drive the hunting minigame", a
   assert.match(client, /localStorage\.getItem\(STORAGE_KEY\)/);
   assert.match(client, /localStorage\.setItem\(STORAGE_KEY/);
   assert.match(client, /Math\.floor\(groupMiles \/ 5\)/);
-  assert.match(client, /function startHunt/);
-  assert.match(client, /function resolveHunt/);
 });
 
 test("pages have no collaborative wording or elements", async () => {
@@ -40,9 +38,13 @@ test("pages have no collaborative wording or elements", async () => {
 test("pages keep the map, hunt, and hand-placed scenery", async () => {
   const [home, progress] = await Promise.all([read("index.html"), read("pages/progress.html")]);
   const hunt = await read("pages/hunt.html");
-  assert.ok(home.indexOf("data-trail-map") < home.indexOf("data-community-panel"));
-  assert.match(hunt, /data-next-hunt/);
-  assert.match(hunt, /data-hunt-location/);
+  assert.ok(home.indexOf("data-community-panel") < home.indexOf("data-trail-map"));
+  assert.ok(home.indexOf("data-trail-map") < home.indexOf("data-camp-scene"));
+  assert.ok(home.indexOf("data-camp-scene") < home.indexOf("data-community-miles"));
+  assert.ok(home.indexOf("data-community-miles") < home.indexOf("data-trail-journal"));
+  assert.ok(home.indexOf("data-trail-journal") < home.indexOf("data-community-recent"));
+  assert.match(hunt, /data-hunt-canvas/);
+  assert.match(hunt, /hunt-game\.js/);
   assert.match(home, /data-map-features/);
   assert.match(home, /data-map-base/);
   assert.match(home, /us-states\.js/);
@@ -61,7 +63,7 @@ test("community text remains readable on parchment cards and its source is onlin
   assert.match(css, /\.trail-card,[\s\S]*?color:\s*var\(--ink\)/);
   assert.match(css, /\.community-stats strong\s*\{[^}]*color:\s*var\(--green-dark\)/);
   assert.match(home, /data-community-miles>Loading/);
-  assert.match(log, /Miles are sent to the Community Expedition/);
+  assert.match(log, /Your name and miles are posted to the Community Expedition/);
   assert.match(log, /Community miles persist online/);
 });
 
@@ -70,7 +72,7 @@ test("mileage is not recorded locally when community service is unavailable", as
   const formHandler = client.slice(client.indexOf("function initializeLogForm"), client.indexOf("function refreshCampaign"));
   assert.match(formHandler, /Community contributions are unavailable\. No miles were saved/);
   assert.doesNotMatch(formHandler, /added to your journey/);
-  assert.match(formHandler, /community\.submit\(rounded\)\.then\(finish/);
+  assert.match(formHandler, /community\.submit\(rounded, nameField/);
   assert.match(client, /Delete this private journal entry\? Your community contribution will remain recorded/);
   assert.match(client, /Community contributions remain recorded online/);
 });

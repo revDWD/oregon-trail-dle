@@ -38,6 +38,13 @@ Every logged mile is also contributed to one community-wide expedition. The comm
 4. The home page shows the map and Community Expedition. The Journal page is deliberately personal and device-local. If Supabase is not configured or unreachable, the community card and map show an explicit status instead of presenting local miles as the global total.
 5. Open the browser console to see `[community]` logs for every database read, write, realtime event, and error. Landmarks live in [assets/js/trail-config.js](assets/js/trail-config.js).
 
+### Community food, names, journal, camp and events
+
+- **Schema additions:** `community_progress.total_food`; `mileage_log.contributor_name` (public, sanitized, 1-24 chars, default "Traveler"), `food_added` (0-500) and `kind` (`miles` or `hunt`). Existing databases get these via the idempotent section 6 of [supabase/schema.sql](supabase/schema.sql). Writes go through `add_community_contribution(p_name, p_miles, p_food, p_source, p_submission_id)`, with the same idempotency and rate limits as before; `add_community_miles` remains for compatibility.
+- **Privacy:** only the optional display name, miles/food and an anonymous device id are sent. Notes and journal history never leave the browser. Names are public.
+- **Trail journal, camp scene, events:** derived in the browser from the totals and the latest 200 log rows by [assets/js/trail-story.js](assets/js/trail-story.js); nothing extra is stored. The pixel camp grows with miles and food. A historical event card appears every 250 community miles (display-only, configured in `trail-config.js`). "Most active travelers" counts only those latest 200 rows.
+- **Hunt page:** a 30-second canvas hunt ([assets/js/hunt-game.js](assets/js/hunt-game.js)): WASD/arrows aim, Space/click fires. Food (capped at 400 per round) is added to community stores. The older local hunt logic in `script.js` is legacy and unused by the page.
+
 ### Verify persistence
 
 1. Add 100 miles on **Log miles**; the console shows `DB write OK`, the Community panel shows 100.
@@ -87,7 +94,7 @@ Open `index.html` in a browser, or serve the folder with any static file server 
 
 - **Home:** community map and aggregate progress, followed by recent private journal entries.
 - **Log miles:** validates and submits to the shared Supabase total; notes and the matching private mileage entry remain in the current browser.
-- **Hunt:** standalone local minigame. Five miles in that browser's journal unlock a hunt.
+- **Hunt:** standalone canvas minigame; hunted food goes to the community stores.
 - **Journal:** private dates, notes, weekly/monthly totals, season log, delete, export, and restore. The map is kept on Home to avoid duplicate dashboards.
 - Public contribution totals are never cached in localStorage. The browser stores only an anonymous device identifier and, temporarily in `sessionStorage`, an idempotency key for an in-flight contribution.
 

@@ -45,7 +45,7 @@ test("submit calls the RPC, publishes the new total, and retries reuse the submi
   const bodies = [];
   let attempt = 0;
   const fetch = async (url, options) => {
-    if (url.includes("/rpc/add_community_miles")) {
+    if (url.includes("/rpc/add_community_contribution")) {
       bodies.push(JSON.parse(options.body));
       if (++attempt === 1) return { ok: false, status: 503, json: async () => ({ message: "down" }) };
       return ok(row(150, 2));
@@ -69,7 +69,7 @@ test("pending submission id survives reload, clears after success, and changes w
   const bodies = [];
   let first = true;
   const fetch = async (url, options) => {
-    if (url.includes("/rpc/add_community_miles")) {
+    if (url.includes("/rpc/add_community_contribution")) {
       bodies.push(JSON.parse(options.body));
       if (first) {
         first = false;

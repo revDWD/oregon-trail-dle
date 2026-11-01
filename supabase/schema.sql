@@ -110,3 +110,67 @@ end $$;
 --   total_miles = (select coalesce(sum(miles_added), 0) from public.mileage_log),
 --   total_contributions = (select count(*) from public.mileage_log),
 --   updated_at = now() where id = 1;
+
+-- 6. Phase 3: contributor names and community food ---------------------------------------------
+-- Idempotent additions on top of the original schema. Names are public by design (sanitized and
+-- capped at 24 chars); `source` (the anonymous device id) is still never readable by anon.
+-- Food from hunts is a contribution row with miles_added = 0 and kind = 'hunt'.
+
+alter table public.community_progress add column if not exists total_food numeric not null default 0;
+alter table public.mileage_log add column if not exists contributor_name text not null default 'Traveler';
+alter table public.mileage_log add column if not exists food_added numeric not null default 0;
+alter table public.mileage_log add column if not exists kind text not null default 'miles';
+alter table public.mileage_log drop constraint if exists mileage_log_miles_added_check;
+alter table public.mileage_log drop constraint if exists mileage_log_miles_range;
+alter table public.mileage_log add constraint mileage_log_miles_range check (miles_added >= 0 and miles_added <= 1000);
+alter table public.mileage_log drop constraint if exists mileage_log_food_check;
+alter table public.mileage_log add constraint mileage_log_food_check check (food_added >= 0 and food_added <= 500);
+alter table public.mileage_log drop constraint if exists mileage_log_name_check;
+alter table public.mileage_log add constraint mileage_log_name_check check (char_length(contributor_name) between 1 and 24);
+
+grant select (contributor_name, food_added, kind) on public.mileage_log to anon, authenticated;
+
+create or replace function public.add_community_contribution(
+  p_name text, p_miles numeric, p_food numeric, p_source text, p_submission_id uuid
+) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_name text := left(btrim(regexp_replace(coalesce(p_name,''), '[^A-Za-z0-9 ''.\-]', '', 'g')), 24);
+  v_miles numeric := coalesce(p_miles,0);
+  v_food numeric := coalesce(p_food,0);
+  v_existing public.mileage_log%rowtype;
+  v_total public.community_progress%rowtype;
+begin
+  if v_name = '' then v_name := 'Traveler'; end if;
+  if v_miles < 0 or v_miles > 1000 or v_food < 0 or v_food > 500 or (v_miles = 0 and v_food = 0)
+     or (v_miles > 0 and v_miles < 0.1) then
+    raise exception 'Invalid contribution';
+  end if;
+  if p_submission_id is null then raise exception 'Missing submission id'; end if;
+  select * into v_existing from public.mileage_log where submission_id = p_submission_id;
+  if found then
+    select * into v_total from public.community_progress where id = 1;
+    return json_build_object('total_miles', v_total.total_miles, 'total_food', v_total.total_food,
+      'total_contributions', v_total.total_contributions, 'duplicate', true);
+  end if;
+  if (select count(*) from public.mileage_log where source = left(coalesce(p_source,'web'),64)
+        and "timestamp" > now() - interval '1 minute') >= 10 then
+    raise exception 'Too many contributions from this device. Try again soon.';
+  end if;
+  if (select count(*) from public.mileage_log where "timestamp" > now() - interval '1 minute') >= 120 then
+    raise exception 'The trail is busy. Try again soon.';
+  end if;
+  select * into v_total from public.community_progress where id = 1 for update;
+  insert into public.mileage_log (miles_added, source, submission_id, contributor_name, food_added, kind)
+    values (v_miles, left(coalesce(p_source,'web'),64), p_submission_id, v_name, v_food,
+            case when v_food > 0 and v_miles = 0 then 'hunt' else 'miles' end);
+  update public.community_progress
+    set total_miles = total_miles + v_miles, total_food = total_food + v_food,
+        total_contributions = total_contributions + 1, updated_at = now()
+    where id = 1 returning * into v_total;
+  return json_build_object('total_miles', v_total.total_miles, 'total_food', v_total.total_food,
+    'total_contributions', v_total.total_contributions, 'duplicate', false);
+end $$;
+
+revoke all on function public.add_community_contribution(text, numeric, numeric, text, uuid) from public;
+grant execute on function public.add_community_contribution(text, numeric, numeric, text, uuid) to anon, authenticated;

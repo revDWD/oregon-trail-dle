@@ -846,6 +846,11 @@
     const distance = map.querySelector("[data-landmark-distance]");
     if (!name || !mileage || !distance) return;
 
+    const details = (window.OTDLE_CONFIG.landmarkDetails || {})[landmark.id] || {};
+    [["importance", details.importance], ["relevance", details.relevance], ["funfact", details.funFact]].forEach(([key, text]) => {
+      const element = map.querySelector(`[data-landmark-${key}]`);
+      if (element) element.textContent = text || "";
+    });
     name.textContent = landmark.name;
     mileage.textContent = `Mile ${formatNumber(landmark.miles)} · ${landmark.state}`;
     if (landmark.miles === totalMiles) {
@@ -933,6 +938,9 @@
       map.addEventListener("click", (event) => {
         if (event.target instanceof Element) handleSelection(event.target);
       });
+      map.addEventListener("mouseover", (event) => {
+        if (event.target instanceof Element && event.target.closest(".map-waypoint")) handleSelection(event.target);
+      });
       map.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         if (!(event.target instanceof Element)) return;
@@ -1019,7 +1027,7 @@
     }
     if (!panel) return;
     const set = (name, text) => {
-      const element = panel.querySelector(`[data-community-${name}]`);
+      const element = document.querySelector(`[data-community-${name}]`);
       if (element) element.textContent = text;
     };
     const status = (text, isError) => {
@@ -1032,7 +1040,7 @@
       set("landmark", "Community service unavailable");
       set("percent", "Unavailable");
       set("contributions", "Unavailable");
-      panel.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
+      document.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
       if (campaignState) renderTrailForState(true);
       return;
     }
@@ -1043,7 +1051,7 @@
       set("landmark", failed ? "Unavailable" : "Loading…");
       set("percent", failed ? "Unavailable" : "Loading…");
       set("contributions", failed ? "Unavailable" : "Loading…");
-      panel.querySelector(".community-stats")?.setAttribute("aria-busy", String(!failed));
+      document.querySelector(".community-stats")?.setAttribute("aria-busy", String(!failed));
       if (campaignState) renderTrailForState(failed);
       return;
     }
@@ -1055,9 +1063,10 @@
     set("percent", `${percent}%`);
     set("contributions", formatNumber(communitySnapshot.totalContributions || 0, 0));
     status(reason === "error" ? "Offline - showing last known total" : "Live", reason === "error");
-    panel.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
+    document.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
 
-    const list = panel.querySelector("[data-community-recent]");
+    renderCommunityStory(communitySnapshot);
+    const list = document.querySelector("[data-community-recent]");
     if (list) {
       list.replaceChildren();
       const recent = communitySnapshot.recent || [];
@@ -1069,9 +1078,145 @@
       recent.forEach((row) => {
         const item = document.createElement("li");
         const when = new Date(row.timestamp);
-        item.textContent = `${formatMiles(row.miles)} - ${Number.isNaN(when.getTime()) ? "" : when.toLocaleString()}`;
+        const what = row.miles > 0 ? `${formatMiles(row.miles)}` : `${formatNumber(row.food, 0)} lbs of food hunted`;
+        item.textContent = `${row.name}: ${what} - ${Number.isNaN(when.getTime()) ? "" : when.toLocaleString()}`;
         list.append(item);
       });
+    }
+  }
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  function pixel(parent, x, y, width, height, color) {
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(width));
+    rect.setAttribute("height", String(height));
+    rect.setAttribute("fill", color);
+    parent.append(rect);
+  }
+
+  // Pixel-art camp built from rectangles; the counts come from OTDLE_STORY.campScale(community totals).
+  function renderCampScene(scene, scale) {
+    const svg = scene.querySelector("svg");
+    if (!svg) return;
+    svg.replaceChildren();
+    pixel(svg, 0, 0, 400, 110, scale.stage === "late" ? "#e9b872" : scale.stage === "mid" ? "#f1d6a0" : "#cfe0e8");
+    pixel(svg, 0, 110, 400, 50, "#8a6b3f");
+    pixel(svg, 0, 110, 400, 4, "#6f8f4e");
+
+    for (let i = 0; i < scale.tents; i += 1) {
+      const x = 20 + (i % 5) * 62 + Math.floor(i / 5) * 24;
+      const y = 78 - Math.floor(i / 5) * 10;
+      pixel(svg, x + 12, y, 4, 4, "#d9c7a0");
+      pixel(svg, x + 8, y + 4, 12, 4, "#d9c7a0");
+      pixel(svg, x + 4, y + 8, 20, 4, "#d9c7a0");
+      pixel(svg, x, y + 12, 28, 8, "#c9b185");
+      pixel(svg, x + 11, y + 14, 6, 6, "#5b4528");
+    }
+
+    for (let i = 0; i < scale.wagons; i += 1) {
+      const x = 16 + i * 46;
+      pixel(svg, x + 4, 100, 30, 4, "#f5efe0");
+      pixel(svg, x, 104, 36, 6, "#7a5230");
+      pixel(svg, x + 4, 112, 6, 6, "#3b2a18");
+      pixel(svg, x + 26, 112, 6, 6, "#3b2a18");
+    }
+
+    const fireX = 188;
+    pixel(svg, fireX, 128, 24, 4, "#4a3520");
+    for (let level = 0; level < scale.fire; level += 1) {
+      pixel(svg, fireX + 6 + level * 2, 124 - level * 6, 12 - level * 4, 6, level === 0 ? "#d9622b" : "#f2b632");
+    }
+
+    for (let i = 0; i < scale.settlers; i += 1) {
+      const x = 140 + ((i * 29) % 130);
+      const y = 134 + (i % 3) * 6;
+      pixel(svg, x, y, 4, 4, "#f0c9a0");
+      pixel(svg, x, y + 4, 4, 6, i % 2 ? "#3f6f8f" : "#9a3f2b");
+    }
+
+    for (let i = 0; i < scale.crates; i += 1) {
+      pixel(svg, 300 + (i % 4) * 14, 136 - Math.floor(i / 4) * 10, 12, 8, "#b98a4a");
+      pixel(svg, 300 + (i % 4) * 14, 136 - Math.floor(i / 4) * 10, 12, 2, "#7a5230");
+    }
+  }
+
+  function listItem(text, className) {
+    const item = document.createElement("li");
+    if (className) item.className = className;
+    item.textContent = text;
+    return item;
+  }
+
+  function formatWhen(value) {
+    const when = new Date(value);
+    return Number.isNaN(when.getTime()) ? "" : when.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  // Community story: food, camp scene, historical event, trail journal and contributor lists.
+  function renderCommunityStory(snapshot) {
+    const story = window.OTDLE_STORY;
+    if (!snapshot || !story) return;
+    const totalFood = snapshot.totalFood || 0;
+    document.querySelectorAll("[data-community-food]").forEach((element) => {
+      element.textContent = `${formatNumber(totalFood, 0)} lbs`;
+    });
+
+    document.querySelectorAll("[data-camp-scene]").forEach((scene) => {
+      const scale = story.campScale(snapshot.totalMiles, totalFood);
+      renderCampScene(scene, scale);
+      const caption = scene.querySelector("[data-camp-caption]");
+      if (caption) {
+        caption.textContent = `${scale.wagons} ${scale.wagons === 1 ? "wagon" : "wagons"}, ${scale.settlers} settlers, ${scale.tents} ${scale.tents === 1 ? "tent" : "tents"} and ${formatNumber(totalFood, 0)} lbs of food at camp.`;
+      }
+    });
+
+    const eventCard = document.querySelector("[data-event-card]");
+    if (eventCard) {
+      const current = story.currentEvent(snapshot.totalMiles);
+      eventCard.hidden = !current;
+      if (current) {
+        eventCard.querySelector("[data-event-title]").textContent = current.title;
+        eventCard.querySelector("[data-event-text]").textContent = `${current.text} ${current.effect}`;
+        eventCard.querySelector("[data-event-education]").textContent = current.education;
+        eventCard.querySelector("[data-event-mile]").textContent = `Mile ${formatNumber(current.atMiles, 0)}`;
+      }
+    }
+
+    const journal = document.querySelector("[data-trail-journal]");
+    if (journal) {
+      journal.replaceChildren();
+      const entries = story.buildJournal(snapshot.journal || [], snapshot.totalMiles, totalFood);
+      if (!entries.length) journal.append(listItem("The wagon train is waiting for its first traveler."));
+      entries.forEach((entry) => {
+        const item = listItem("", `journal-entry is-${entry.kind}`);
+        const text = document.createElement("span");
+        text.textContent = entry.text;
+        const when = document.createElement("small");
+        when.textContent = formatWhen(entry.timestamp);
+        item.append(text, when);
+        journal.append(item);
+      });
+    }
+
+    const contributors = document.querySelector("[data-community-contributors]");
+    if (contributors) {
+      contributors.replaceChildren();
+      (snapshot.contributors || []).forEach((person) => {
+        const parts = [`${formatNumber(person.miles)} mi`];
+        if (person.food > 0) parts.push(`${formatNumber(person.food, 0)} lbs food`);
+        contributors.append(listItem(`${person.name} - ${parts.join(", ")}`));
+      });
+      if (!contributors.children.length) contributors.append(listItem("No contributors yet."));
+    }
+
+    const largest = document.querySelector("[data-community-largest]");
+    if (largest) {
+      largest.replaceChildren();
+      (snapshot.largest || []).forEach((row) => largest.append(listItem(`${row.name} - ${formatMiles(row.miles)}`)));
+      if (!largest.children.length) largest.append(listItem("No contributions yet."));
     }
   }
 
@@ -1213,6 +1358,8 @@
     const milesField = form.elements.namedItem("miles");
     const dateField = form.elements.namedItem("date");
     const notesField = form.elements.namedItem("notes");
+    const nameField = form.elements.namedItem("traveler");
+    if (nameField && window.OTDLE_COMMUNITY) nameField.value = window.OTDLE_COMMUNITY.getName();
     const message = document.querySelector("[data-form-message]");
     const noteCount = document.querySelector("[data-note-count]");
     const submitButton = form.querySelector('[type="submit"]');
@@ -1281,7 +1428,8 @@
       submitting = true;
       submitButton.disabled = true;
       message.textContent = "Sending your miles to the community...";
-      community.submit(rounded).then(finish, (error) => {
+      if (nameField) community.setName(nameField.value);
+      community.submit(rounded, nameField ? nameField.value : "").then(finish, (error) => {
         message.textContent = `Could not confirm your contribution: ${error.message}. Retrying the same amount is safe.`;
         message.classList.add("is-error");
       }).finally(() => {

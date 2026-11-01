@@ -9,17 +9,17 @@ The site is static (no build step). GitHub Pages serves the repository root from
 | Supabase **Project URL** | Supabase Dashboard > Project Settings > API | `assets/js/at/config.js` (`SUPABASE_CONFIG.url`) |
 | Supabase **publishable (anon) key** | Same page. Use the `sb_publishable_...` key (or legacy `anon`) | `assets/js/at/config.js` (`SUPABASE_CONFIG.anonKey`) |
 
-`config.js` currently holds the URL and publishable key that were already committed in this repository for the old Oregon game. **Confirm that this is the project you want for this game.** If not, replace both values. These two values are public by design; security comes from Row Level Security.
+**Confirmed project:** `eojzvyyhzdapwgsrtyne` (`https://eojzvyyhzdapwgsrtyne.supabase.co`), the same project the Oregon game used. `config.js` uses its existing publishable key. If that key has been rotated or deleted, copy the current `sb_publishable_...` key from Project Settings > API Keys into `config.js`. These two values are public by design; security comes from Row Level Security.
 
 **Never** put the `service_role` / secret key, database password or JWT secret in this repo. A test fails if one appears, and `layer.js` refuses to start with one.
 
 ## 2. Apply the database migration
 
-1. Supabase Dashboard > SQL Editor > New query.
+1. Supabase Dashboard > SQL Editor > New query (https://supabase.com/dashboard/project/eojzvyyhzdapwgsrtyne/sql/new).
 2. Paste the whole of `supabase/migrations/20261101000000_at_fitness_schema.sql` and run it. It is idempotent and only creates `at_*` objects, so the existing Oregon tables are untouched.
 3. Open the site once, then check Dashboard > Authentication > Users shows a new anonymous user and `at_profiles` has a matching row.
 
-(Or with the Supabase CLI: `supabase link --project-ref <ref>` then `supabase db push`.)
+(Or with the Supabase CLI: `supabase link --project-ref eojzvyyhzdapwgsrtyne` then `supabase db push`.)
 
 ## 3. Supabase Auth settings: anonymous sign-ins (there is no login screen)
 

@@ -11,7 +11,7 @@ The site is static (no build step). GitHub Pages serves the repository root from
 
 `config.js` currently holds the URL and publishable key that were already committed in this repository for the old Oregon game. **Confirm that this is the project you want for this game.** If not, replace both values. These two values are public by design; security comes from Row Level Security.
 
-**Never** put the `service_role` / `sb_secret_...` key, database password or JWT secret in this repo. A test fails if one appears, and `layer.js` refuses to start with one.
+**Never** put the `service_role` / secret key, database password or JWT secret in this repo. A test fails if one appears, and `layer.js` refuses to start with one.
 
 ## 2. Apply the database migration
 

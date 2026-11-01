@@ -51,6 +51,10 @@ select t.ok((select display_name from public.at_profiles where id = 'aaaaaaaa-00
 select t.ok((select display_name from public.at_profiles where id = 'bbbbbbbb-0000-4000-8000-000000000002') = 'Bob b', 'display names are sanitised by the trigger');
 select t.ok((select display_name from public.at_profiles where id = 'cccccccc-0000-4000-8000-000000000003') = 'Hiker', 'default name does not come from the email address');
 
+-- Anonymous sign-ins (the app has no login screen) create auth users with no email or metadata.
+insert into auth.users (id, email) values ('dddddddd-0000-4000-8000-000000000004', null);
+select t.ok((select display_name from public.at_profiles where id = 'dddddddd-0000-4000-8000-000000000004') = 'Hiker', 'anonymous (email-less) users get a profile');
+
 -- Static privilege checks -----------------------------------------------------------------------
 select t.ok(not exists (
   select 1 from information_schema.role_table_grants

@@ -19,7 +19,7 @@ export function toDataError(error) {
   // Messages we raise ourselves in SQL are user-safe; pass them through.
   const SAFE = ["22003", "22008", "22023", "54000", "P0002"];
   if (SAFE.includes(state) && message) return new DataError(message, "validation", error);
-  if (state === "28000" || /jwt|not authenticated/i.test(message)) return new DataError("Please sign in to continue.", "auth", error);
+  if (state === "28000" || /jwt|not authenticated/i.test(message)) return new DataError("Your trail session expired. Please reload the page.", "auth", error);
   if (state === "42501") return new DataError("You do not have permission to do that.", "forbidden", error);
   if (state === "23505") return new DataError("That already exists.", "duplicate", error);
   if (state === "23514") return new DataError("Some of those values are not allowed. Please check them and try again.", "validation", error);

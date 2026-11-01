@@ -95,5 +95,5 @@ test("every page-level view has an h1 that receives focus on navigation", () => 
   const h1s = [...views.matchAll(/h\("h1"/g)].length;
   const focus = [...views.matchAll(/"data-focus": ""/g)].length;
   assert.equal(h1s, focus);
-  assert.ok(h1s >= 7);
+  assert.ok(h1s >= 6);
 });

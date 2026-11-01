@@ -88,27 +88,27 @@ test("database errors become friendly DataErrors without leaking internals", asy
   await assert.rejects(createDataLayer(client).challenges.leaderboard("c"), (e) => e.code === "forbidden");
 });
 
-test("sign up passes the display name and redirect, and reports email confirmation", async () => {
-  const client = createFakeClient();
-  const data = createDataLayer(client, { redirectTo: "https://atfitnesstracker.abbydavid.com/" });
-  const result = await data.auth.signUp({ email: "a@example.test", password: "correct horse battery", displayName: "  Abby " });
-  assert.equal(result.needsConfirmation, true);
-  const call = client.calls.find((c) => c.name === "signUp");
-  assert.equal(call.args.options.data.display_name, "Abby");
-  assert.equal(call.args.options.emailRedirectTo, "https://atfitnesstracker.abbydavid.com/");
+test("ensureSession starts an anonymous session only when there is none", async () => {
+  const fresh = createFakeClient();
+  const user = await createDataLayer(fresh).auth.ensureSession();
+  assert.equal(user.id, "anon1");
+  assert.equal(fresh.calls.filter((c) => c.name === "signInAnonymously").length, 1);
+
+  const returning = createFakeClient({ session: signedIn });
+  assert.equal((await createDataLayer(returning).auth.ensureSession()).id, signedIn.user.id);
+  assert.equal(returning.calls.some((c) => c.name === "signInAnonymously"), false);
 });
 
-test("sign in errors surface as DataErrors; sign out and auth subscription work", async () => {
-  const client = createFakeClient({ auth: { signIn: async () => ({ data: {}, error: { message: "Invalid login credentials", status: 400 } }) } });
+test("anonymous sign-in failures surface as DataErrors; auth subscription works", async () => {
+  const client = createFakeClient({ auth: { signInAnonymously: async () => ({ data: {}, error: { message: "Anonymous sign-ins are disabled", status: 422 } }) } });
   const data = createDataLayer(client);
-  await assert.rejects(data.auth.signIn({ email: "a@b.c", password: "x" }), DataError);
-  await data.auth.signOut();
+  await assert.rejects(data.auth.ensureSession(), DataError);
+  assert.equal("signIn" in data.auth || "signUp" in data.auth || "signOut" in data.auth || "sendPasswordReset" in data.auth, false);
   const seen = [];
   const stop = data.auth.onChange((event, user) => seen.push([event, user && user.id]));
   client.authCallback("SIGNED_IN", { user: { id: "u9" } });
-  client.authCallback("SIGNED_OUT", null);
   stop();
-  assert.deepEqual(seen, [["SIGNED_IN", "u9"], ["SIGNED_OUT", null]]);
+  assert.deepEqual(seen, [["SIGNED_IN", "u9"]]);
   assert.equal(client.unsubscribed, true);
 });
 

@@ -6,6 +6,7 @@ A friends-based fitness game: log walks, hikes, runs and rides, and turn them in
 - Friends challenges with a leaderboard computed in Postgres (not in the browser)
 - Forgiving weekly goals and activity rhythm: encouraging, never punitive
 - Static frontend (GitHub Pages) + Supabase Auth/Postgres with Row Level Security
+- No login: each browser gets a Supabase anonymous user automatically (enable anonymous sign-ins in Supabase)
 - Unofficial and unaffiliated with the Appalachian Trail Conservancy. Mileage is approximate (see `docs/trail-data-sources.md`).
 
 ## Run locally

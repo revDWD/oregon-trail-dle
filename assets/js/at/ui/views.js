@@ -15,22 +15,6 @@ const bar = (percent, label) => h("div", { class: "bar", role: "progressbar", "a
 
 const stat = (label, value) => h("div", { class: "stat" }, h("dt", {}, label), h("dd", {}, value));
 
-export function authView({ mode, onSubmit, onSwitch, onReset, message }) {
-  const signup = mode === "signup";
-  const form = h("form", { class: "card", novalidate: true, "aria-labelledby": "auth-title",
-    onSubmit: (e) => { e.preventDefault(); const f = new FormData(e.target); onSubmit({ email: f.get("email"), password: f.get("password"), displayName: f.get("displayName") }); } },
-    h("h1", { id: "auth-title", tabindex: "-1", "data-focus": "" }, signup ? "Join the trail crew" : "Welcome back, hiker"),
-    h("p", {}, signup ? "Create an account to log miles and hike the Appalachian Trail with friends." : "Sign in to pick up where you left off."),
-    signup ? field("displayName", "Trail name", h("input", { id: "displayName", name: "displayName", maxlength: 40, autocomplete: "nickname", required: true, "aria-describedby": "displayName-hint" }), "Shown to friends in your challenge. It does not need to be your real name.") : null,
-    field("email", "Email", h("input", { id: "email", name: "email", type: "email", autocomplete: "email", required: true })),
-    field("password", "Password", h("input", { id: "password", name: "password", type: "password", minlength: 8, autocomplete: signup ? "new-password" : "current-password", required: true }), signup ? "At least 8 characters." : null),
-    h("p", { class: "status", role: "status", "data-status": "" }, message || ""),
-    h("button", { class: "btn primary", type: "submit" }, signup ? "Create account" : "Sign in"));
-  return h("section", { class: "auth" }, form,
-    h("p", { class: "center" }, h("button", { class: "link", type: "button", onClick: onSwitch }, signup ? "I already have an account" : "New here? Create an account")),
-    signup ? null : h("p", { class: "center" }, h("button", { class: "link", type: "button", onClick: onReset }, "Forgot password?")));
-}
-
 export function trailView(s) {
   const p = s.progress;
   const rhythm = s.rhythm;
@@ -38,6 +22,7 @@ export function trailView(s) {
   const trivia = triviaFor(p);
   return h("section", { "aria-labelledby": "page-title" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, p.completed ? "You finished the Appalachian Trail!" : "Your trail"),
+    (s.profile?.displayName || "Hiker") === "Hiker" ? h("p", { class: "card" }, "Welcome to the trail! ", h("a", { href: "#/profile" }, "Choose a trail name"), " so friends can spot you on the leaderboard.") : null,
     h("div", { class: "card hero" },
       h("p", { class: "big" }, `${p.percent}%`),
       bar(Math.floor(p.percent), "Trail completed"),
@@ -183,7 +168,9 @@ export function profileView(s, a) {
       field("goal", "Weekly goal in trail miles (optional)", h("input", { id: "goal", name: "goal", type: "number", inputmode: "decimal", min: 1, max: 200, step: "0.5", value: s.profile?.weeklyGoalMiles ?? "" }), "Pick something that feels good. Leave empty for no goal."),
       h("p", { class: "status", role: "status", "data-status": "" }),
       h("button", { class: "btn primary", type: "submit" }, "Save profile")),
-    h("div", { class: "card" }, h("p", {}, `Signed in as ${s.user.email}.`), h("button", { class: "btn", type: "button", onClick: a.signOut }, "Sign out")));
+    h("div", { class: "card" }, h("h2", {}, "About your progress"),
+      h("p", {}, "There is no login. Your miles are saved to the trail server and linked to this browser on this device."),
+      h("p", { class: "hint" }, "Clearing this browser's site data, using private browsing, or switching devices starts a new hiker. Keep using the same browser to keep your progress.")));
 }
 
 export { localDateString };

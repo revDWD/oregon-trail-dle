@@ -1,12 +1,12 @@
 // App shell: auth gate, hash routing, state and actions. All Supabase access goes through the data layer.
-import { SUPABASE_CONFIG, SITE_URL } from "../config.js";
+import { SUPABASE_CONFIG } from "../config.js";
 import { createClientFromGlobal, createDataLayer } from "../data/layer.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { computeProgress } from "../engine/progress.js";
 import { DEFAULT_RULES, localDateString } from "../engine/activities.js";
 import { computeRhythm, weekStart } from "../engine/game.js";
 import { h, clear } from "./dom.js";
-import { authView, trailView, logView, historyView, crewView, badgesView, profileView } from "./views.js";
+import { trailView, logView, historyView, crewView, badgesView, profileView } from "./views.js";
 
 const ROUTES = { trail: trailView, log: logView, history: historyView, crew: crewView, badges: badgesView, profile: profileView };
 const root = document.getElementById("app");
@@ -17,11 +17,10 @@ const PAGE = 50;
 
 const state = {
   user: null, profile: null, rules: DEFAULT_RULES, activities: [], hasMore: false, summary: { totalCreditedMiles: 0, weekCreditedMiles: 0, activeDates: [] },
-  challenges: [], challenge: null, board: [], groupSummary: null, inviteCode: null, editingId: null, today: localDateString(), authMode: "signin", authMessage: ""
+  challenges: [], challenge: null, board: [], groupSummary: null, inviteCode: null, editingId: null, today: localDateString()
 };
 let layer = null;
 let timer = null;
-let booted = false;
 
 const announce = (text) => { live.textContent = ""; setTimeout(() => { live.textContent = text; }, 30); };
 const route = () => { const r = location.hash.replace(/^#\/?/, ""); return ROUTES[r] ? r : "trail"; };
@@ -40,11 +39,7 @@ function render({ focus = false } = {}) {
   clear(root);
   nav.hidden = !state.user;
   if (!state.user) {
-    root.append(authView({
-      mode: state.authMode, message: state.authMessage, onSubmit: submitAuth,
-      onSwitch: () => { state.authMode = state.authMode === "signup" ? "signin" : "signup"; state.authMessage = ""; render({ focus: true }); },
-      onReset: resetPassword
-    }));
+    root.append(h("p", { class: "card", role: "status" }, "Getting your trail ready…"));
   } else {
     derived();
     const name = route();
@@ -53,24 +48,6 @@ function render({ focus = false } = {}) {
     document.title = `${name[0].toUpperCase()}${name.slice(1)} · AT Fitness Tracker`;
   }
   if (focus) root.querySelector("[data-focus]")?.focus();
-}
-
-async function submitAuth({ email, password, displayName }) {
-  setStatus("One moment…");
-  try {
-    if (state.authMode === "signup") {
-      const result = await layer.auth.signUp({ email, password, displayName });
-      if (result.needsConfirmation) { state.authMode = "signin"; state.authMessage = "Check your email to confirm your account, then sign in."; render({ focus: true }); return; }
-    } else {
-      await layer.auth.signIn({ email, password });
-    }
-  } catch (e) { setStatus(friendly(e)); }
-}
-
-async function resetPassword() {
-  const email = root.querySelector("#email")?.value;
-  if (!email) { setStatus("Enter your email above first."); root.querySelector("#email")?.focus(); return; }
-  try { await layer.auth.sendPasswordReset(email); setStatus("If that email has an account, a reset link is on its way."); } catch (e) { setStatus(friendly(e)); }
 }
 
 async function loadAll() {
@@ -180,36 +157,39 @@ const actions = {
       state.profile = await layer.profile.update({ displayName, weeklyGoalMiles: goal });
       setStatus("Saved."); announce("Profile saved.");
     } catch (e) { setStatus(friendly(e)); }
-  },
-  async signOut() { await layer.auth.signOut(); }
+  }
 };
 
 function onAuth(event, user) {
-  const changed = (user?.id || null) !== (state.user?.id || null);
+  if (!user || user.id === state.user?.id) return;
   state.user = user;
-  if (!changed && booted) return;
-  booted = true;
   clearInterval(timer);
-  if (user) {
-    loadAll();
-    // Leaderboard polling, not Realtime: RLS (correctly) hides other users' rows from realtime subscriptions.
-    timer = setInterval(() => { if (!document.hidden && route() === "crew") loadBoard(true); }, 60000);
-  } else {
-    Object.assign(state, { profile: null, activities: [], challenges: [], challenge: null, board: [], groupSummary: null, inviteCode: null, summary: { totalCreditedMiles: 0, weekCreditedMiles: 0, activeDates: [] } });
-    render({ focus: true });
-  }
+  loadAll();
+  // Leaderboard polling, not Realtime: RLS (correctly) hides other users' rows from realtime subscriptions.
+  timer = setInterval(() => { if (!document.hidden && route() === "crew") loadBoard(true); }, 60000);
+}
+
+function startFailed() {
+  root.replaceChildren(h("div", { class: "card", role: "alert" },
+    h("p", {}, "We couldn't reach the trail server. Check your connection and try again."),
+    h("button", { class: "btn primary", type: "button", onClick: () => { render(); boot(); } }, "Try again")));
+}
+
+function boot() {
+  layer.auth.ensureSession().then((user) => onAuth("INITIAL", user)).catch(startFailed);
 }
 
 function start() {
   try {
     const client = createClientFromGlobal(SUPABASE_CONFIG, globalThis);
-    layer = createDataLayer(client, { redirectTo: ["localhost", "127.0.0.1"].includes(location.hostname) ? location.origin : SITE_URL });
+    layer = createDataLayer(client);
   } catch (e) {
     root.replaceChildren(h("p", { class: "card", role: "alert" }, "The app could not start. Check assets/js/at/config.js."));
     return;
   }
   layer.auth.onChange(onAuth);
-  layer.auth.getUser().then((user) => { if (!user) onAuth("INITIAL", null); else onAuth("INITIAL", user); }).catch(() => onAuth("INITIAL", null));
+  render();
+  boot();
   window.addEventListener("hashchange", () => { if (state.user) { state.editingId = null; render({ focus: true }); if (route() === "crew") loadBoard(true); } });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) { loadBoard(true); } });
 }

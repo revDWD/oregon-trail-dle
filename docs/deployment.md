@@ -17,19 +17,20 @@ The site is static (no build step). GitHub Pages serves the repository root from
 
 1. Supabase Dashboard > SQL Editor > New query.
 2. Paste the whole of `supabase/migrations/20261101000000_at_fitness_schema.sql` and run it. It is idempotent and only creates `at_*` objects, so the existing Oregon tables are untouched.
-3. Dashboard > Authentication > Users: sign up once through the site and check an `at_profiles` row appears.
+3. Open the site once, then check Dashboard > Authentication > Users shows a new anonymous user and `at_profiles` has a matching row.
 
 (Or with the Supabase CLI: `supabase link --project-ref <ref>` then `supabase db push`.)
 
-## 3. Supabase Auth settings (Authentication > URL Configuration)
+## 3. Supabase Auth settings: anonymous sign-ins (there is no login screen)
 
-- **Site URL:** `https://atfitnesstracker.abbydavid.com`
-- **Redirect URLs (allow list):**
-  - `https://atfitnesstracker.abbydavid.com/**`
-  - `http://localhost:8000/**` (local development: `python3 -m http.server 8000`)
-  - `http://127.0.0.1:8000/**`
-- **Email confirmations:** your choice. If on, new users must click the emailed link before signing in (the app tells them). Supabase's built-in email sender is heavily rate limited, so for more than a handful of friends configure custom SMTP (Authentication > SMTP Settings).
-- Password minimum length: the app asks for 8; set the same in Authentication > Providers > Email.
+The app has no email/password login. On first visit, each browser is given a Supabase **anonymous user**, so every activity still belongs to a real `auth.uid()` and Row Level Security still prevents players editing each other's records.
+
+- **Required:** Authentication > Sign In / Providers > **Allow anonymous sign-ins: ON**. Without it the app shows "We couldn't reach the trail server".
+- **Recommended:** Authentication > Attack Protection: keep the anonymous sign-in rate limit (default 30 per hour per IP), and consider enabling CAPTCHA (Turnstile/hCaptcha). CAPTCHA would need a small frontend change to pass the token.
+- Site URL: set it to `https://atfitnesstracker.abbydavid.com`. Redirect URLs and SMTP are not needed, because the app sends no auth emails.
+- Optional housekeeping: anonymous users that never log activity can be deleted periodically from the dashboard. Deleting a user cascades to their `at_*` rows.
+
+**Trade-off to know:** progress is tied to the browser. Clearing site data, private browsing, or a new device starts a new hiker, and the old progress cannot be recovered from the app. (Supabase can later convert an anonymous user into an email account with `updateUser`, if you want that back.)
 
 ## 4. DNS (at the provider that hosts `abbydavid.com`)
 
@@ -54,16 +55,15 @@ Merging the feature branch into `main` replaces the old Oregon site. The Oregon 
 | Environment | URL | Notes |
 |---|---|---|
 | Production | https://atfitnesstracker.abbydavid.com | Pages from `main` |
-| Local | http://localhost:8000 | `python3 -m http.server 8000`; auth emails link back to localhost (must be in the redirect allow list) |
+| Local | http://localhost:8000 | `python3 -m http.server 8000` (anonymous sign-in works from any origin) |
 | Pages default | https://revdwd.github.io/oregon-trail-dle/ | Redirects to the custom domain once configured |
 
 For a separate staging database, create a second Supabase project, run the migration there, and point a local copy of `config.js` at it. Do not commit that change.
 
 ## 7. Verification checklist after go-live
 
-- [ ] Sign up, confirm email (if enabled), sign in.
+- [ ] First visit starts automatically (no login) and the Profile page lets you set a trail name.
 - [ ] Log an activity; trail percent and map marker update.
 - [ ] Create a challenge, copy the invite code, join from a second account; both appear on the leaderboard.
-- [ ] As the second account, try editing the first account's activity (it must fail / be invisible).
-- [ ] Password reset email returns to the site.
+- [ ] In a second browser (a second anonymous hiker), the first hiker's activities are not visible or editable.
 - [ ] `https://` loads with a valid certificate.

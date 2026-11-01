@@ -41,11 +41,12 @@ export function createFakeClient({ session = null, respond = () => ({ data: [], 
     },
     auth: {
       getSession: async () => ({ data: { session: currentSession }, error: null }),
-      signUp: async (args) => { calls.push({ kind: "auth", name: "signUp", args }); return auth.signUp ? auth.signUp(args) : { data: { user: { id: "u1" }, session: null }, error: null }; },
-      signInWithPassword: async (args) => { calls.push({ kind: "auth", name: "signIn", args }); return auth.signIn ? auth.signIn(args) : { data: { user: { id: "u1" }, session: { user: { id: "u1" } } }, error: null }; },
-      signOut: async () => { calls.push({ kind: "auth", name: "signOut" }); return { error: null }; },
-      resetPasswordForEmail: async (email, options) => { calls.push({ kind: "auth", name: "reset", email, options }); return { data: {}, error: null }; },
-      updateUser: async (args) => { calls.push({ kind: "auth", name: "updateUser", args }); return { data: {}, error: null }; },
+      signInAnonymously: async () => {
+        calls.push({ kind: "auth", name: "signInAnonymously" });
+        if (auth.signInAnonymously) return auth.signInAnonymously();
+        currentSession = { user: { id: "anon1", is_anonymous: true } };
+        return { data: { user: currentSession.user, session: currentSession }, error: null };
+      },
       onAuthStateChange: (callback) => { client.authCallback = callback; return { data: { subscription: { unsubscribe() { client.unsubscribed = true; } } } }; }
     }
   };

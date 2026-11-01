@@ -10,4 +10,5 @@ export const SUPABASE_CONFIG = Object.freeze({
 });
 
 // Canonical production address (used for auth redirect links; must be in the Supabase redirect allow-list).
+// Production URL (documentation only; the app has no login emails or auth redirects).
 export const SITE_URL = "https://atfitnesstracker.abbydavid.com";

@@ -4,6 +4,7 @@ Friends-based Appalachian Trail fitness game. Static site on GitHub Pages + Supa
 
 ## Rules
 - No build step; native ES modules; no runtime npm dependencies and no third-party CDN scripts. `@supabase/supabase-js` is vendored (update its checksum in `assets/vendor/supabase-js/README.md` when upgrading).
+- There is no login UI by design: `auth.ensureSession()` uses Supabase anonymous sign-in. Do not add email/password flows unless asked.
 - Never commit secrets. Only the public project URL and publishable key belong in `assets/js/at/config.js`. Never use a service-role/secret key in the browser.
 - Supabase is the source of truth. `localStorage` may only hold harmless preferences. All Supabase calls live in `assets/js/at/data/layer.js`.
 - Credited miles and conversion factors are computed by the database trigger; the client never sets `user_id`, `credited_miles` or `conversion_factor`. Keep `engine/activities.js` rules in sync with the SQL (tests enforce this).

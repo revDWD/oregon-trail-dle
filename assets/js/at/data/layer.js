@@ -17,10 +17,10 @@ export function createClientFromGlobal(config, globalObject = globalThis) {
     throw new DataError("Supabase is not configured. See docs/deployment.md.", "config");
   }
   if (/service_role|sb_secret_/i.test(config.anonKey)) throw new DataError("A secret key must never be used in the browser.", "config");
-  return lib.createClient(config.url, config.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  return lib.createClient(config.url, config.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 }
 
-export function createDataLayer(client, { newId = () => globalThis.crypto.randomUUID(), redirectTo } = {}) {
+export function createDataLayer(client, { newId = () => globalThis.crypto.randomUUID() } = {}) {
   async function run(promise) {
     let result;
     try {
@@ -40,35 +40,24 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
       throw toDataError(error);
     }
     const user = result && result.data && result.data.session && result.data.session.user;
-    if (!user) throw new DataError("Please sign in to continue.", "auth");
+    if (!user) throw new DataError("Your trail session has not started yet. Please reload the page.", "auth");
     return user;
   }
 
+  // No login screen: each browser gets its own Supabase anonymous user, so activities still belong
+  // to a real auth.uid() and Row Level Security still separates players.
   const auth = {
-    async signUp({ email, password, displayName }) {
-      const options = { data: { display_name: String(displayName || "").trim() } };
-      if (redirectTo) options.emailRedirectTo = redirectTo;
-      const data = await run(client.auth.signUp({ email, password, options }));
-      // With email confirmation on, there is a user but no session yet.
-      return { needsConfirmation: !data.session, user: data.user };
-    },
-    async signIn({ email, password }) {
-      const data = await run(client.auth.signInWithPassword({ email, password }));
-      return data.user;
-    },
-    async signOut() {
-      await run(client.auth.signOut());
-    },
     async getUser() {
       const result = await client.auth.getSession();
       const session = result && result.data && result.data.session;
       return session ? session.user : null;
     },
-    async sendPasswordReset(email) {
-      await run(client.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined));
-    },
-    async updatePassword(password) {
-      await run(client.auth.updateUser({ password }));
+    async ensureSession() {
+      const existing = await auth.getUser();
+      if (existing) return existing;
+      const data = await run(client.auth.signInAnonymously());
+      if (!data || !data.user) throw new DataError("Could not start your trail session. Please try again.", "auth");
+      return data.user;
     },
     onChange(callback) {
       const { data } = client.auth.onAuthStateChange((event, session) => callback(event, session ? session.user : null));

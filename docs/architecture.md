@@ -72,7 +72,7 @@ Authority: Postgres owns activities, challenge membership, conversion rules and 
 
 ## 5. Public configuration the owner must provide
 
-See `docs/deployment.md`. In short: Supabase project URL, publishable (anon) key, applying the migrations, Auth Site URL and redirect URLs, SMTP decision, DNS records.
+See `docs/deployment.md`. In short: Supabase project URL, publishable (anon) key, applying the migrations, enabling anonymous sign-ins (no login screen, decided 2026-11-01), DNS records.
 
 ## 6. Feature plan and acceptance criteria
 
@@ -80,7 +80,7 @@ See `docs/deployment.md`. In short: Supabase project URL, publishable (anon) key
 2. **Trail data + progress engine** — Appalachian Trail data (miles, direction, landmarks with coordinates, milestones, documented sources) and pure functions for position, percent, passed/next landmark, remaining distance, direction reversal. *Done when* unit tests cover boundaries (0, exactly on a landmark, finish, overshoot, both directions) and data-integrity checks (sorted, unique, within length, coordinates in range).
 3. **Activity rules** — validation and conversion mirrored from SQL. *Done when* tests cover each type, bounds, date rules, rounding, rule versioning (old activities keep their factor).
 4. **Supabase schema + RLS** — migrations and SQL tests against a real Postgres. *Done when* tests prove user B cannot select/insert/update/delete user A's activities, cannot forge `user_id` or `credited_miles`, anon gets nothing, non-members cannot read a challenge, leaderboard returns aggregates only.
-5. **Auth + data layer** — sign up/in/out, session, profile, activity CRUD behind `data/`. *Done when* tests with an injected fake client cover auth boundaries (signed-out calls rejected), error mapping and CRUD.
+5. **Auth + data layer** — automatic anonymous session (login removed at the owner's request; RLS unchanged), profile, activity CRUD behind `data/`. *Done when* tests with an injected fake client cover auth boundaries (signed-out calls rejected), error mapping and CRUD.
 6. **Personal dashboard + map** — logging form, history with edit/delete, progress, map, landmarks. Remove the Oregon UI/code/tests here.
 7. **Challenges + leaderboard** — create/join by code, leaderboard, group total.
 8. **Game mechanics** — landmark badges, milestones, trivia, weekly goal, forgiving streaks, cooperative milestones; all with safety caps and no punitive loss states.

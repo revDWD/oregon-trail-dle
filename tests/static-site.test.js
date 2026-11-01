@@ -41,8 +41,14 @@ test("pages keep the map, hunt, and hand-placed scenery", async () => {
   assert.ok(home.indexOf("data-community-panel") < home.indexOf("data-trail-map"));
   assert.ok(home.indexOf("data-trail-map") < home.indexOf("data-camp-scene"));
   assert.ok(home.indexOf("data-camp-scene") < home.indexOf("data-community-miles"));
-  assert.ok(home.indexOf("data-community-miles") < home.indexOf("data-trail-journal"));
-  assert.ok(home.indexOf("data-trail-journal") < home.indexOf("data-community-recent"));
+  assert.ok(home.indexOf("data-community-miles") < home.indexOf("data-community-recent"));
+  assert.doesNotMatch(home, /data-trail-journal|data-recent-entries/);
+  assert.match(home, /data-route-donner/);
+  assert.match(home, /data-donner-card/);
+  assert.doesNotMatch(await read("assets/js/script.js"), /"Live"/);
+  assert.match(progress, /data-trail-journal/);
+  assert.match(progress, /data-journal-filters/);
+  assert.match(progress, /community\.js/);
   assert.match(hunt, /data-hunt-canvas/);
   assert.match(hunt, /hunt-game\.js/);
   assert.match(home, /data-map-features/);

@@ -2220,6 +2220,250 @@ h2,
   margin: 12px 0 0;
 }
 
+.distance-chip[hidden] {
+  display: none;
+}
+
+.community-status-line:has([hidden]) {
+  display: none;
+}
+
+/* ---- Typography and readability audit (Phase 3b) ----
+   Minimums for HTML text: 16px body copy, 13px for captions and labels, 14px for controls.
+   SVG map labels keep their own sizes because they scale with the map. */
+:root {
+  --muted: #4f5c49;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.eyebrow,
+.distance-chip,
+.landmark-chip,
+.landmark-chip small,
+.map-legend,
+.map-readout small,
+.map-readout > div > span,
+.camp-supplies span,
+.history-summary span,
+.fitness-progress > div:first-child > span,
+.form-field small,
+.hunt-location > small,
+.entry-date,
+.entry-delete,
+.stat-foot,
+.privacy-note,
+.map-disclaimer,
+.site-footer,
+.landmark-detail,
+.community-stats span,
+.form-message,
+.notice,
+.hunt-message {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.nav-link,
+.brand,
+.button,
+.button-small,
+.text-link,
+.form-field label,
+.entry-notes,
+.empty-state,
+.hunt-help,
+.camp-caption,
+.landmark-detail strong,
+.map-readout strong,
+.map-hero-head p:last-child,
+.fitness-percent,
+.hero-copy {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.eyebrow {
+  letter-spacing: 0.12em;
+}
+
+.map-hero-head p:last-child,
+.page-intro p {
+  max-width: 60ch;
+}
+
+.map-hero-head > div > p:not(.eyebrow),
+.hero-copy {
+  color: var(--ink);
+}
+
+.landmark-facts dt {
+  font-size: 0.8125rem;
+}
+
+.landmark-facts dd {
+  font-size: 0.9375rem;
+}
+
+.trail-card > h2,
+.trail-card-heading h2 {
+  line-height: 1.2;
+}
+
+.nav-link {
+  min-height: 44px;
+}
+
+/* ---- Donner Party layer ---- */
+.route-donner {
+  fill: none;
+  stroke: #8c3a2b;
+  stroke-width: 3;
+  stroke-dasharray: 7 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+.donner-stop {
+  fill: #f0e5c8;
+  stroke: #8c3a2b;
+  stroke-width: 1.5;
+}
+
+.donner-marker circle {
+  fill: #f0e5c8;
+  stroke: #8c3a2b;
+  stroke-width: 2;
+}
+
+.donner-marker path {
+  fill: #8c3a2b;
+}
+
+.legend-donner {
+  border-top: 3px dashed #8c3a2b;
+  background: none;
+}
+
+.landmark-donner {
+  padding: 10px 12px;
+  border-left: 3px solid #8c3a2b;
+  background: rgba(140, 58, 43, 0.08);
+}
+
+.landmark-donner dt {
+  color: #8c3a2b;
+}
+
+.donner-card {
+  border-left: 5px solid #8c3a2b;
+}
+
+.donner-card h2 {
+  margin: 4px 0 8px;
+}
+
+.donner-lead {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #6f2c20;
+}
+
+.donner-next {
+  color: var(--muted);
+}
+
+/* ---- Trail journal: diary timeline ---- */
+.journal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 8px;
+}
+
+.journal-filter {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.journal-filter[aria-pressed="true"] {
+  border-color: var(--green);
+  background: var(--green);
+  color: #f6edd2;
+}
+
+.journal-filter:focus-visible {
+  outline: 3px solid var(--rust);
+  outline-offset: 2px;
+}
+
+.journal-hero .trail-journal {
+  position: relative;
+  margin: 12px 0 0;
+  padding: 0 0 0 22px;
+  border-left: 2px solid rgba(112, 75, 50, 0.35);
+  list-style: none;
+}
+
+.journal-hero .journal-entry {
+  position: relative;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 0 14px 4px;
+  font-size: 1.0625rem;
+}
+
+.journal-hero .journal-entry::before {
+  content: "";
+  position: absolute;
+  left: -29px;
+  top: 22px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--leather);
+}
+
+.journal-hero .journal-entry.is-donner::before {
+  background: #8c3a2b;
+}
+
+.journal-hero .journal-entry.is-hunt::before {
+  background: var(--gold);
+}
+
+.journal-hero .journal-entry.is-landmark::before,
+.journal-hero .journal-entry.is-milestone::before {
+  background: var(--green);
+}
+
+.journal-entry.is-donner {
+  color: #6f2c20;
+  font-style: italic;
+}
+
+.journal-entry small {
+  font-size: 0.8125rem;
+}
+
+.private-journal-head {
+  margin-top: 40px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .journal-entry {
     transition: none;

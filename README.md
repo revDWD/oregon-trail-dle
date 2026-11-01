@@ -44,6 +44,9 @@ Every logged mile is also contributed to one community-wide expedition. The comm
 - **Privacy:** only the optional display name, miles/food and an anonymous device id are sent. Notes and journal history never leave the browser. Names are public.
 - **Trail journal, camp scene, events:** derived in the browser from the totals and the latest 200 log rows by [assets/js/trail-story.js](assets/js/trail-story.js); nothing extra is stored. The pixel camp grows with miles and food. A historical event card appears every 250 community miles (display-only, configured in `trail-config.js`). "Most active travelers" counts only those latest 200 rows.
 - **Hunt page:** a 30-second canvas hunt ([assets/js/hunt-game.js](assets/js/hunt-game.js)): WASD/arrows aim, Space/click fires. Food (capped at 400 per round) is added to community stores. The older local hunt logic in `script.js` is legacy and unused by the page.
+- **Donner Party layer (Phase 3b):** a dashed second route on the map branches at Fort Bridger (Hastings Cutoff) and tracks the 1846 Donner-Reed party; a ghost marker shows where the Donner Party stood at the community's mileage. Stops, dates and per-landmark notes are static data in `trail-config.js` (`donnerParty`, `donnerNotes`); nothing is stored. A home card compares the community with the party's history. Dates are approximate where sources differ.
+- **Journal tab:** the Trail Journal lives on the Journal page with filters (all, miles, hunts, landmarks, milestones, events, Donner Party). The home page no longer shows the journal, recent private entries or a Live chip.
+- **Hunt polish:** animals pause, turn and vary speed, startle after misses; scenery is seeded; hits show feedback and optional WebAudio sound with a mute button.
 
 ### Verify persistence
 

@@ -109,6 +109,58 @@ test("hunt: the round ends when time or ammo runs out and aim stays in bounds", 
   assert.equal(hunt.fire(state), null);
 });
 
+test("Donner Party data lines up with landmarks and the journal", () => {
+  const { story, config: cfg } = loadStory();
+  const party = cfg.donnerParty;
+  assert.ok(party.stops.length >= 10);
+  party.stops.forEach((stop, index) => {
+    assert.ok(stop.text && stop.education && stop.dateLabel, stop.id);
+    if (index) assert.ok(stop.miles > party.stops[index - 1].miles, `${stop.id} is in route order`);
+  });
+  cfg.landmarks.forEach((landmark) => assert.ok(cfg.donnerNotes[landmark.id], `${landmark.id} has a Donner note`));
+  assert.equal(story.donnerAt(0).previous.id, "independence");
+  assert.equal(story.donnerAt(700).previous.id, "fort_laramie");
+  assert.equal(story.donnerAt(700).next.id, "independence_rock");
+  assert.equal(story.donnerAt(5000).finished, true);
+
+  const entries = story.buildJournal([row("1", "Ann", 400, 0, "2026-01-01T00:00:00Z")], 700, 0);
+  assert.ok(entries.some((entry) => entry.kind === "donner" && /Fort Laramie/.test(entry.text)));
+  assert.equal(story.buildJournal([row("1", "Ann", 400, 0, "2026-01-01T00:00:00Z")], 700, 0, 1).length, 1);
+});
+
+test("hunt: animals pause, turn and change speed, and a miss startles rabbits", () => {
+  const hunt = loadHunt();
+  let seed = 7;
+  const state = hunt.newRound(() => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; });
+  state.animals.push({ kind: "deer", x: 100, y: 100, dir: 1 });
+  const dirs = new Set();
+  const mults = new Set();
+  let paused = false;
+  for (let i = 0; i < 300 && !state.over; i += 1) {
+    hunt.step(state, 0.1, { dx: 0, dy: 0 });
+    const deer = state.animals.find((animal) => animal.kind === "deer");
+    if (deer) { dirs.add(deer.dir); mults.add(Math.round(deer.mult * 10)); paused = paused || deer.pause > 0; }
+  }
+  assert.ok(mults.size > 2 && paused);
+
+  const fresh = hunt.newRound(() => 0.5);
+  fresh.animals.push({ kind: "rabbit", x: 120, y: 100, dir: 1 });
+  fresh.aim.x = 110;
+  fresh.aim.y = 90;
+  assert.equal(hunt.fire(fresh), null);
+  assert.equal(fresh.animals[0].dir, 1);
+  fresh.aim.x = 150;
+  fresh.animals[0].x = 100;
+  hunt.fire(fresh);
+  assert.equal(fresh.animals[0].dir, -1);
+  assert.ok(fresh.puffs.length === 2);
+  const hit = hunt.newRound(() => 0.5);
+  hit.animals.push({ kind: "deer", x: 100, y: 100, dir: 1 });
+  hit.aim.x = 110;
+  hit.aim.y = 108;
+  hunt.fire(hit);
+  assert.equal(hit.popups[0].text, "+50 lbs");
+});
 test("community client sends name and food, sanitizes names, and summarizes the log", async () => {
   const bodies = [];
   const logRows = [

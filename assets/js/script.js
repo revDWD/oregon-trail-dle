@@ -678,6 +678,74 @@
     return [start, ...inner, end].map((point, i) => `${i ? "L" : "M"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
   }
 
+  // The Donner Party shares the community route to Fort Bridger, then follows the Hastings Cutoff.
+  // Distances use the community route's ruler, so miles are comparable on both paths.
+  let donnerModel = null;
+
+  function getDonnerModel() {
+    if (donnerModel) return donnerModel;
+    const party = window.OTDLE_CONFIG.donnerParty;
+    const route = getRouteModel();
+    if (!party) return null;
+    const stops = party.stops || [];
+    const ids = new Map(stops.filter((stop) => stop.coordinates).map((stop) => [stop.id, stop.coordinates]));
+    const bridgeAt = ROUTE_WAYPOINTS.indexOf("Fort Bridger");
+    const coordinates = [...ROUTE_WAYPOINTS.slice(0, bridgeAt + 1), ...party.route].map((waypoint) => {
+      if (Array.isArray(waypoint)) return waypoint;
+      const landmark = LANDMARKS.find((item) => item.shortName === waypoint);
+      return landmark ? landmark.coordinates : ids.get(waypoint);
+    });
+    const points = [];
+    let length = 0;
+    coordinates.forEach((coords) => {
+      const point = projectMapPoint(coords);
+      if (points.length) length += Math.hypot(point.x - points[points.length - 1].x, point.y - points[points.length - 1].y);
+      points.push({ ...point, distance: length });
+    });
+    donnerModel = { points, ruler: route.length / TRAIL_MILES, branchDistance: points[bridgeAt].distance, branchIndex: bridgeAt };
+    return donnerModel;
+  }
+
+  function getDonnerPoint(model, miles) {
+    const distance = Math.max(0, miles) * model.ruler;
+    const index = Math.max(1, model.points.findIndex((point) => point.distance >= distance));
+    const a = model.points[index - 1];
+    const b = model.points[index] || a;
+    const portion = b.distance === a.distance ? 0 : Math.min((distance - a.distance) / (b.distance - a.distance), 1);
+    return { x: a.x + (b.x - a.x) * portion, y: a.y + (b.y - a.y) * portion };
+  }
+
+  function renderDonnerRoute(svg, progressMiles) {
+    const layer = svg.querySelector("[data-route-donner]");
+    if (!layer) return;
+    layer.replaceChildren();
+    const model = getDonnerModel();
+    if (!model) return;
+    const branch = model.points.slice(model.branchIndex);
+    layer.append(createSvgElement("path", {
+      class: "route-donner",
+      d: branch.map((point, i) => `${i ? "L" : "M"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ")
+    }));
+    window.OTDLE_CONFIG.donnerParty.stops.filter((stop) => stop.coordinates).forEach((stop) => {
+      const point = getDonnerPoint(model, stop.miles);
+      const mark = createSvgElement("path", { class: "donner-stop", d: `M${point.x} ${point.y - 4.5}L${point.x + 4.5} ${point.y}L${point.x} ${point.y + 4.5}L${point.x - 4.5} ${point.y}Z` });
+      const title = createSvgElement("title", {});
+      title.textContent = `Donner Party: ${stop.name} (${stop.dateLabel})`;
+      mark.append(title);
+      layer.append(mark);
+    });
+    if (progressMiles > model.branchDistance / model.ruler) {
+      const stops = window.OTDLE_CONFIG.donnerParty.stops;
+      const point = getDonnerPoint(model, Math.min(progressMiles, stops[stops.length - 1].miles));
+      const ghost = createSvgElement("g", { class: "donner-marker", transform: `translate(${point.x} ${point.y})` });
+      ghost.append(createSvgElement("circle", { r: 6.5 }), createSvgElement("path", { d: "M-3 2L0 -3L3 2Z" }));
+      const title = createSvgElement("title", {});
+      title.textContent = "Where the Donner Party would be at the community's mileage";
+      ghost.append(title);
+      layer.append(ghost);
+    }
+  }
+
   function getWagonPosition(svg, miles) {
     const { points, length } = getRouteModel();
     const distance = Math.max(0, Math.min(miles, TRAIL_MILES)) / TRAIL_MILES * length;
@@ -761,6 +829,7 @@
     wagonLayer.replaceChildren();
 
     getRouteModel();
+    renderDonnerRoute(svg, progressMiles);
     remainingLayer.append(createSvgElement("path", { d: getRoutePath(0, TRAIL_MILES), class: "route-remaining" }));
     if (progressMiles > 0) {
       completedLayer.append(createSvgElement("path", { d: getRoutePath(0, progressMiles), class: "route-completed" }));
@@ -847,7 +916,7 @@
     if (!name || !mileage || !distance) return;
 
     const details = (window.OTDLE_CONFIG.landmarkDetails || {})[landmark.id] || {};
-    [["importance", details.importance], ["relevance", details.relevance], ["funfact", details.funFact]].forEach(([key, text]) => {
+    [["importance", details.importance], ["relevance", details.relevance], ["funfact", details.funFact], ["donner", (window.OTDLE_CONFIG.donnerNotes || {})[landmark.id]]].forEach(([key, text]) => {
       const element = map.querySelector(`[data-landmark-${key}]`);
       if (element) element.textContent = text || "";
     });
@@ -1025,13 +1094,18 @@
       renderTrailForState(reason === "error" && !communitySnapshot);
       renderPersonalSummary(campaignState);
     }
-    if (!panel) return;
+    if (!panel) {
+      if (communitySnapshot) renderCommunityStory(communitySnapshot);
+      return;
+    }
     const set = (name, text) => {
       const element = document.querySelector(`[data-community-${name}]`);
       if (element) element.textContent = text;
     };
     const status = (text, isError) => {
       set("status", text);
+      const chip = panel.querySelector("[data-community-status]");
+      if (chip) chip.hidden = !text;
       panel.querySelector("[data-community-status]")?.classList.toggle("is-error", Boolean(isError));
     };
     if (!window.OTDLE_COMMUNITY || !window.OTDLE_COMMUNITY.enabled) {
@@ -1039,6 +1113,7 @@
       set("miles", "Not connected");
       set("landmark", "Community service unavailable");
       set("percent", "Unavailable");
+      set("food", "Unavailable");
       set("contributions", "Unavailable");
       document.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
       if (campaignState) renderTrailForState(true);
@@ -1050,6 +1125,7 @@
       set("miles", failed ? "Unavailable" : "Loading…");
       set("landmark", failed ? "Unavailable" : "Loading…");
       set("percent", failed ? "Unavailable" : "Loading…");
+      set("food", failed ? "Unavailable" : "Loading…");
       set("contributions", failed ? "Unavailable" : "Loading…");
       document.querySelector(".community-stats")?.setAttribute("aria-busy", String(!failed));
       if (campaignState) renderTrailForState(failed);
@@ -1062,7 +1138,7 @@
     set("landmark", getLocation(seasonMiles));
     set("percent", `${percent}%`);
     set("contributions", formatNumber(communitySnapshot.totalContributions || 0, 0));
-    status(reason === "error" ? "Offline - showing last known total" : "Live", reason === "error");
+    status(reason === "error" ? "Offline - showing last known total" : "", reason === "error");
     document.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
 
     renderCommunityStory(communitySnapshot);
@@ -1155,6 +1231,79 @@
     return Number.isNaN(when.getTime()) ? "" : when.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
+  const JOURNAL_FILTERS = [
+    { id: "all", label: "All" },
+    { id: "travel", label: "Miles" },
+    { id: "hunt", label: "Hunts" },
+    { id: "landmark", label: "Landmarks" },
+    { id: "milestone", label: "Milestones" },
+    { id: "event", label: "Events" },
+    { id: "donner", label: "Donner Party" }
+  ];
+  const JOURNAL_PAGE_LIMIT = 80;
+  let journalFilter = "all";
+
+  function renderDonnerCard(totalMiles) {
+    const card = document.querySelector("[data-donner-card]");
+    const story = window.OTDLE_STORY;
+    if (!card || !story || !story.donnerAt) return;
+    const at = story.donnerAt(totalMiles);
+    card.hidden = !at;
+    if (!at) return;
+    const set = (name, text) => {
+      const element = card.querySelector(`[data-donner-${name}]`);
+      if (element) element.textContent = text;
+    };
+    const stop = at.previous;
+    set("lead", stop.miles === 0
+      ? `At this point in the journey, the Donner Party had just left Independence on ${stop.dateLabel}.`
+      : `Historically, the Donner Party reached ${stop.name} around ${stop.dateLabel}.`);
+    set("text", stop.text);
+    set("education", stop.education);
+    set("next", at.next ? `Next on their route: ${at.next.name}, about ${formatNumber(at.milesToNext, 0)} miles ahead of the community wagon.` : "The community wagon has passed the end of the Donner Party's route.");
+  }
+
+  function renderJournal(snapshot) {
+    const journal = document.querySelector("[data-trail-journal]");
+    const story = window.OTDLE_STORY;
+    if (!journal || !story) return;
+    const filters = document.querySelector("[data-journal-filters]");
+    const onJournalPage = Boolean(filters);
+    if (filters && !filters.childElementCount) {
+      JOURNAL_FILTERS.forEach((filter) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "journal-filter";
+        button.textContent = filter.label;
+        button.dataset.journalFilter = filter.id;
+        button.addEventListener("click", () => {
+          journalFilter = filter.id;
+          renderJournal(communitySnapshot);
+        });
+        filters.append(button);
+      });
+    }
+    filters?.querySelectorAll("[data-journal-filter]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.journalFilter === journalFilter));
+    });
+
+    journal.replaceChildren();
+    const all = story.buildJournal(snapshot.journal || [], snapshot.totalMiles, snapshot.totalFood || 0, onJournalPage ? 200 : undefined);
+    const entries = all.filter((entry) => journalFilter === "all" || entry.kind === journalFilter).slice(0, onJournalPage ? JOURNAL_PAGE_LIMIT : 20);
+    if (!entries.length) {
+      journal.append(listItem(journalFilter === "all" ? "The wagon train is waiting for its first traveler." : "No entries of this kind yet."));
+    }
+    entries.forEach((entry) => {
+      const item = listItem("", `journal-entry is-${entry.kind}`);
+      const text = document.createElement("span");
+      text.textContent = entry.text;
+      const when = document.createElement("small");
+      when.textContent = formatWhen(entry.timestamp);
+      item.append(text, when);
+      journal.append(item);
+    });
+  }
+
   // Community story: food, camp scene, historical event, trail journal and contributor lists.
   function renderCommunityStory(snapshot) {
     const story = window.OTDLE_STORY;
@@ -1185,21 +1334,8 @@
       }
     }
 
-    const journal = document.querySelector("[data-trail-journal]");
-    if (journal) {
-      journal.replaceChildren();
-      const entries = story.buildJournal(snapshot.journal || [], snapshot.totalMiles, totalFood);
-      if (!entries.length) journal.append(listItem("The wagon train is waiting for its first traveler."));
-      entries.forEach((entry) => {
-        const item = listItem("", `journal-entry is-${entry.kind}`);
-        const text = document.createElement("span");
-        text.textContent = entry.text;
-        const when = document.createElement("small");
-        when.textContent = formatWhen(entry.timestamp);
-        item.append(text, when);
-        journal.append(item);
-      });
-    }
+    renderDonnerCard(snapshot.totalMiles);
+    renderJournal(snapshot);
 
     const contributors = document.querySelector("[data-community-contributors]");
     if (contributors) {
@@ -1234,9 +1370,6 @@
     document.querySelectorAll("[data-days-traveled]").forEach((element) => {
       element.textContent = formatNumber(days, 0);
     });
-    const recent = entries.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 3);
-    const recentContainer = document.querySelector("[data-recent-entries]");
-    if (recentContainer) renderEntryList(recentContainer, recent, "Your first entry is waiting. Log some miles to get underway.");
     renderTrailForState();
   }
 

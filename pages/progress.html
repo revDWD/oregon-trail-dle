@@ -4,11 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f1e7">
-  <meta name="description" content="See your Oregon Trail mileage, recent activity, and journey history.">
+  <meta name="description" content="Read the community wagon train's trail journal and keep your own private mileage journal.">
   <title>Journal | Oregon Trail DLE</title>
-  <link rel="stylesheet" href="../assets/css/style.css?v=6">
-  <script src="../assets/js/trail-config.js?v=6" defer></script>
-  <script src="../assets/js/script.js?v=6" defer></script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=7">
+  <script src="../assets/js/trail-config.js?v=7" defer></script>
+  <script src="../assets/js/supabase-config.js?v=7" defer></script>
+  <script src="../assets/js/trail-story.js?v=7" defer></script>
+  <script src="../assets/js/community.js?v=7" defer></script>
+  <script src="../assets/js/script.js?v=7" defer></script>
 </head>
 <body data-page="progress">
   <header class="site-header">
@@ -26,13 +29,25 @@
 
   <main class="page-shell">
     <div class="notice" data-storage-status role="alert" hidden></div>
-    <section class="map-hero-head" aria-labelledby="journal-heading">
+    <section class="trail-card journal-hero" aria-labelledby="journal-heading">
+      <div class="map-hero-head">
+        <div>
+          <p class="eyebrow">Community diary · newest first</p>
+          <h1 id="journal-heading">Trail journal</h1>
+          <p>The wagon train's story, written by every visitor's miles and hunts, alongside the history of the Donner Party.</p>
+        </div>
+        <a class="button button-primary" href="log-mileage.html">Log miles <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="journal-filters" data-journal-filters role="group" aria-label="Filter journal entries"></div>
+      <ul class="journey-list trail-journal" data-trail-journal aria-live="polite"><li>Loading the trail journal…</li></ul>
+    </section>
+
+    <section class="map-hero-head private-journal-head" aria-labelledby="private-heading">
       <div>
         <p class="eyebrow">Private field journal</p>
-        <h1 id="journal-heading">Your journal</h1>
+        <h2 id="private-heading">Your journal</h2>
         <p>Your local history, game milestones, and backups live in this browser.</p>
       </div>
-      <a class="button button-primary" href="log-mileage.html">Log today's miles <span aria-hidden="true">→</span></a>
     </section>
 
     <section class="section-block" aria-labelledby="personal-summary-heading">

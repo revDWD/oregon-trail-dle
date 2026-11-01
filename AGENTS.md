@@ -61,7 +61,7 @@ pages/progress.html ────┘     home loads assets/js/us-states.js first
 | `assets/js/script.js` | Personal game/journal logic and rendering |
 | `assets/js/community.js` | Supabase API, contribution RPC, polling and Realtime |
 | `assets/js/supabase-config.js` | Public Supabase project URL and anon/publishable key |
-| `assets/js/trail-config.js` | Trail milestones, achievements, messages and events |
+| `assets/js/trail-config.js` | Trail milestones, achievements, messages, events, Donner Party route/stops (`donnerParty`) and notes (`donnerNotes`) |
 | `supabase/schema.sql` | Community tables, RLS policies, atomic contribution RPC and Realtime publication |
 | `assets/js/us-states.js` | ~97 KB single-line SVG path string. **Never view, diff, or hand-edit.** Regenerate from us-atlas / Census data if it must change |
 | `assets/css/style.css` | All styles (~2,000 lines, one file) |
@@ -148,3 +148,9 @@ pages/progress.html ────┘     home loads assets/js/us-states.js first
 - README title and project name are slightly out of sync.
 - No CI, linter, or lockfile; tests don't cover DOM rendering or map code. A GitHub Action running `npm test` on push would be a low-cost win.
 - Community writes are intentionally anonymous; rate-limits based on a client-supplied device id are best-effort. The private journal is device-local and its JSON backup is the only transfer path.
+
+## Phase 3 notes
+
+- Map hooks: `data-route-donner`, `data-landmark-donner`; home `data-donner-card`; journal `data-journal-filters` and `data-trail-journal`; hunt `data-hunt-mute`.
+- `pages/progress.html` loads `supabase-config.js`, `trail-story.js` and `community.js` to show the community Trail Journal; it must not contain `data-trail-map` or `data-community-panel`.
+- Donner stops must stay in ascending miles order (tested); `hunt-game.js` may not reference extra globals at load time. Typography floor: 13px captions, 16px body (override block at the end of `style.css`).

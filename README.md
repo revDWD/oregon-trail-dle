@@ -95,7 +95,7 @@ Open `index.html` in a browser, or serve the folder with any static file server 
 
 ## Navigation and data boundaries
 
-- **Home:** community map and aggregate progress, followed by recent private journal entries.
+- **Home:** community map, aggregate progress and the evolving camp scene.
 - **Log miles:** validates and submits to the shared Supabase total; notes and the matching private mileage entry remain in the current browser.
 - **Hunt:** standalone canvas minigame; hunted food goes to the community stores.
 - **Journal:** private dates, notes, weekly/monthly totals, season log, delete, export, and restore. The map is kept on Home to avoid duplicate dashboards.
@@ -111,9 +111,24 @@ The route follows an approximate polyline of the emigrant trail through Independ
 
 ## Living camp, weather and hunting grounds (Phase 5)
 
-- **Camp diorama:** the community camp is an animated SVG: flickering fires, rising smoke, swaying wagons, lantern glow at night (visitor's local clock), wandering oxen, horses and dogs. Wagons, tents, animals and supply crates grow with real community miles and food. Animations pause under prefers-reduced-motion.
+- **Camp diorama:** the community camp is an animated SVG: flickering fires, rising smoke, swaying wagons, lantern glow at night, wandering oxen, horses and dogs. Its independent dawn/day/sunset/night cycle changes every 30 seconds; it does not use the visitor's local clock. Wagons, tents, animals and supply crates grow with real community miles and food. Animations pause under prefers-reduced-motion.
 - **Settlers:** recent and top contributors appear as named settlers. Select one (or its roster button) to see miles, food, first seen and latest contribution. Stats come from the latest 200 log rows. Names are public; nothing else personal is shown.
 - **Hunters return:** a hunt logged within 6 hours walks into camp with a crate and a news line.
 - **Weather:** deterministic from the UTC day and trail region (clear, windy, rain, fog, snow in the mountains), so every visitor sees the same sky. Preview with `?preview=night,rain`.
 - **Celebrations:** for 40 miles after a landmark the camp shows bunting, a welcome board and a bigger fire.
 - **Hunt:** adds turkey and elk, six grounds (prairie, grassland, forest, riverbank, foothills, mountain edge) chosen by trail position, herds that flee together, grazing, and rain, fog, wind and snow. Test with `pages/hunt.html?biome=forest&weather=rain`.
+
+## World-building and the Donner Memorial (Phase 7)
+
+- **Donner Memorial:** the home-page section is reachable from the map and the Journal. Four short, milestone-unlocked biographies use illustrative silhouettes rather than unverified portraits. The profiles distinguish role, significance and journey outcome and link to historical sources (including the National Park Service and archival collections).
+- **Camp cycle and interactions:** dawn, day, sunset and night each last 30 seconds; the two-minute cycle is independent of the visitor's real-world clock. The SVG campfire, wagons and food stores are keyboard-accessible controls, as are the named settlers. They explain current mileage and landmark, community food and recent hunts.
+- **Regional camp:** the scene progresses through Missouri, Great Plains, Wyoming, mountain country and Oregon. River, tree, grass, rock, pine, snowcap and settlement details follow community miles. Small trail monuments are derived from passed landmarks, so they remain visible as the shared total grows.
+- **Regional hunting:** Missouri grasslands favor deer, rabbit and turkey; the plains feature antelope and buffalo; riverbanks include waterfowl; foothills and mountains feature elk and bear; Oregon forest includes blacktail deer. A four-shot magazine reloads automatically, with a visible countdown and end-of-hunt hit accuracy.
+- **Sources:** [National Park Service: Donner and Reed Wagon Train Incident](https://www.nps.gov/cali/learn/historyculture/donner-reed-party.htm), [NCpedia: George and Jacob Donner](https://www.ncpedia.org/biography/donner-george-and-jacob), and the [Virginia Reed collection finding aid](https://oac.cdlib.org/findaid/ark:/13030/c8154j2k). Memorial silhouettes are generic illustrations, not likenesses.
+
+### Phase 7 roadmap
+
+1. **Highest impact (implemented):** the Memorial, accessible camp interactions, the continuously cycling camp atmosphere, and region-specific camp scenery.
+2. **High value (implemented):** milestone monuments, a more readable wagon centerpiece, species and grounds that follow the community's westward progress, and a visible automatic reload/accuracy loop.
+3. **Nice to have:** a deeper hunt results panel and more journal links into individual Memorial stories.
+4. **Future:** additional primary-source transcriptions with archival review, more regional wildlife, and fine-grained mobile interaction testing.

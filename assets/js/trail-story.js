@@ -113,6 +113,22 @@
     };
   }
 
+  function campRegion(totalMiles) {
+    const miles = Math.max(totalMiles || 0, 0);
+    if (miles >= 1750) return { id: "oregon", label: "Oregon Territory" };
+    if (miles >= 973) return { id: "mountains", label: "Mountain country" };
+    if (miles >= 688) return { id: "wyoming", label: "Wyoming high plains" };
+    if (miles >= 319) return { id: "plains", label: "Great Plains" };
+    return { id: "missouri", label: "Missouri" };
+  }
+
+  function campMonuments(totalMiles) {
+    const miles = Math.max(totalMiles || 0, 0);
+    return (CONFIG.landmarks || [])
+      .filter((landmark) => landmark.miles > 0 && landmark.miles <= miles)
+      .map((landmark) => ({ id: landmark.id, name: landmark.shortName || landmark.name, miles: landmark.miles }));
+  }
+
   const hashText = (text) => {
     let hash = 0;
     String(text).split("").forEach((char) => { hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0; });
@@ -205,5 +221,10 @@
     return { previous: stops[index], next, milesToNext: next ? Math.max(Math.round(next.miles - miles), 0) : 0, finished: !next };
   }
 
-  window.OTDLE_STORY = { buildJournal, campScale, currentEvent, donnerAt, timeOfDay, weatherFor, campPeople, latestHunt, celebrationAt, weatherInfo: (id) => ({ id, ...(WEATHER[id] || WEATHER.clear) }) };
+  function unlockedDonnerMembers(totalMiles) {
+    const miles = Math.max(totalMiles || 0, 0);
+    return (CONFIG.donnerMemorial || []).map((person) => ({ ...person, unlocked: miles >= person.unlockAt }));
+  }
+
+  window.OTDLE_STORY = { buildJournal, campScale, campRegion, campMonuments, currentEvent, donnerAt, timeOfDay, weatherFor, campPeople, latestHunt, celebrationAt, unlockedDonnerMembers, weatherInfo: (id) => ({ id, ...(WEATHER[id] || WEATHER.clear) }) };
 })();

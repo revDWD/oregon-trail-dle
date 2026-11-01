@@ -9,6 +9,9 @@
   const AMMO = 12;
   const AIM_SPEED = 150;
   const MAX_ROUND_FOOD = 400;
+  const MAGAZINE_SIZE = 4;
+  const RELOAD_SECONDS = 1.1;
+  const FIRE_COOLDOWN = 0.28;
   const SPAWN_EVERY = 1.1;
   const MAX_ANIMALS = 6;
   const MIN_Y = 62;
@@ -27,9 +30,21 @@
       name: "turkey", food: 12, speed: 46, w: 14, h: 13, skittish: true, graze: true,
       behavior: { pause: 0.4, turn: 0.25, mult: [0.8, 1.9], drift: 20, timer: [0.5, 1.4], pauseTime: [0.5, 1.2] }
     },
+    antelope: {
+      name: "antelope", food: 55, speed: 76, w: 28, h: 18, skittish: true, herd: 3,
+      behavior: { pause: 0.12, turn: 0.12, mult: [1.1, 1.8], drift: 26, timer: [0.7, 1.6], pauseTime: [0.3, 0.8] }
+    },
     deer: {
       name: "deer", food: 50, speed: 58, w: 26, h: 18, skittish: true, graze: true, herd: 2,
       behavior: { pause: 0.2, turn: 0.2, mult: [0.7, 1.5], drift: 24, timer: [1, 2.4], pauseTime: [0.8, 1.7] }
+    },
+    blacktail: {
+      name: "blacktail deer", food: 55, speed: 54, w: 26, h: 18, skittish: true, graze: true, herd: 2,
+      behavior: { pause: 0.25, turn: 0.18, mult: [0.8, 1.5], drift: 18, timer: [1, 2.2], pauseTime: [0.8, 1.6] }
+    },
+    waterfowl: {
+      name: "waterfowl", food: 14, speed: 68, w: 18, h: 11, skittish: true, flock: 3,
+      behavior: { pause: 0.08, turn: 0.08, mult: [0.9, 1.6], drift: 8, timer: [0.8, 1.7], pauseTime: [0.2, 0.5] }
     },
     elk: {
       name: "elk", food: 85, speed: 52, w: 32, h: 22, skittish: true, graze: true, herd: 3,
@@ -47,14 +62,14 @@
 
   // Hunting grounds. animals: spawn weights in the order rabbit, turkey, deer, elk, bear, buffalo.
   // Scenery counts and colors drive the seeded scenery; far is the backdrop style.
-  const KINDS = ["rabbit", "turkey", "deer", "elk", "bear", "buffalo"];
+  const KINDS = ["rabbit", "turkey", "antelope", "deer", "blacktail", "waterfowl", "elk", "bear", "buffalo"];
   const BIOMES = {
-    prairie: { label: "Prairie", animals: [4, 1, 3, 0, 1, 3], sky: "#bcd9e6", haze: "#d6e8ee", far: "#b6a68c", ground: "#d8c58a", band: "#cdb87a", patch: "#c9b270", tuft: "#6f8f4e", trees: 1, pines: false, shrubs: 6, rocks: 5, logs: 1, tall: 14, backdrop: "spire" },
-    grassland: { label: "Grassland", animals: [4, 2, 3, 1, 0, 3], sky: "#c4e0e8", haze: "#dcefee", far: "#8fa56a", ground: "#b9c77a", band: "#a9b96a", patch: "#9fb260", tuft: "#4f7a3a", trees: 2, pines: false, shrubs: 8, rocks: 3, logs: 0, tall: 30, backdrop: "hills" },
-    forest: { label: "Forest", animals: [3, 3, 3, 2, 2, 0], sky: "#b9d3d6", haze: "#d0e2e2", far: "#4e6b48", ground: "#8fa268", band: "#7f9358", patch: "#728a4e", tuft: "#3e6a35", trees: 16, pines: true, shrubs: 10, rocks: 5, logs: 3, tall: 8, backdrop: "hills" },
-    riverbank: { label: "Riverbank", animals: [3, 2, 3, 1, 1, 1], sky: "#bcd9e6", haze: "#d6e8ee", far: "#9aa77a", ground: "#c9c58a", band: "#b9b87a", patch: "#b2b070", tuft: "#5d8a45", trees: 5, pines: false, shrubs: 8, rocks: 7, logs: 2, tall: 16, backdrop: "hills", stream: true },
-    foothills: { label: "Foothills", animals: [3, 1, 2, 3, 2, 0], sky: "#c0d6e4", haze: "#d9e6ee", far: "#8a7f78", ground: "#c4a56c", band: "#b8996a", patch: "#ae9060", tuft: "#7a8a4a", trees: 6, pines: true, shrubs: 6, rocks: 12, logs: 1, tall: 10, backdrop: "mesa" },
-    mountains: { label: "Mountain edge", animals: [2, 0, 1, 3, 2, 0], sky: "#c5d5e2", haze: "#dfe8ef", far: "#6f7a8c", ground: "#a9a58f", band: "#9a9680", patch: "#908c78", tuft: "#6a7a52", trees: 8, pines: true, shrubs: 3, rocks: 14, logs: 2, tall: 5, backdrop: "peaks" }
+    prairie: { label: "Prairie", animals: [2, 1, 4, 2, 0, 0, 0, 0, 5], sky: "#bcd9e6", haze: "#d6e8ee", far: "#b6a68c", ground: "#d8c58a", band: "#cdb87a", patch: "#c9b270", tuft: "#6f8f4e", trees: 1, pines: false, shrubs: 6, rocks: 5, logs: 1, tall: 14, backdrop: "spire" },
+    grassland: { label: "Grassland", animals: [4, 3, 0, 3, 0, 0, 0, 0, 0], sky: "#c4e0e8", haze: "#dcefee", far: "#8fa56a", ground: "#b9c77a", band: "#a9b96a", patch: "#9fb260", tuft: "#4f7a3a", trees: 2, pines: false, shrubs: 8, rocks: 3, logs: 0, tall: 30, backdrop: "hills" },
+    forest: { label: "Forest", animals: [2, 1, 0, 2, 4, 2, 2, 1, 0], sky: "#b9d3d6", haze: "#d0e2e2", far: "#4e6b48", ground: "#8fa268", band: "#7f9358", patch: "#728a4e", tuft: "#3e6a35", trees: 16, pines: true, shrubs: 10, rocks: 5, logs: 3, tall: 8, backdrop: "hills" },
+    riverbank: { label: "Riverbank", animals: [2, 1, 0, 2, 1, 4, 1, 0, 0], sky: "#bcd9e6", haze: "#d6e8ee", far: "#9aa77a", ground: "#c9c58a", band: "#b9b87a", patch: "#b2b070", tuft: "#5d8a45", trees: 5, pines: false, shrubs: 8, rocks: 7, logs: 2, tall: 16, backdrop: "hills", stream: true },
+    foothills: { label: "Foothills", animals: [2, 1, 1, 2, 0, 0, 4, 2, 0], sky: "#c0d6e4", haze: "#d9e6ee", far: "#8a7f78", ground: "#c4a56c", band: "#b8996a", patch: "#ae9060", tuft: "#7a8a4a", trees: 6, pines: true, shrubs: 6, rocks: 12, logs: 1, tall: 10, backdrop: "mesa" },
+    mountains: { label: "Mountain edge", animals: [1, 0, 0, 1, 1, 0, 4, 4, 0], sky: "#c5d5e2", haze: "#dfe8ef", far: "#6f7a8c", ground: "#a9a58f", band: "#9a9680", patch: "#908c78", tuft: "#6a7a52", trees: 8, pines: true, shrubs: 3, rocks: 14, logs: 2, tall: 5, backdrop: "peaks" }
   };
   const WEATHERS = ["clear", "clear", "clear", "clear", "windy", "rain", "fog"];
 
@@ -89,6 +104,11 @@
       clock: 0,
       shake: 0,
       nextHerd: 1,
+      clip: MAGAZINE_SIZE,
+      reload: 0,
+      fireCooldown: 0,
+      shots: 0,
+      hits: 0,
       timeLeft: ROUND_SECONDS,
       ammo: AMMO,
       food: 0,
@@ -110,7 +130,8 @@
     const fromLeft = state.random() < 0.5;
     const baseY = MIN_Y + 8 + state.random() * (HEIGHT - MIN_Y - 8 - spec.h - 8);
     let count = 1;
-    if (spec.herd && state.random() < 0.5) count = Math.min(1 + Math.ceil(state.random() * (spec.herd - 1)), MAX_ANIMALS + 1 - state.animals.length);
+    const groupSize = spec.herd || spec.flock;
+    if (groupSize && state.random() < 0.5) count = Math.min(1 + Math.ceil(state.random() * (groupSize - 1)), MAX_ANIMALS + 1 - state.animals.length);
     const herdId = count > 1 ? state.nextHerd++ : 0;
     for (let i = 0; i < Math.max(count, 1); i += 1) {
       state.animals.push({
@@ -220,6 +241,11 @@
     state.aim.y = clamp(state.aim.y + move2.dy * scale * AIM_SPEED * dt, 0, HEIGHT);
     state.timeLeft = Math.max(state.timeLeft - dt, 0);
     state.clock = (state.clock || 0) + dt;
+    state.fireCooldown = Math.max((state.fireCooldown || 0) - dt, 0);
+    if (state.reload > 0) {
+      state.reload = Math.max(state.reload - dt, 0);
+      if (state.reload === 0) state.clip = Math.min(MAGAZINE_SIZE, state.ammo);
+    }
     state.flash = Math.max(state.flash - dt, 0);
     state.popups = ageEffects(state.popups || [], dt, 1.1);
     state.puffs = ageEffects(state.puffs || [], dt, 0.35);
@@ -245,9 +271,13 @@
 
   // Fires at the current aim point; the first animal under the crosshair is the one hit.
   function fire(state) {
-    if (state.over || state.ammo <= 0) return null;
+    if (state.over || state.ammo <= 0 || state.reload > 0 || state.fireCooldown > 0 || state.clip <= 0) return null;
     state.ammo -= 1;
+    state.clip -= 1;
+    state.shots += 1;
+    state.fireCooldown = FIRE_COOLDOWN;
     state.flash = 0.12;
+    if (state.clip === 0 && state.ammo > 0) state.reload = RELOAD_SECONDS;
     const { x, y } = state.aim;
     const index = animalAt(state, x, y);
     if (index < 0) {
@@ -256,6 +286,8 @@
       return null;
     }
     const [animal] = state.animals.splice(index, 1);
+    state.hits += 1;
+    startle(state);
     const food = Math.max(Math.min(ANIMALS[animal.kind].food, MAX_ROUND_FOOD - state.food), 0);
     state.food += food;
     state.kills.push(animal.kind);
@@ -309,6 +341,20 @@
       case "turkey": return [
         [2, 4, 9, 6, 0], [0, 1, 4, 7, 1], [9, 2, 3, 5, 0], [10, 0, 3, 3, 0], [12, 1, 2, 1, 2], [11, 3, 1, 2, 1],
         [5, 10, 1, 3 + legA, 2], [8, 10, 1, 3 + legB, 2]
+      ];
+      case "waterfowl": return [
+        [5, 3, 10, 5, 0], [12, 1, 4, 4, 0], [14, 3, 3, 2, 2], [1, 4, 5, 3, 1],
+        [7, 8, 2, 3 + legA, 1], [12, 8, 2, 3 + legB, 1], [7, 0, 5, 1, 2]
+      ];
+      case "antelope": return [
+        [4, 5, 18, 8, 0], [7, 12, 12, 2, 2], [18, 0, 5, 9, 0], [21, 1, 6, 5, 0], [25, 4, 2, 2, 1],
+        [20, -4, 1, 5, 2], [23, -5, 2, 1, 2], [3, 6, 3, 3, 2],
+        [6, 14, 2, 5 + legA, 1], [11, 14, 2, 5 + legB, 1], [16, 14, 2, 5 + legA, 1], [19, 14, 2, 5 + legB, 1]
+      ];
+      case "blacktail": return [
+        [4, 5, 17, 8, 0], [6, 11, 13, 2, 2], [18, 0, 5, 9, 0], [20, 0, 6, 5, 0], [24, 3, 2, 2, 1],
+        [21, -4, 1, 4, 2], [23, -4, 1, 4, 2], [1, 5, 4, 3, 2],
+        [6, 13, 2, 5 + legA, 1], [11, 13, 2, 5 + legB, 1], [16, 13, 2, 5 + legA, 1], [19, 13, 2, 5 + legB, 1]
       ];
       case "elk": return [
         [5, 6, 20, 9, 0], [8, 13, 14, 2, 2], [17, 5, 6, 8, 1], [22, 1, 5, 9, 0], [25, 0, 6, 5, 0], [29, 3, 3, 2, 1],
@@ -569,10 +615,16 @@
   // Colors per animal; light is the accent color for tails, antlers, snouts and bellies.
   ANIMALS.rabbit.colors = ["#b79d7c", "#6e5a43"];
   ANIMALS.deer.colors = ["#b5703a", "#5e3a1e"];
+  ANIMALS.antelope.colors = ["#c18a4d", "#624225"];
+  ANIMALS.blacktail.colors = ["#8b5638", "#3d2c20"];
+  ANIMALS.waterfowl.colors = ["#586b58", "#35443d"];
   ANIMALS.bear.colors = ["#5a4437", "#2f2119"];
   ANIMALS.buffalo.colors = ["#6a4630", "#3b2517"];
   ANIMALS.rabbit.light = "#fffaf0";
   ANIMALS.deer.light = "#e8d5a6";
+  ANIMALS.antelope.light = "#e4c78c";
+  ANIMALS.blacktail.light = "#d8c49c";
+  ANIMALS.waterfowl.light = "#e6d9bb";
   ANIMALS.bear.light = "#b98d61";
   ANIMALS.turkey.colors = ["#7a5230", "#3f2a18"];
   ANIMALS.elk.colors = ["#9a6a3c", "#4a2f1c"];
@@ -630,6 +682,7 @@
     const message = root.querySelector("[data-hunt-message]");
     const timeText = root.querySelector("[data-hunt-time]");
     const ammoText = root.querySelector("[data-hunt-ammo]");
+    const reloadText = root.querySelector("[data-hunt-reload]");
     const foodText = root.querySelector("[data-hunt-food]");
     const community = window.OTDLE_COMMUNITY;
     const sound = createAudio();
@@ -666,7 +719,8 @@
 
     function readout() {
       timeText.textContent = `${Math.ceil(state.timeLeft)}s`;
-      ammoText.textContent = String(state.ammo);
+      ammoText.textContent = `${state.ammo} (${state.clip} loaded)`;
+      reloadText.textContent = state.reload > 0 ? `${state.reload.toFixed(1)}s` : "Ready";
       foodText.textContent = `${state.food} lbs`;
     }
 
@@ -686,9 +740,10 @@
       sendButton.hidden = state.food <= 0;
       sendButton.disabled = false;
       message.classList.remove("is-error");
+      const accuracy = state.shots ? Math.round((state.hits / state.shots) * 100) : 0;
       message.textContent = state.food > 0
-        ? `The hunt is over. You brought down ${state.kills.length} ${state.kills.length === 1 ? "animal" : "animals"} for ${state.food} lbs of food.`
-        : "The hunt is over. Nothing this time; the plains are wide and the shots are few.";
+        ? `The hunt is over. You brought down ${state.kills.length} ${state.kills.length === 1 ? "animal" : "animals"} for ${state.food} lbs of food. ${state.hits} hits from ${state.shots} shots (${accuracy}% accuracy).`
+        : `The hunt is over. ${state.hits} hits from ${state.shots} shots (${accuracy}% accuracy). Nothing this time; the trail is wide and the shots are few.`;
     }
 
     function frame(now) {
@@ -704,6 +759,14 @@
 
     function shoot() {
       if (!running) return;
+      if (state.reload > 0) {
+        message.textContent = `Reloading: ${state.reload.toFixed(1)} seconds.`;
+        return;
+      }
+      if (state.fireCooldown > 0) {
+        message.textContent = "Steady your aim before the next shot.";
+        return;
+      }
       const hit = fire(state);
       if (sound) {
         sound.shot();
@@ -711,8 +774,8 @@
         else sound.miss();
       }
       message.textContent = hit
-        ? (hit.food > 0 ? `Hit! A ${hit.kind} adds ${hit.food} lbs.` : "Hit! The wagons are already full.")
-        : "Missed.";
+        ? (hit.food > 0 ? `Hit! A ${ANIMALS[hit.kind].name} adds ${hit.food} lbs.` : `Hit! The wagons are already full. ${ANIMALS[hit.kind].name} startled the nearby wildlife.`)
+        : (state.reload > 0 ? `Missed. Reloading for ${state.reload.toFixed(1)} seconds.` : "Missed. Nearby wildlife may have been startled.");
       draw(ctx, state);
       readout();
     }
@@ -723,7 +786,7 @@
       startButton.hidden = true;
       sendButton.hidden = true;
       message.classList.remove("is-error");
-      message.textContent = `${groundText()} Aim with WASD or the arrow keys. Press Space or click to fire.`;
+      message.textContent = `${groundText()} Aim with WASD or the arrow keys. Press Space or click to fire. Four shots load at a time; reloading is automatic.`;
       canvas.focus();
       last = window.performance.now();
       window.requestAnimationFrame(frame);

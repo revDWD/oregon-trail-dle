@@ -1164,7 +1164,13 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
 
   let campSelected = null;
+  let campNotice = "";
   let campPeopleList = [];
+  let campTime = "dawn";
+  let campCycleStarted = false;
+  let donnerSelectedId = null;
+  const CAMP_TIMES = ["dawn", "day", "dusk", "night"];
+  const CAMP_TIME_LABELS = { dawn: "Dawn", day: "Day", dusk: "Sunset", night: "Night" };
 
   function pixel(parent, x, y, width, height, color, className) {
     const rect = document.createElementNS(SVG_NS, "rect");
@@ -1263,17 +1269,82 @@
     }
   }
 
+  function drawCampRegion(svg, region, monuments) {
+    const horizon = decor(svg, `camp-region camp-region-${region.id}`);
+    if (region.id === "missouri") {
+      pixel(horizon, 0, 101, 400, 8, "#6c9ca3");
+      pixel(horizon, 0, 102, 400, 2, "#a8c8bd");
+      for (let x = 14; x < 400; x += 68) {
+        pixel(horizon, x, 88, 9, 17, "#456b45");
+        pixel(horizon, x - 5, 82, 19, 11, "#547b4a");
+        pixel(horizon, x - 2, 78, 13, 8, "#6e9055");
+      }
+    } else if (region.id === "plains") {
+      for (let x = 0; x < 400; x += 15) {
+        const height = 3 + (x * 7 % 8);
+        pixel(horizon, x, 108 - height, 2, height, "#8da15c");
+      }
+    } else if (region.id === "wyoming") {
+      [[10, 91, 48, 18], [102, 96, 38, 13], [244, 89, 72, 20], [336, 97, 44, 12]].forEach(([x, y, w, h]) => {
+        svgEl(horizon, "polygon", { points: `${x},${y + h} ${x + w * 0.18},${y + h * 0.35} ${x + w * 0.48},${y} ${x + w * 0.7},${y + h * 0.3} ${x + w},${y + h}`, fill: "#796f60" });
+        pixel(horizon, x + Math.floor(w * 0.48), y + 3, Math.max(Math.floor(w * 0.16), 3), 2, "#b8aa8d");
+      });
+    } else if (region.id === "mountains" || region.id === "oregon") {
+      for (let x = 0; x < 400; x += 25) {
+        const peak = region.id === "mountains" ? 77 + (x * 3 % 16) : 90 + (x * 5 % 9);
+        svgEl(horizon, "polygon", { points: `${x},110 ${x + 14},${peak} ${x + 27},110`, fill: region.id === "mountains" ? "#6d7882" : "#4e704b" });
+        if (region.id === "mountains") {
+          svgEl(horizon, "polygon", { points: `${x + 10},${peak + 7} ${x + 14},${peak} ${x + 18},${peak + 7}`, fill: "#e8e7dc" });
+        } else {
+          pixel(horizon, x + 12, peak + 7, 3, 10, "#4b3b27");
+          svgEl(horizon, "polygon", { points: `${x + 3},${peak + 10} ${x + 14},${peak - 2} ${x + 25},${peak + 10}`, fill: "#315f43" });
+        }
+      }
+      if (region.id === "oregon") {
+        pixel(horizon, 180, 90, 38, 19, "#a88a5b");
+        pixel(horizon, 184, 84, 30, 8, "#725a3c");
+        pixel(horizon, 195, 96, 7, 13, "#5a462f");
+      }
+    }
+
+    const trail = decor(svg, "camp-monuments");
+    const visible = monuments.slice(-12);
+    visible.forEach((monument, index) => {
+      const x = 12 + index * 32;
+      pixel(trail, x + 5, 91, 2, 18, "#624a31");
+      pixel(trail, x, 88, 13, 8, index === visible.length - 1 ? "#d29a35" : "#b98a4a");
+      pixel(trail, x + 2, 90, 9, 1, "#f1dfb6");
+      if (index === visible.length - 1) pixel(trail, x + 5, 93, 3, 2, "#315b3d");
+    });
+  }
+
+  function startCampCycle() {
+    if (campCycleStarted) return;
+    campCycleStarted = true;
+    window.setInterval(() => {
+      campTime = CAMP_TIMES[(CAMP_TIMES.indexOf(campTime) + 1) % CAMP_TIMES.length];
+      document.querySelectorAll("[data-camp-scene]").forEach((scene) => {
+        const svg = scene.querySelector(".camp-svg");
+        if (svg) svg.dataset.time = campTime;
+        const label = scene.querySelector("[data-camp-cycle-label]");
+        if (label) label.textContent = `${CAMP_TIME_LABELS[campTime]} at camp`;
+      });
+    }, 30000);
+  }
+
   function renderCampScene(scene, scale, context) {
     const svg = scene.querySelector("svg");
     if (!svg) return;
-    const { time, weather, people, hunt, celebration } = context;
-    const signature = JSON.stringify([scale, time, weather.id, people.map((p) => [p.name, p.miles, p.food, p.activity]), celebration && celebration.name]);
+    const { time, weather, people, hunt, celebration, region, monuments } = context;
+    const signature = JSON.stringify([scale, time, weather.id, region.id, monuments.map((item) => item.id), people.map((p) => [p.name, p.miles, p.food, p.activity]), celebration && celebration.name]);
     if (svg.dataset.campSignature === signature) return;
     svg.dataset.campSignature = signature;
     svg.replaceChildren();
     svg.setAttribute("role", "group");
     svg.dataset.time = time;
-    svg.setAttribute("class", `camp-svg stage-${scale.stage} weather-${weather.id}`);
+    svg.setAttribute("class", `camp-svg stage-${scale.stage} weather-${weather.id} region-${region.id}`);
+    svg.setAttribute("aria-label", `Community camp at ${region.label}, ${CAMP_TIME_LABELS[time].toLowerCase()}. Select a wagon, fire, food stores or settler for details.`);
+    scene._campContext = context;
 
     const sky = decor(svg, "camp-sky-layer");
     pixel(sky, 0, 0, 400, 112, "#cfe0e8", "camp-sky");
@@ -1287,6 +1358,7 @@
     });
     pixel(sky, 0, 100, 400, 10, "#a9b49c");
     for (let x = 0; x < 400; x += 10) pixel(sky, x, 94 + Math.round(Math.sin(x / 31) * 4 + 4), 10, 16, "#98a58c");
+    drawCampRegion(svg, region, monuments);
 
     const ground = decor(svg, "camp-ground");
     pixel(ground, 0, 110, 400, 50, "#8a6b3f", "camp-soil");
@@ -1311,14 +1383,32 @@
 
     for (let i = 0; i < scale.wagons; i += 1) {
       const x = 16 + i * 46;
-      const wagon = svgEl(camp, "g", { class: "camp-wagon", style: `--delay:-${i * 1.3}s`, transform: `translate(${x} 0)` });
-      pixel(wagon, 4, 100, 30, 4, "#f5efe0");
-      pixel(wagon, 0, 104, 36, 6, "#7a5230");
-      pixel(wagon, 4, 112, 6, 6, "#3b2a18", "camp-wheel");
-      pixel(wagon, 26, 112, 6, 6, "#3b2a18", "camp-wheel");
+      const wagonSpot = svgEl(camp, "g", {
+        class: "camp-wagon-hotspot",
+        transform: `translate(${x} 0)`,
+        role: "button",
+        tabindex: "0",
+        "data-camp-hotspot": "wagon",
+        "aria-label": `Community wagon ${i + 1}. Show expedition progress.`
+      });
+      const wagon = svgEl(wagonSpot, "g", { class: "camp-wagon", style: `--delay:-${i * 1.3}s` });
+      pixel(wagon, 8, 80, 3, 29, "#6b4a2b");
+      pixel(wagon, 27, 80, 3, 29, "#6b4a2b");
+      svgEl(wagon, "path", { d: "M5 99L5 87Q6 76 18 76Q30 76 32 87L32 99Z", fill: "#eee3c5", stroke: "#4b3724", "stroke-width": "1.5" });
+      pixel(wagon, 12, 79, 12, 2, "#f8f0db");
+      pixel(wagon, 4, 98, 30, 5, "#a77942");
+      pixel(wagon, 0, 103, 38, 7, "#7a5230");
+      pixel(wagon, 4, 110, 30, 2, "#4a3520");
+      [8, 28].forEach((wheelX) => {
+        svgEl(wagon, "circle", { cx: wheelX, cy: 115, r: 6, fill: "#4b3624", stroke: "#d0ad71", "stroke-width": "1" });
+        svgEl(wagon, "circle", { cx: wheelX, cy: 115, r: 1.5, fill: "#dfc58e" });
+        pixel(wagon, wheelX - 0.5, 110, 1, 10, "#b98a4a");
+      });
+      pixel(wagon, 35, 107, 12, 2, "#6b4a2b");
+      pixel(wagon, 43, 107, 2, 5, "#6b4a2b");
       if (i < 3) {
-        pixel(wagon, 36, 105, 3, 4, "#ffd86a", "camp-lantern-lamp");
-        svgEl(wagon, "circle", { cx: 37, cy: 107, r: 13, class: "camp-lantern" });
+        pixel(wagon, 31, 92, 3, 4, "#ffd86a", "camp-lantern-lamp");
+        svgEl(wagon, "circle", { cx: 32, cy: 94, r: 13, class: "camp-lantern" });
       }
     }
 
@@ -1327,7 +1417,13 @@
     for (let i = 0; i < scale.dogs; i += 1) drawCritter(svg, "dog", 205, 141, 2, 22);
 
     const fireX = 188;
-    const fire = decor(svg, `camp-fire${celebration ? " is-celebrating" : ""}`);
+    const fire = svgEl(svg, "g", {
+      class: `camp-fire-hotspot${celebration ? " is-celebrating" : ""}`,
+      role: "button",
+      tabindex: "0",
+      "data-camp-hotspot": "fire",
+      "aria-label": "Campfire. Show the expedition summary."
+    });
     svgEl(fire, "circle", { cx: fireX + 12, cy: 124, r: celebration ? 46 : 34, class: "camp-glow" });
     pixel(fire, fireX, 128, 24, 4, "#4a3520");
     pixel(fire, fireX + 3, 126, 18, 3, "#6b4a2b");
@@ -1339,7 +1435,18 @@
     fire.lastElementChild.style.setProperty("--delay", "-3s");
     fire.querySelectorAll(".camp-smoke").forEach((puff, i) => puff.style.setProperty("--delay", `-${i}s`));
 
-    const supplies = decor(svg, "camp-supplies-layer");
+    const supplies = svgEl(svg, "g", {
+      class: "camp-supplies-layer",
+      role: "button",
+      tabindex: "0",
+      "data-camp-hotspot": "supplies",
+      "aria-label": "Food stores. Show the community food total and recent hunts."
+    });
+    svgEl(supplies, "rect", { x: 296, y: 130, width: 96, height: 29, fill: "transparent" });
+    if (!scale.crates) {
+      pixel(supplies, 300, 140, 12, 8, "#8a6b3f");
+      pixel(supplies, 300, 140, 12, 2, "#6f5131");
+    }
     for (let i = 0; i < scale.crates; i += 1) {
       pixel(supplies, 300 + (i % 4) * 14, 140 - Math.floor(i / 4) * 10, 12, 8, "#b98a4a");
       pixel(supplies, 300 + (i % 4) * 14, 140 - Math.floor(i / 4) * 10, 12, 2, "#7a5230");
@@ -1402,6 +1509,7 @@
 
   function selectCampPerson(scene, name) {
     campSelected = name;
+    if (name) campNotice = "";
     const story = scene.querySelector("[data-camp-person]");
     const person = campPeopleList.find((item) => item.name === name);
     scene.querySelectorAll("[data-camp-name]").forEach((node) => {
@@ -1411,7 +1519,7 @@
     });
     if (!story) return;
     if (!person) {
-      story.textContent = campPeopleList.length ? "Select a settler to see their story." : "Log miles or go hunting to bring settlers to camp.";
+      story.textContent = campNotice || (campPeopleList.length ? "Select a wagon, fire, food store or settler to explore the camp." : "Log miles or go hunting to bring settlers to camp.");
       return;
     }
     const parts = [`${person.name} has contributed ${formatNumber(person.miles)} mi${person.food > 0 ? ` and ${formatNumber(person.food, 0)} lbs of food` : ""}.`];
@@ -1420,6 +1528,24 @@
       : `Latest: traveled ${formatNumber(person.latest.miles)} mi on ${formatWhen(person.latest.timestamp)}.`);
     parts.push(`First seen ${formatWhen(person.firstSeen)} in the recent log.`);
     story.textContent = parts.join(" ");
+  }
+
+  function showCampInfo(scene, kind) {
+    const context = scene._campContext;
+    if (!context) return;
+    campSelected = null;
+    if (kind === "wagon") {
+      campNotice = `The wagon train has traveled ${formatNumber(context.totalMiles, 0)} miles. It is at ${context.landmark}, with ${formatNumber(context.remaining, 0)} miles to Oregon City.`;
+    } else if (kind === "fire") {
+      const count = context.monuments.length;
+      campNotice = `The expedition has made ${formatNumber(context.totalMiles, 0)} miles and passed ${formatNumber(count, 0)} ${count === 1 ? "landmark" : "landmarks"}${context.celebration ? `, most recently ${context.celebration.name}` : ""}. The fire is a place to gather, rest and share the trail story.`;
+    } else {
+      const hunts = context.recentHunts.length
+        ? ` Recent hunts: ${context.recentHunts.map((row) => `${row.name}, ${formatNumber(row.food, 0)} lbs`).join("; ")}.`
+        : " No community hunts have been recorded yet.";
+      campNotice = `Community food stores hold ${formatNumber(context.totalFood, 0)} lbs.${hunts}`;
+    }
+    selectCampPerson(scene, null);
   }
 
   function renderCampRoster(scene, people) {
@@ -1445,23 +1571,26 @@
       scene.addEventListener("click", (event) => {
         const target = event.target.closest ? event.target.closest("[data-camp-name]") : null;
         if (target) selectCampPerson(scene, target.dataset.campName);
+        const hotspot = event.target.closest ? event.target.closest("[data-camp-hotspot]") : null;
+        if (hotspot) showCampInfo(scene, hotspot.dataset.campHotspot);
       });
       scene.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
-        const target = event.target.closest ? event.target.closest(".camp-settler") : null;
+        const target = event.target.closest ? event.target.closest(".camp-settler, [data-camp-hotspot]") : null;
         if (!target) return;
         event.preventDefault();
-        selectCampPerson(scene, target.dataset.campName);
+        if (target.dataset.campHotspot) showCampInfo(scene, target.dataset.campHotspot);
+        else selectCampPerson(scene, target.dataset.campName);
       });
     }
     selectCampPerson(scene, people.some((p) => p.name === campSelected) ? campSelected : null);
   }
 
-  // Time of day follows the visitor's clock; weather follows the UTC date and trail region so all visitors agree.
+  // Weather follows the UTC date and trail region so all visitors agree; the camp cycle runs independently of the clock.
   // ?preview=night,rain (any time/weather ids) is a harmless way to look at the other states.
   function campContext(snapshot, story) {
     const now = Date.now();
-    let time = story.timeOfDay(new Date(now).getHours());
+    let time = campTime;
     let weather = story.weatherFor(snapshot.totalMiles, Math.floor(now / 86400000));
     try {
       const preview = (new URLSearchParams(window.location.search).get("preview") || "").split(",");
@@ -1474,7 +1603,20 @@
     }
     const hunt = story.latestHunt(snapshot.journal, now);
     const people = story.campPeople(snapshot.journal, snapshot.contributors, hunt && hunt.fresh ? hunt.name : null, 8);
-    return { time, weather, hunt, people, celebration: story.celebrationAt(snapshot.totalMiles) };
+    const config = window.OTDLE_CONFIG || {};
+    const landmarks = config.landmarks || [];
+    const landmark = landmarks.reduce((current, item) => item.miles <= snapshot.totalMiles ? item : current, landmarks[0]);
+    const region = story.campRegion(snapshot.totalMiles);
+    return {
+      time, weather, hunt, people, region,
+      monuments: story.campMonuments(snapshot.totalMiles),
+      totalMiles: snapshot.totalMiles,
+      totalFood: snapshot.totalFood || 0,
+      landmark: landmark ? landmark.name : "Independence, Missouri",
+      remaining: Math.max((config.trailMiles || 2040) - snapshot.totalMiles, 0),
+      recentHunts: (snapshot.journal || []).filter((row) => row.food > 0).slice(0, 3),
+      celebration: story.celebrationAt(snapshot.totalMiles)
+    };
   }
 
   function listItem(text, className) {
@@ -1519,6 +1661,91 @@
     set("text", stop.text);
     set("education", stop.education);
     set("next", at.next ? `Next on their route: ${at.next.name}, about ${formatNumber(at.milesToNext, 0)} miles ahead of the community wagon.` : "The community wagon has passed the end of the Donner Party's route.");
+  }
+
+  function renderDonnerMemorial(totalMiles) {
+    const section = document.querySelector("[data-donner-memorial]");
+    if (!section || !window.OTDLE_STORY) return;
+    const list = section.querySelector("[data-donner-member-list]");
+    const profile = section.querySelector("[data-donner-member-profile]");
+    if (!list || !profile) return;
+    const members = window.OTDLE_STORY.unlockedDonnerMembers(totalMiles);
+    const unlocked = members.filter((person) => person.unlocked);
+    const signature = unlocked.map((person) => person.id).join("|");
+    if (list.dataset.members !== signature) {
+      list.dataset.members = signature;
+      list.replaceChildren();
+      unlocked.forEach((person) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "donner-member-button";
+        button.dataset.donnerMember = person.id;
+        button.textContent = person.name;
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("click", () => {
+          donnerSelectedId = person.id;
+          renderDonnerProfile(profile, person);
+          list.querySelectorAll("[data-donner-member]").forEach((item) => item.setAttribute("aria-pressed", String(item.dataset.donnerMember === donnerSelectedId)));
+        });
+        list.append(button);
+      });
+    }
+    let selected = unlocked.find((person) => person.id === donnerSelectedId) || unlocked[unlocked.length - 1];
+    if (!selected) {
+      profile.classList.add("is-locked");
+      const next = members.find((person) => !person.unlocked);
+      profile.replaceChildren();
+      const text = document.createElement("p");
+      text.textContent = next
+        ? `The first profile opens when the expedition reaches mile ${formatNumber(next.unlockAt, 0)}.`
+        : "The memorial profiles will appear as the expedition advances.";
+      profile.append(text);
+      return;
+    }
+    profile.classList.remove("is-locked");
+    donnerSelectedId = selected.id;
+    renderDonnerProfile(profile, selected);
+    list.querySelectorAll("[data-donner-member]").forEach((item) => item.setAttribute("aria-pressed", String(item.dataset.donnerMember === donnerSelectedId)));
+  }
+
+  function renderDonnerProfile(container, person) {
+    container.replaceChildren();
+    const portrait = document.createElementNS(SVG_NS, "svg");
+    portrait.setAttribute("viewBox", "0 0 96 96");
+    portrait.setAttribute("class", `donner-silhouette silhouette-${person.id}`);
+    portrait.setAttribute("role", "img");
+    portrait.setAttribute("aria-label", `Illustrative silhouette representing ${person.name}, not a historical portrait`);
+    const circle = document.createElementNS(SVG_NS, "circle");
+    circle.setAttribute("cx", "48"); circle.setAttribute("cy", "48"); circle.setAttribute("r", "46"); circle.setAttribute("class", "silhouette-ground");
+    const shoulders = document.createElementNS(SVG_NS, "path");
+    shoulders.setAttribute("d", "M14 91c3-20 15-30 34-30s31 10 34 30");
+    shoulders.setAttribute("class", "silhouette-body");
+    const neck = document.createElementNS(SVG_NS, "path");
+    neck.setAttribute("d", "M41 54h14v12H41z");
+    neck.setAttribute("class", "silhouette-body");
+    const head = document.createElementNS(SVG_NS, "circle");
+    head.setAttribute("cx", "48"); head.setAttribute("cy", "38"); head.setAttribute("r", "17"); head.setAttribute("class", "silhouette-body");
+    const hat = document.createElementNS(SVG_NS, "path");
+    hat.setAttribute("d", "M27 33c3-15 13-21 21-21s18 6 21 21H27zm-5 4h52v5H22z");
+    hat.setAttribute("class", "silhouette-hat");
+    portrait.append(circle, shoulders, neck, head, hat);
+    const heading = document.createElement("h3");
+    heading.textContent = person.name;
+    const role = document.createElement("p");
+    role.className = "donner-member-role";
+    role.textContent = person.role;
+    container.append(portrait, heading, role);
+    [["Biography", person.biography], ["Why their story matters", person.significance], ["Journey outcome", person.outcome]].forEach(([label, value]) => {
+      const item = document.createElement("p");
+      const strong = document.createElement("strong");
+      strong.textContent = `${label}: `;
+      item.append(strong, document.createTextNode(value));
+      container.append(item);
+    });
+    const source = document.createElement("a");
+    source.href = person.source;
+    source.textContent = "Read a historical source";
+    container.append(source);
   }
 
   function renderJournal(snapshot) {
@@ -1567,6 +1794,7 @@
     const story = window.OTDLE_STORY;
     if (!snapshot || !story) return;
     const totalFood = snapshot.totalFood || 0;
+    startCampCycle();
     document.querySelectorAll("[data-community-food]").forEach((element) => {
       element.textContent = `${formatNumber(totalFood, 0)} lbs`;
     });
@@ -1586,8 +1814,10 @@
       }
       const caption = scene.querySelector("[data-camp-caption]");
       if (caption) {
-        caption.textContent = `${scale.wagons} ${scale.wagons === 1 ? "wagon" : "wagons"}, ${scale.settlers} settlers, ${scale.tents} ${scale.tents === 1 ? "tent" : "tents"} and ${formatNumber(totalFood, 0)} lbs of food at camp.`;
+        caption.textContent = `${context.region.label}: ${scale.wagons} ${scale.wagons === 1 ? "wagon" : "wagons"}, ${scale.settlers} settlers, ${scale.tents} ${scale.tents === 1 ? "tent" : "tents"} and ${formatNumber(totalFood, 0)} lbs of food at camp.`;
       }
+      const phase = scene.querySelector("[data-camp-cycle-label]");
+      if (phase) phase.textContent = `${CAMP_TIME_LABELS[context.time]} at camp · ${context.region.label}`;
     });
 
     const eventCard = document.querySelector("[data-event-card]");
@@ -1603,6 +1833,7 @@
     }
 
     renderDonnerCard(snapshot.totalMiles);
+    renderDonnerMemorial(snapshot.totalMiles);
     renderJournal(snapshot);
 
     const contributors = document.querySelector("[data-community-contributors]");

@@ -45,11 +45,17 @@ test("pages keep the map, hunt, and hand-placed scenery", async () => {
   assert.doesNotMatch(home, /data-trail-journal|data-recent-entries/);
   assert.match(home, /data-route-donner/);
   assert.match(home, /data-donner-card/);
+  assert.match(home, /id="donner-memorial"/);
+  assert.match(home, /data-donner-member-list/);
+  assert.match(home, /data-camp-cycle-label/);
+  assert.match(await read("assets/js/script.js"), /data-camp-hotspot/);
+  assert.match(progress, /index\.html#donner-memorial/);
   assert.doesNotMatch(await read("assets/js/script.js"), /"Live"/);
   assert.match(progress, /data-trail-journal/);
   assert.match(progress, /data-journal-filters/);
   assert.match(progress, /community\.js/);
   assert.match(hunt, /data-hunt-canvas/);
+  assert.match(hunt, /data-hunt-reload/);
   assert.match(hunt, /hunt-game\.js/);
   assert.match(home, /data-map-features/);
   assert.match(home, /data-map-base/);

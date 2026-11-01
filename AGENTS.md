@@ -54,7 +54,7 @@ pages/progress.html ────┘     home loads assets/js/us-states.js first
 
 | Path | Purpose |
 |---|---|
-| `index.html` | Home: community trail map and expedition card, recent private entries |
+| `index.html` | Home: community trail map, expedition card and evolving camp |
 | `pages/log-mileage.html` | Mileage entry form |
 | `pages/hunt.html` | Standalone local hunting minigame |
 | `pages/progress.html` | Private journal, history (with delete), backup/restore JSON |
@@ -160,3 +160,10 @@ pages/progress.html ────┘     home loads assets/js/us-states.js first
 - New hooks: `data-camp-news`, `data-camp-roster`, `data-camp-person`, `data-camp-name`. The camp SVG rebuilds only when its signature changes; keep CSS animations on inner groups so attribute transforms are not overridden.
 - `trail-story.js` helpers (`weatherFor`, `timeOfDay`, `campPeople`, `latestHunt`, `celebrationAt`) must stay pure with no `Date` (test sandbox).
 - `hunt-game.js`: `newRound(random, {biome, weather})` defaults to a clear prairie; adding animals changes `pickAnimal` weights, so update tests.
+
+## Phase 7 notes
+
+- Home hooks: `data-camp-cycle-label`, `data-camp-hotspot`, `data-donner-memorial`, `data-donner-member-list`, `data-donner-member-profile`, and `data-donner-member`. Keep SVG hotspots keyboard-operable and keep generic memorial silhouettes clearly distinct from historical portraits.
+- `trail-story.js` helpers `campRegion`, `campMonuments`, and `unlockedDonnerMembers` are pure derivations from the community mile total and trail configuration. Monuments are not stored separately; passed landmarks make them persistent.
+- The camp's dawn/day/dusk/night cycle advances on a 30-second timer and must not depend on the visitor's wall clock. Region visuals follow the community total.
+- `hunt-game.js` species weights are indexed by `KINDS`; update every biome table when adding a species. The clip, reload, cooldown, shots and hits are per-round state and never persisted.

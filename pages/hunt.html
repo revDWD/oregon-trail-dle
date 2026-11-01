@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Take a short hunting diversion on your Oregon Trail journey.">
   <title>Hunt | Oregon Trail DLE</title>
-  <link rel="stylesheet" href="../assets/css/style.css?v=8">
-  <script src="../assets/js/trail-config.js?v=8" defer></script>
-  <script src="../assets/js/supabase-config.js?v=8" defer></script>
-  <script src="../assets/js/community.js?v=8" defer></script>
-  <script src="../assets/js/script.js?v=8" defer></script>
-  <script src="../assets/js/hunt-game.js?v=8" defer></script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=9">
+  <script src="../assets/js/trail-config.js?v=9" defer></script>
+  <script src="../assets/js/supabase-config.js?v=9" defer></script>
+  <script src="../assets/js/community.js?v=9" defer></script>
+  <script src="../assets/js/script.js?v=9" defer></script>
+  <script src="../assets/js/hunt-game.js?v=9" defer></script>
 </head>
 <body data-page="hunt">
   <header class="site-header">
@@ -37,10 +37,11 @@
       <div class="camp-supplies" aria-live="off">
         <div><span>Time</span><strong data-hunt-time>30s</strong></div>
         <div><span>Shots left</span><strong data-hunt-ammo>12</strong></div>
+        <div><span>Reload</span><strong data-hunt-reload>Ready</strong></div>
         <div><span>Food hunted</span><strong data-hunt-food>0 lbs</strong></div>
       </div>
       <canvas class="hunt-canvas" data-hunt-canvas width="320" height="180" tabindex="0" aria-label="Hunting field. Move the crosshair with WASD or arrow keys and fire with Space, or tap an animal."></canvas>
-      <p class="hunt-help">Rabbit 2 lbs · Turkey 12 · Deer 50 · Bear 80 · Elk 85 · Buffalo 100. The ground and weather follow the trail. WASD or arrows to aim, Space or click to fire. A missed shot spooks rabbits and deer.</p>
+      <p class="hunt-help">Rabbit 2 lbs · Turkey 12 · Waterfowl 14 · Deer 50 · Antelope 55 · Blacktail deer 55 · Bear 80 · Elk 85 · Buffalo 100. Wildlife and grounds follow the trail. WASD or arrows to aim; Space or click to fire. Four shots are loaded at a time; the next reloads automatically. Missed shots startle nearby wildlife.</p>
       <div class="hunt-footer">
         <p class="hunt-message" data-hunt-message role="status" aria-live="polite">Press start when you are ready.</p>
         <button class="button button-secondary button-small" type="button" data-hunt-mute aria-pressed="false" hidden>Sound on</button>

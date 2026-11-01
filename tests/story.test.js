@@ -65,6 +65,13 @@ test("camp scale grows with miles and food, and stays capped", () => {
   assert.ok(late.wagons > early.wagons && late.settlers > early.settlers && late.crates > early.crates);
   const huge = story.campScale(1e9, 1e9);
   assert.ok(huge.wagons <= 8 && huge.tents <= 10 && huge.settlers <= 14 && huge.crates <= 12);
+  assert.equal(story.campRegion(0).id, "missouri");
+  assert.equal(story.campRegion(500).id, "plains");
+  assert.equal(story.campRegion(800).id, "wyoming");
+  assert.equal(story.campRegion(1200).id, "mountains");
+  assert.equal(story.campRegion(1900).id, "oregon");
+  assert.equal(story.campMonuments(0).length, 0);
+  assert.ok(story.campMonuments(900).some((item) => item.id === "independence_rock"));
 });
 
 test("trail events are deterministic and appear every 250 miles", () => {
@@ -126,22 +133,31 @@ test("Donner Party data lines up with landmarks and the journal", () => {
   const entries = story.buildJournal([row("1", "Ann", 400, 0, "2026-01-01T00:00:00Z")], 700, 0);
   assert.ok(entries.some((entry) => entry.kind === "donner" && /Fort Laramie/.test(entry.text)));
   assert.equal(story.buildJournal([row("1", "Ann", 400, 0, "2026-01-01T00:00:00Z")], 700, 0, 1).length, 1);
+  assert.equal(story.unlockedDonnerMembers(0).filter((person) => person.unlocked).length, 0);
+  assert.equal(story.unlockedDonnerMembers(319).filter((person) => person.unlocked)[0].id, "george-donner");
+  assert.equal(story.unlockedDonnerMembers(865).filter((person) => person.unlocked).length, 4);
+  cfg.donnerMemorial.forEach((person) => assert.ok(person.biography && person.role && person.significance && person.outcome && person.source));
 });
 
 test("hunt: animals pause, turn and change speed, and a miss startles rabbits", () => {
   const hunt = loadHunt();
-  let seed = 7;
+  let seed = 24;
   const state = hunt.newRound(() => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; });
+  state.spawnIn = 1000;
   state.animals.push({ kind: "deer", x: 100, y: 100, dir: 1 });
   const dirs = new Set();
   const mults = new Set();
   let paused = false;
   for (let i = 0; i < 300 && !state.over; i += 1) {
     hunt.step(state, 0.1, { dx: 0, dy: 0 });
-    const deer = state.animals.find((animal) => animal.kind === "deer");
-    if (deer) { dirs.add(deer.dir); mults.add(Math.round(deer.mult * 10)); paused = paused || deer.pause > 0; }
+    state.animals.filter((animal) => animal.kind === "deer").forEach((deer) => {
+      dirs.add(deer.dir);
+      mults.add(Math.round(deer.mult * 10));
+      paused = paused || deer.pause > 0;
+    });
   }
   assert.ok(mults.size > 2 && paused);
+  assert.ok(dirs.size > 1);
 
   const fresh = hunt.newRound(() => 0.5);
   fresh.animals.push({ kind: "rabbit", x: 120, y: 100, dir: 1 });
@@ -150,6 +166,7 @@ test("hunt: animals pause, turn and change speed, and a miss startles rabbits", 
   assert.equal(hunt.fire(fresh), null);
   assert.equal(fresh.animals[0].dir, 1);
   fresh.aim.x = 150;
+  hunt.step(fresh, 0.3, { dx: 0, dy: 0 });
   fresh.animals[0].x = 100;
   hunt.fire(fresh);
   assert.equal(fresh.animals[0].dir, -1);
@@ -160,6 +177,32 @@ test("hunt: animals pause, turn and change speed, and a miss startles rabbits", 
   hit.aim.y = 108;
   hunt.fire(hit);
   assert.equal(hit.popups[0].text, "+50 lbs");
+});
+
+test("hunt: regional wildlife, automatic reload and accuracy are reported", () => {
+  const hunt = loadHunt();
+  assert.equal(hunt.ANIMALS.antelope.food, 55);
+  assert.equal(hunt.ANIMALS.waterfowl.food, 14);
+  assert.equal(hunt.ANIMALS.blacktail.food, 55);
+  assert.equal(hunt.pickAnimal(() => 0.3, "prairie"), "antelope");
+  assert.equal(hunt.pickAnimal(() => 0.6, "riverbank"), "waterfowl");
+  assert.equal(hunt.pickAnimal(() => 0.8, "mountains"), "bear");
+  const state = hunt.newRound(() => 0.5, { biome: "prairie" });
+  for (let shot = 0; shot < 4; shot += 1) {
+    state.animals.push({ kind: "deer", x: 100, y: 100, dir: 1 });
+    state.aim.x = 110;
+    state.aim.y = 108;
+    assert.ok(hunt.fire(state));
+    if (shot < 3) hunt.step(state, 0.3, { dx: 0, dy: 0 });
+  }
+  assert.equal(state.shots, 4);
+  assert.equal(state.hits, 4);
+  assert.equal(state.reload, 1.1);
+  assert.equal(state.clip, 0);
+  assert.equal(hunt.fire(state), null);
+  hunt.step(state, 1.1, { dx: 0, dy: 0 });
+  assert.equal(state.clip, 4);
+  assert.equal(state.reload, 0);
 });
 test("community client sends name and food, sanitizes names, and summarizes the log", async () => {
   const bodies = [];

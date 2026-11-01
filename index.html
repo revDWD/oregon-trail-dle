@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Track your miles as you make your way west along the Oregon Trail.">
   <title>Oregon Trail DLE | Your journey west</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=8">
-  <script src="assets/js/us-states.js?v=8" defer></script>
-  <script src="assets/js/trail-config.js?v=8" defer></script>
-  <script src="assets/js/supabase-config.js?v=8" defer></script>
-  <script src="assets/js/trail-story.js?v=8" defer></script>
-  <script src="assets/js/community.js?v=8" defer></script>
-  <script src="assets/js/script.js?v=8" defer></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=9">
+  <script src="assets/js/us-states.js?v=9" defer></script>
+  <script src="assets/js/trail-config.js?v=9" defer></script>
+  <script src="assets/js/supabase-config.js?v=9" defer></script>
+  <script src="assets/js/trail-story.js?v=9" defer></script>
+  <script src="assets/js/community.js?v=9" defer></script>
+  <script src="assets/js/script.js?v=9" defer></script>
 </head>
 <body data-page="home">
   <header class="site-header">
@@ -102,6 +102,7 @@
           </dl>
         </div>
         <div class="landmark-list" data-landmark-list aria-label="Oregon Trail landmarks"></div>
+        <p><a class="button button-secondary button-small" href="#donner-memorial">Explore the Donner Memorial</a></p>
         <p class="map-disclaimer">State boundaries use Census-derived geography. Rivers and mountain ranges are hand-placed and approximate, as is the trail mileage.</p>
     </section>
 
@@ -113,6 +114,8 @@
         </div>
       </div>
       <svg class="camp-svg" viewBox="0 0 400 160" role="group" aria-labelledby="camp-caption" shape-rendering="crispEdges"></svg>
+      <p class="camp-cycle-label" data-camp-cycle-label>Dawn at camp</p>
+      <p class="camp-interaction-help">Choose the wagon, campfire, food stores or a settler to explore the camp.</p>
       <p class="camp-news" data-camp-news aria-live="polite"></p>
       <p class="camp-caption" id="camp-caption" data-camp-caption>The camp grows as the community travels and hunts.</p>
       <ul class="camp-roster" data-camp-roster aria-label="Settlers in camp"></ul>
@@ -127,6 +130,18 @@
       <p class="event-education"><strong>History:</strong> <span data-donner-education></span></p>
       <p class="donner-next" data-donner-next></p>
       <p class="map-disclaimer">Dates are drawn from historical accounts and some are approximate. The Donner Party left Independence on May 12, 1846.</p>
+    </section>
+    <section class="trail-card donner-memorial-card" id="donner-memorial" aria-labelledby="donner-memorial-heading" data-donner-memorial>
+      <p class="eyebrow">People behind the history</p>
+      <h2 id="donner-memorial-heading">Donner Memorial</h2>
+      <p>Meet a few of the people whose lives were changed by the 1846 journey. Profiles unfold as the community reaches the places where their story took shape.</p>
+      <div class="donner-memorial-layout">
+        <div class="donner-member-list" data-donner-member-list role="group" aria-label="Donner Party members"></div>
+        <article class="donner-member-profile" data-donner-member-profile aria-live="polite">
+          <p>As the expedition progresses, the next profile will become available here.</p>
+        </article>
+      </div>
+      <p class="map-disclaimer">Historical summary; dates and events are approximate. <a href="https://www.nps.gov/cali/learn/historyculture/donner-reed-party.htm">National Park Service overview</a> · <a href="https://oac.cdlib.org/findaid/ark:/13030/c8154j2k">Virginia Reed collection finding aid</a>.</p>
     </section>
     <section class="trail-card event-card" aria-labelledby="event-heading" data-event-card hidden>
       <p class="eyebrow">Trail event · <span data-event-mile></span></p>

@@ -57,6 +57,39 @@ window.OTDLE_CONFIG = {
     ]
   },
 
+  // Profiles unlock as the community passes the corresponding historical mileposts.
+  // Silhouettes are illustrative, not portraits; copy emphasizes each person's life and choices.
+  donnerMemorial: [
+    {
+      id: "george-donner", name: "George Donner", unlockAt: 319, role: "Wagon-train captain and farmer",
+      biography: "A successful Illinois farmer who organized a westbound party of families in 1846. George Donner was elected captain after the group turned toward the Hastings Cutoff.",
+      significance: "His leadership placed him at the center of the decisions that shaped the party's route, including the choice to leave the established trail.",
+      outcome: "George died during the winter encampment near Truckee Lake. Several of his children survived and were brought west in relief parties.",
+      source: "https://www.nps.gov/cali/learn/historyculture/donner-reed-party.htm"
+    },
+    {
+      id: "tamsen-donner", name: "Tamsen Donner", unlockAt: 604, role: "Teacher, mother and emigrant",
+      biography: "Tamsen Eustis Donner was a teacher who traveled with George Donner and their children. She carried supplies for a school she hoped to open after reaching California.",
+      significance: "Her experience reminds us that the expedition was made up of families whose labor, care and decisions mattered throughout the journey.",
+      outcome: "Tamsen died during the winter at the Sierra Nevada camps. Her daughters survived and were rescued.",
+      source: "https://www.ncpedia.org/biography/donner-tamsen-eustis"
+    },
+    {
+      id: "james-reed", name: "James Reed", unlockAt: 688, role: "Organizer and emigrant",
+      biography: "James Frazier Reed helped organize the California-bound party. At Fort Laramie, fellow traveler James Clyman warned him against the Hastings Cutoff; the party later chose that route.",
+      significance: "The story of Reed and the cutoff shows how uncertain information and pressure to save time could influence a group's choices.",
+      outcome: "After a fatal dispute on the trail, Reed was expelled from the party. He reached California ahead of the others and later helped organize relief.",
+      source: "https://www.nps.gov/cali/learn/historyculture/donner-reed-party.htm"
+    },
+    {
+      id: "virginia-reed", name: "Virginia Reed", unlockAt: 865, role: "Young emigrant and survivor",
+      biography: "Virginia Reed was a child traveling with the Reed family. Her recollections provide one of the most personal accounts of the westward journey and its hardships.",
+      significance: "Her later letter and memoir helped readers understand the expedition through the perspective of a young person who lived through it.",
+      outcome: "Virginia survived the winter and later shared her memories in writing, leaving an enduring first-person record.",
+      source: "https://digital.library.upenn.edu/women/reed/donner/donner.html"
+    }
+  ],
+
   // How the Donner Party's experience compares with each landmark, shown on the landmark card.
   donnerNotes: {
     independence: "The Donner-Reed party left here on May 12, 1846, near the back of the year's migration.",

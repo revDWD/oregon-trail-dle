@@ -1745,6 +1745,11 @@ a {
   .site-header {
     padding: 0 12px;
     gap: 6px;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 9px;
+    padding-bottom: 9px;
   }
 
   .brand {
@@ -1758,7 +1763,9 @@ a {
   }
 
   .site-nav {
+    width: 100%;
     gap: 0;
+    justify-content: space-between;
   }
 
   .nav-link {
@@ -2118,6 +2125,20 @@ h2,
   .nav-link {
     padding: 9px 8px;
     font-size: 12px;
+  }
+
+  .camp-supplies {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .camp-supplies > div {
+    flex: 1 1 calc(50% - 5px);
+    min-width: calc(50% - 5px);
+  }
+
+  .hunt-page-card {
+    min-width: 0;
   }
 }
 
@@ -2618,4 +2639,123 @@ body {
     animation: none !important;
   }
   .camp-cloud { transform: translate(40px, var(--y, 20px)); }
+}
+
+/* Phase 7: regional camp character, accessible hotspots and the Donner Memorial. */
+.camp-cycle-label {
+  margin: 8px 0 0;
+  color: var(--green-dark);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.camp-interaction-help {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.journal-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.camp-region { pointer-events: none; }
+.region-missouri .camp-grass-line { fill: #557a45; }
+.region-plains .camp-grass-line { fill: #9bab5f; }
+.region-wyoming .camp-grass-line { fill: #897b65; }
+.region-mountains .camp-grass-line { fill: #718268; }
+.region-oregon .camp-grass-line { fill: #416c49; }
+.region-missouri .camp-soil { fill: #7d8050; }
+.region-plains .camp-soil { fill: #9d8a53; }
+.region-wyoming .camp-soil { fill: #84785f; }
+.region-mountains .camp-soil { fill: #777d72; }
+.region-oregon .camp-soil { fill: #5f7650; }
+
+.camp-wagon-hotspot,
+.camp-fire-hotspot,
+.camp-supplies-layer { cursor: pointer; }
+.camp-wagon-hotspot:focus-visible .camp-wagon,
+.camp-fire-hotspot:focus-visible .camp-glow,
+.camp-supplies-layer:focus-visible {
+  filter: drop-shadow(0 0 2px #fff6dc);
+}
+.camp-wagon-hotspot:hover .camp-wagon { filter: brightness(1.08); }
+.camp-fire-hotspot:hover .camp-glow { opacity: 0.4; }
+.camp-supplies-layer:hover { filter: brightness(1.12); }
+
+.donner-memorial-card > h2 { margin-top: 0; }
+.donner-memorial-layout {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.34fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin: 20px 0;
+}
+.donner-member-list {
+  display: grid;
+  gap: 8px;
+}
+.donner-member-button {
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.donner-member-button[aria-pressed="true"] {
+  border-color: var(--green);
+  background: var(--green);
+  color: #f6edd2;
+}
+.donner-member-button:focus-visible {
+  outline: 3px solid var(--rust);
+  outline-offset: 2px;
+}
+.donner-member-profile {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  column-gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.22);
+}
+.donner-member-profile.is-locked {
+  display: block;
+  text-align: center;
+}
+.donner-member-profile.is-locked > p {
+  margin: 0;
+  padding: 8px;
+}
+.donner-member-profile > :not(.donner-silhouette) { grid-column: 2; }
+.donner-member-profile > .donner-silhouette {
+  grid-column: 1;
+  grid-row: 1 / span 5;
+  width: 76px;
+  height: 76px;
+}
+.donner-member-profile h3 { margin: 2px 0 4px; font-size: 1.25rem; }
+.donner-member-profile p { margin: 8px 0; line-height: 1.55; }
+.donner-member-profile a { color: var(--green-dark); font-weight: 700; }
+.donner-member-role { color: var(--rust); font-family: Georgia, "Times New Roman", serif; font-style: italic; }
+.silhouette-ground { fill: #d8c99e; stroke: #8a6b3f; stroke-width: 2; }
+.silhouette-body { fill: #374c3d; }
+.silhouette-hat { fill: #6f4a2d; }
+.silhouette-james-reed .silhouette-ground,
+.silhouette-george-donner .silhouette-ground { fill: #c9b68a; }
+.silhouette-tamsen-donner .silhouette-hat,
+.silhouette-virginia-reed .silhouette-hat { fill: #874b35; }
+
+@media (max-width: 600px) {
+  .donner-memorial-layout { grid-template-columns: 1fr; }
+  .donner-member-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .donner-member-profile { grid-template-columns: 58px minmax(0, 1fr); gap: 12px; padding: 14px; }
+  .donner-member-profile > .donner-silhouette { width: 58px; height: 58px; }
 }

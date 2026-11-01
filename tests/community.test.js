@@ -6,11 +6,16 @@ import { fileURLToPath } from "node:url";
 
 const source = await readFile(fileURLToPath(new URL("../assets/js/community.js", import.meta.url)), "utf8");
 
-function load({ settings, fetch, WebSocket }) {
+function load({ settings, fetch, WebSocket, sessionData = new Map() }) {
   const window = { OTDLE_SUPABASE: settings, crypto: globalThis.crypto };
   const context = {
     window, fetch, WebSocket, console: { info() {}, error() {} },
     localStorage: { getItem: () => "device-1", setItem() {} },
+    sessionStorage: {
+      getItem: (key) => sessionData.get(key) || null,
+      setItem: (key, value) => sessionData.set(key, String(value)),
+      removeItem: (key) => sessionData.delete(key)
+    },
     setInterval: () => 0, clearInterval() {}, setTimeout: () => 0, Uint8Array, Math, JSON, Number, Error
   };
   vm.runInNewContext(source, context);
@@ -57,6 +62,33 @@ test("submit calls the RPC, publishes the new total, and retries reuse the submi
   assert.equal(bodies[1].p_miles, 50);
   assert.equal(bodies[1].p_source, "device-1");
   assert.equal(seen[0], 150);
+});
+
+test("pending submission id survives reload, clears after success, and changes with the amount", async () => {
+  const sessionData = new Map();
+  const bodies = [];
+  let first = true;
+  const fetch = async (url, options) => {
+    if (url.includes("/rpc/add_community_miles")) {
+      bodies.push(JSON.parse(options.body));
+      if (first) {
+        first = false;
+        throw new Error("connection lost after request");
+      }
+      return ok(row(15, 2));
+    }
+    return ok([]);
+  };
+  await assert.rejects(load({ settings, fetch, sessionData }).submit(5), /connection lost/);
+  const pendingId = JSON.parse(sessionData.get("oregon-trail-dle:pending-contribution")).id;
+  await load({ settings, fetch, sessionData }).submit(5);
+  assert.equal(bodies[1].p_submission_id, pendingId);
+  assert.equal(sessionData.has("oregon-trail-dle:pending-contribution"), false);
+
+  first = true;
+  await assert.rejects(load({ settings, fetch, sessionData }).submit(5), /connection lost/);
+  await load({ settings, fetch, sessionData }).submit(10);
+  assert.notEqual(bodies[3].p_submission_id, bodies[2].p_submission_id);
 });
 
 test("realtime updates are published and the join is rejected gracefully", async () => {

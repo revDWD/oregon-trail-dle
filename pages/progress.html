@@ -5,13 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="See your Oregon Trail mileage, recent activity, and journey history.">
-  <title>Progress | Oregon Trail DLE</title>
-  <link rel="stylesheet" href="../assets/css/style.css">
-  <script src="../assets/js/us-states.js" defer></script>
-  <script src="../assets/js/trail-config.js?v=3" defer></script>
-  <script src="../assets/js/supabase-config.js?v=3" defer></script>
-  <script src="../assets/js/community.js?v=3" defer></script>
-  <script src="../assets/js/script.js?v=3" defer></script>
+  <title>Journal | Oregon Trail DLE</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=5">
+  <script src="../assets/js/trail-config.js?v=5" defer></script>
+  <script src="../assets/js/script.js?v=5" defer></script>
 </head>
 <body data-page="progress">
   <header class="site-header">
@@ -22,130 +19,40 @@
     <nav class="site-nav" aria-label="Main navigation">
       <a class="nav-link" href="../index.html">Home</a>
       <a class="nav-link" href="log-mileage.html">Log miles</a>
-      <a class="nav-link is-active" href="progress.html" aria-current="page">Progress</a>
+      <a class="nav-link" href="hunt.html">Hunt</a>
+      <a class="nav-link is-active" href="progress.html" aria-current="page">Journal</a>
     </nav>
   </header>
 
   <main class="page-shell">
     <div class="notice" data-storage-status role="alert" hidden></div>
-    <section class="map-hero-head" aria-labelledby="journey-heading">
+    <section class="map-hero-head" aria-labelledby="journal-heading">
       <div>
-        <p class="eyebrow">Oregon Trail · Missouri to Oregon</p>
-        <h1 id="journey-heading">Current journey</h1>
-        <p>Follow your wagon west, one fitness mile at a time.</p>
+        <p class="eyebrow">Private field journal</p>
+        <h1 id="journal-heading">Your journal</h1>
+        <p>Your local history, game milestones, and backups live in this browser.</p>
       </div>
       <a class="button button-primary" href="log-mileage.html">Log today's miles <span aria-hidden="true">→</span></a>
     </section>
 
-    <section class="trail-card community-card" aria-labelledby="community-heading" data-community-panel>
-      <div class="trail-card-heading">
-        <div>
-          <p class="eyebrow">Everyone, one wagon</p>
-          <h2 id="community-heading">Community Expedition</h2>
-        </div>
-        <span class="distance-chip" data-community-status role="status">Connecting...</span>
-      </div>
-      <div class="community-stats">
-        <div><span>Community miles traveled</span><strong data-community-miles>--</strong></div>
-        <div><span>Current landmark</span><strong data-community-landmark>--</strong></div>
-        <div><span>Trail completion</span><strong data-community-percent>--</strong></div>
-        <div><span>Contributions</span><strong data-community-contributions>--</strong></div>
-      </div>
-      <h3 class="community-recent-heading">Recent contributions</h3>
-      <ul class="journey-list" data-community-recent aria-live="polite"></ul>
-    </section>
-
-    <section class="trail-card progress-trail-card" aria-labelledby="map-heading">
-      <div class="trail-card-heading">
-        <div>
-          <p class="eyebrow">2,040 miles west</p>
-          <h2 id="map-heading">The Oregon Trail</h2>
-        </div>
-        <span class="distance-chip" data-progress-label>0% complete</span>
-      </div>
-      <div class="trail-map" data-trail-map>
-        <svg class="trail-svg us-map" viewBox="0 0 1000 570" role="group" aria-labelledby="progress-map-title progress-map-desc">
-          <title id="progress-map-title">Interactive Oregon Trail map across the United States</title>
-          <desc id="progress-map-desc">A geographically projected map of the contiguous United States with the Oregon Trail from Independence, Missouri, to Oregon City, Oregon. Select a numbered landmark for details.</desc>
-          <g class="map-base" data-map-base aria-hidden="true"></g>
-          <g data-map-features aria-hidden="true"></g>
-          <g data-route-remaining aria-hidden="true"></g>
-          <g data-route-completed aria-hidden="true"></g>
-          <g data-route-stops></g>
-          <g data-wagon-layer aria-hidden="true"></g>
-        </svg>
-      <div class="map-legend" aria-label="Map legend">
-        <span><i class="legend-line legend-completed"></i> Traveled</span>
-        <span><i class="legend-line legend-remaining"></i> Ahead on the trail</span>
-        <span><i class="legend-relief"></i> Rivers &amp; mountains</span>
-        <span>
-          <svg class="legend-wagon" viewBox="0 0 36 28" aria-hidden="true">
-            <path class="legend-wagon-cover" d="M7 16C5 12 6 6 11 5C17 3 24 5 26 9L28 16Z"></path>
-            <path class="legend-wagon-bed" d="M4 15H29L32 19H3Z"></path>
-            <circle class="legend-wagon-wheel" cx="9" cy="22" r="4"></circle>
-            <circle class="legend-wagon-wheel" cx="26" cy="22" r="4"></circle>
-          </svg>
-          Your wagon
-        </span>
-      </div>
-      <div class="fitness-progress">
-        <div><span>Fitness progress</span><strong data-trail-mileage>0 of 2,040 miles</strong></div>
-        <strong class="fitness-percent" data-progress-label>0% complete</strong>
-        <div class="progress-track" role="progressbar" aria-label="Oregon Trail distance completed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progressbar>
-          <span class="progress-fill" data-progress-fill></span>
-        </div>
-      </div>
-      <div class="map-readout">
-        <div><span>Current location</span><strong data-map-current>Independence, Missouri</strong></div>
-        <div><span>Next landmark</span><strong data-next-landmark>Fort Kearny</strong><small data-next-distance>300 miles ahead</small></div>
-        <div><span>Distance to Oregon City</span><strong><span data-distance-remaining>2,040</span> miles</strong></div>
-      </div>
-      <div class="landmark-detail" data-landmark-detail aria-live="polite">
-        <strong data-landmark-name>Independence, Missouri</strong>
-        <span data-landmark-mileage>Trailhead · mile 0</span>
-        <span data-landmark-distance>Select a numbered marker or waypoint to explore the route.</span>
-      </div>
-      <div class="landmark-list" data-landmark-list aria-label="Oregon Trail landmarks"></div>
-      <p class="map-disclaimer">State boundaries use Census-derived geography. Rivers and mountain ranges are hand-placed and approximate, as is the trail mileage.</p>
-      </div>
-    </section>
-
-    <section class="section-block" aria-labelledby="journey-stats-heading">
+    <section class="section-block" aria-labelledby="personal-summary-heading">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">On the trail</p>
-          <h2 id="journey-stats-heading">Journey summary</h2>
+          <p class="eyebrow">This browser only</p>
+          <h2 id="personal-summary-heading">Your logged miles</h2>
         </div>
       </div>
-      <div class="stats-grid progress-stats" aria-label="Journey statistics">
-        <article class="stat-card">
-          <span class="stat-label">Miles traveled</span>
-          <strong class="stat-value"><span data-group-miles>0</span></strong>
-          <span class="stat-foot">saved on this device</span>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Average per travel day</span>
-          <strong class="stat-value"><span data-avg-pace>0</span></strong>
-          <span class="stat-foot">miles on days you logged</span>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Distance remaining</span>
-          <strong class="stat-value"><span data-distance-remaining>2,040</span></strong>
-          <span class="stat-foot">based on your mileage</span>
-        </article>
-        <article class="stat-card stat-card-location">
-          <span class="stat-label">Current location</span>
-          <strong class="stat-value stat-location" data-current-location>Independence, Missouri</strong>
-          <span class="stat-foot">latest landmark reached</span>
-        </article>
+      <div class="history-summary">
+        <div><span>Total miles</span><strong data-personal-miles>0 mi</strong></div>
+        <div><span>Travel days</span><strong data-days-traveled>0</strong></div>
       </div>
     </section>
 
     <section class="section-block history-section" aria-labelledby="history-heading">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Field journal</p>
-          <h2 id="history-heading">Mileage history</h2>
+          <p class="eyebrow">Stored on this device</p>
+          <h2 id="history-heading">Private mileage history</h2>
         </div>
         <a class="button button-secondary button-small" href="log-mileage.html">Add an entry <span aria-hidden="true">+</span></a>
       </div>
@@ -180,7 +87,7 @@
           <h2 id="backup-heading">Back up your journey</h2>
         </div>
       </div>
-      <p>Your miles live only in this browser. Download a backup to keep them safe or to move them to another browser or device, then restore the file there.</p>
+      <p>Your notes, dates, and game state live only in this browser. Download a backup to keep them safe or move this private journal to another device.</p>
       <div class="backup-actions">
         <button class="button button-secondary button-small" type="button" data-export-backup>Download backup</button>
         <label class="button button-secondary button-small backup-restore">Restore from backup
@@ -194,7 +101,7 @@
 
   <footer class="site-footer">
     <span>Oregon Trail DLE</span>
-    <span>Your journey is saved privately in this browser.</span>
+    <span>Your private journal is saved in this browser.</span>
   </footer>
 </body>
 </html>

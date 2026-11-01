@@ -2042,3 +2042,81 @@ h2,
 .distance-chip.is-error {
   color: var(--rust);
 }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+.brand {
+  text-shadow: none;
+}
+
+.map-hero-head h1,
+.page-intro h1,
+.trail-card-heading h2,
+.section-heading h2,
+.form-card-heading h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -.025em;
+  text-transform: none;
+}
+
+.trail-card,
+.camp-card,
+.form-card,
+.stat-card,
+.entry-list,
+.history-summary {
+  color: var(--ink);
+  border-width: 1px;
+  border-style: solid;
+  border-color: #c9c0a9;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.button {
+  border-radius: 7px;
+  letter-spacing: .025em;
+  text-transform: none;
+}
+
+.community-stats strong {
+  color: var(--green-dark);
+}
+
+.community-stats[aria-busy="true"] strong {
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.community-card .journey-list li {
+  color: var(--ink);
+}
+
+.hunt-page-card {
+  margin-top: 0;
+  padding: 22px;
+}
+
+.hunt-page-card .hunt-scene {
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 520px) {
+  .community-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .site-header {
+    gap: 8px;
+  }
+
+  .nav-link {
+    padding: 9px 8px;
+    font-size: 12px;
+  }
+}

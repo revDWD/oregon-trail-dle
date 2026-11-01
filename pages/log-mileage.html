@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Add a new entry to your Oregon Trail mileage journal.">
   <title>Log miles | Oregon Trail DLE</title>
-  <link rel="stylesheet" href="../assets/css/style.css">
-  <script src="../assets/js/trail-config.js?v=3" defer></script>
-  <script src="../assets/js/supabase-config.js?v=3" defer></script>
-  <script src="../assets/js/community.js?v=3" defer></script>
-  <script src="../assets/js/script.js?v=3" defer></script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=5">
+  <script src="../assets/js/trail-config.js?v=5" defer></script>
+  <script src="../assets/js/supabase-config.js?v=5" defer></script>
+  <script src="../assets/js/community.js?v=5" defer></script>
+  <script src="../assets/js/script.js?v=5" defer></script>
 </head>
 <body data-page="log">
   <header class="site-header">
@@ -21,7 +21,8 @@
     <nav class="site-nav" aria-label="Main navigation">
       <a class="nav-link" href="../index.html">Home</a>
       <a class="nav-link is-active" href="log-mileage.html" aria-current="page">Log miles</a>
-      <a class="nav-link" href="progress.html">Progress</a>
+      <a class="nav-link" href="hunt.html">Hunt</a>
+      <a class="nav-link" href="progress.html">Journal</a>
     </nav>
   </header>
 
@@ -29,7 +30,7 @@
     <section class="page-intro">
       <p class="eyebrow">Trail ledger</p>
       <h1>Record your miles.</h1>
-      <p>No account needed. Your entries are saved on this device and move your wagon along the trail.</p>
+      <p>Your miles move the community wagon. Notes and your private game journal stay in this browser.</p>
     </section>
 
     <section class="form-card" aria-labelledby="form-heading">
@@ -37,11 +38,11 @@
         <span class="form-icon" aria-hidden="true">✳</span>
         <div>
           <p class="eyebrow">Field journal</p>
-          <h2 id="form-heading">Today's travel log</h2>
+          <h2 id="form-heading">Contribute miles</h2>
         </div>
       </div>
       <div class="notice" data-storage-status role="status" hidden></div>
-      <p class="notice storage-notice">Entries are saved in this browser only. Use the same browser to keep adding to your journey.</p>
+      <p class="notice storage-notice">Miles are sent to the Community Expedition. Notes, hunts, and food are saved in this browser.</p>
       <form class="mileage-form" data-mileage-form novalidate>
         <div class="form-row">
           <div class="form-field">
@@ -64,17 +65,17 @@
         </div>
         <div class="form-actions">
           <button class="button button-primary" type="submit">Save mileage <span aria-hidden="true">→</span></button>
-          <a class="text-link" href="progress.html">View my progress</a>
+          <a class="text-link" href="progress.html">Open your journal</a>
         </div>
         <p class="form-message" data-form-message role="status" aria-live="polite"></p>
       </form>
     </section>
-    <p class="privacy-note"><span aria-hidden="true">◈</span> No account or password. Clearing this site's browser data will erase your journey.</p>
+    <p class="privacy-note"><span aria-hidden="true">◈</span> Community miles persist online; clearing browser data only removes your private journal.</p>
   </main>
 
   <footer class="site-footer">
     <span>Oregon Trail DLE</span>
-    <span>Your journey is saved privately in this browser.</span>
+    <span>Your private journal is saved in this browser.</span>
   </footer>
 </body>
 </html>

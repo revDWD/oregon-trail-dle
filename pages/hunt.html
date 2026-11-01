@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f1e7">
+  <meta name="description" content="Take a short hunting diversion on your Oregon Trail journey.">
+  <title>Hunt | Oregon Trail DLE</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=5">
+  <script src="../assets/js/trail-config.js?v=5" defer></script>
+  <script src="../assets/js/script.js?v=5" defer></script>
+</head>
+<body data-page="hunt">
+  <header class="site-header">
+    <a class="brand" href="../index.html" aria-label="Oregon Trail DLE home">
+      <span class="brand-mark" aria-hidden="true">OT</span>
+      <span>Oregon Trail <span class="brand-light">DLE</span></span>
+    </a>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a class="nav-link" href="../index.html">Home</a>
+      <a class="nav-link" href="log-mileage.html">Log miles</a>
+      <a class="nav-link is-active" href="hunt.html" aria-current="page">Hunt</a>
+      <a class="nav-link" href="progress.html">Journal</a>
+    </nav>
+  </header>
+
+  <main class="page-shell narrow-shell">
+    <section class="page-intro">
+      <p class="eyebrow">A frontier diversion</p>
+      <h1>Hunt for camp.</h1>
+      <p>Every 5 miles in your personal journal unlocks one search. Pick a hiding place; a successful hunt adds food to your local stores.</p>
+    </section>
+    <div class="notice" data-storage-status role="status" hidden></div>
+    <section class="camp-card hunt-page-card" aria-label="Hunting minigame">
+      <div class="camp-supplies" aria-live="polite">
+        <div><span>Food stores</span><strong><span data-camp-food>0</span> lb</strong></div>
+        <div><span>Searches ready</span><strong data-hunts-remaining>0</strong></div>
+        <div><span>Hunts won</span><strong data-hunts-won>0 / 0</strong></div>
+        <div><span>Win streak</span><strong data-hunt-streak>0</strong></div>
+      </div>
+      <p class="camp-intro">A critter is hiding nearby. Pick one place to search. Your finds stay in this browser.</p>
+      <p class="hunt-opportunity-note" data-hunt-opportunity-note></p>
+      <div class="hunt-scene" aria-label="Choose one of three places where the animal may be hiding">
+        <button class="hunt-location" type="button" data-hunt-location="tree" disabled>
+          <span class="hunt-landscape" aria-hidden="true"><span class="hunt-ground"></span><span class="hunt-illustration" data-location-illustration>🌲</span></span>
+          <strong>Old pine</strong>
+          <small data-location-reveal>Look here</small>
+        </button>
+        <button class="hunt-location" type="button" data-hunt-location="bush" disabled>
+          <span class="hunt-landscape" aria-hidden="true"><span class="hunt-ground"></span><span class="hunt-illustration" data-location-illustration>🌿</span></span>
+          <strong>Sagebrush</strong>
+          <small data-location-reveal>Look here</small>
+        </button>
+        <button class="hunt-location" type="button" data-hunt-location="log" disabled>
+          <span class="hunt-landscape" aria-hidden="true"><span class="hunt-ground"></span><span class="hunt-illustration" data-location-illustration>🪵</span></span>
+          <strong>Fallen log</strong>
+          <small data-location-reveal>Look here</small>
+        </button>
+      </div>
+      <div class="hunt-footer">
+        <p class="hunt-message" data-hunt-message role="status" aria-live="polite">Log miles to unlock the first search.</p>
+        <button class="button button-secondary next-hunt-button" type="button" data-next-hunt hidden disabled>Search again</button>
+      </div>
+    </section>
+    <p class="privacy-note">Hunt results and food stores are part of your private, device-local journal.</p>
+  </main>
+
+  <footer class="site-footer">
+    <span>Oregon Trail DLE</span>
+    <span>Your private journal is saved in this browser.</span>
+  </footer>
+</body>
+</html>

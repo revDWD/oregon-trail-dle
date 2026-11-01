@@ -890,6 +890,7 @@
     });
     document.querySelectorAll("[data-progressbar]").forEach((element) => {
       element.setAttribute("aria-valuenow", String(percent));
+      element.removeAttribute("aria-valuetext");
     });
     document.querySelectorAll("[data-progress-fill]").forEach((element) => {
       element.style.width = `${percent}%`;
@@ -923,7 +924,7 @@
         if (!marker || !map.contains(marker)) return;
         try {
           if (!campaignState) return;
-          selectLandmark(Number(marker.dataset.landmarkIndex), displayMiles(campaignState), map);
+          selectLandmark(Number(marker.dataset.landmarkIndex), displayMiles(), map);
         } catch (error) {
           showAppError(error);
         }
@@ -950,13 +951,13 @@
     return start;
   }
 
-  function renderSharedSummary(state) {
-    document.querySelectorAll("[data-group-miles]").forEach((element) => {
-      element.textContent = formatNumber(communitySnapshot && communitySnapshot.totalMiles !== undefined ? communitySnapshot.totalMiles : state.groupMiles);
-    });
+  function renderPersonalSummary(state) {
     const days = new Set(state.entries.map((entry) => entry.date)).size;
     document.querySelectorAll("[data-avg-pace]").forEach((element) => {
       element.textContent = days ? formatNumber(state.groupMiles / days) : "0";
+    });
+    document.querySelectorAll("[data-personal-miles]").forEach((element) => {
+      element.textContent = `${formatNumber(state.groupMiles)} mi`;
     });
   }
 
@@ -967,15 +968,45 @@
     return round2(total - Math.floor(total / TRAIL_MILES) * TRAIL_MILES);
   }
 
-  function displayMiles(state) {
-    return communitySnapshot && communitySnapshot.totalMiles !== undefined ? communitySeasonMiles(communitySnapshot.totalMiles) : state.seasonMiles;
+  function displayMiles() {
+    if (communitySnapshot && communitySnapshot.totalMiles !== undefined) return communitySeasonMiles(communitySnapshot.totalMiles);
+    return 0;
   }
 
-  function renderTrailForState(state) {
+  function renderTrailForState(unavailable) {
     if (communitySnapshot && communitySnapshot.totalMiles !== undefined) {
       renderTrail(communitySeasonMiles(communitySnapshot.totalMiles), communitySnapshot.totalMiles);
     } else {
-      renderTrail(state.seasonMiles, state.groupMiles);
+      const failed = unavailable || !window.OTDLE_COMMUNITY || !window.OTDLE_COMMUNITY.enabled;
+      renderTrail(0, 0);
+      document.querySelectorAll("[data-total-miles]").forEach((element) => {
+        element.textContent = failed ? "Unavailable" : "Loading…";
+      });
+      document.querySelectorAll("[data-trail-mileage]").forEach((element) => {
+        element.textContent = failed ? "Community progress unavailable" : "Loading community progress…";
+      });
+      document.querySelectorAll("[data-map-current]").forEach((element) => {
+        element.textContent = failed ? "Unavailable" : "Loading community progress…";
+      });
+      document.querySelectorAll("[data-current-location]").forEach((element) => {
+        element.textContent = failed ? "Unavailable" : "Loading…";
+      });
+      document.querySelectorAll("[data-next-landmark]").forEach((element) => {
+        element.textContent = failed ? "Unavailable" : "Loading…";
+      });
+      document.querySelectorAll("[data-next-distance], [data-distance-remaining]").forEach((element) => {
+        element.textContent = failed ? "Unavailable" : "Loading…";
+      });
+      document.querySelectorAll("[data-landmark-name], [data-landmark-mileage], [data-landmark-distance]").forEach((element) => {
+        element.textContent = failed ? "Community progress unavailable" : "Loading community progress…";
+      });
+      document.querySelectorAll("[data-progress-label]").forEach((element) => {
+        element.textContent = failed ? "Unavailable" : "Loading…";
+      });
+      document.querySelectorAll("[data-progressbar]").forEach((element) => {
+        element.removeAttribute("aria-valuenow");
+        element.setAttribute("aria-valuetext", failed ? "Community progress unavailable" : "Loading community progress");
+      });
     }
   }
 
@@ -983,8 +1014,8 @@
     const panel = document.querySelector("[data-community-panel]");
     if (snapshot && snapshot.totalMiles !== undefined) communitySnapshot = snapshot;
     if (campaignState) {
-      renderTrailForState(campaignState);
-      renderSharedSummary(campaignState);
+      renderTrailForState(reason === "error" && !communitySnapshot);
+      renderPersonalSummary(campaignState);
     }
     if (!panel) return;
     const set = (name, text) => {
@@ -998,13 +1029,22 @@
     if (!window.OTDLE_COMMUNITY || !window.OTDLE_COMMUNITY.enabled) {
       status("Not connected", true);
       set("miles", "Not connected");
-      set("landmark", "Set up Supabase (see README)");
-      set("percent", "--");
-      set("contributions", "--");
+      set("landmark", "Community service unavailable");
+      set("percent", "Unavailable");
+      set("contributions", "Unavailable");
+      panel.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
+      if (campaignState) renderTrailForState(true);
       return;
     }
     if (!communitySnapshot) {
-      status(reason === "error" ? "Cannot reach the community" : "Connecting...", reason === "error");
+      const failed = reason === "error";
+      status(failed ? "Community unavailable" : "Loading community progress…", failed);
+      set("miles", failed ? "Unavailable" : "Loading…");
+      set("landmark", failed ? "Unavailable" : "Loading…");
+      set("percent", failed ? "Unavailable" : "Loading…");
+      set("contributions", failed ? "Unavailable" : "Loading…");
+      panel.querySelector(".community-stats")?.setAttribute("aria-busy", String(!failed));
+      if (campaignState) renderTrailForState(failed);
       return;
     }
     const total = communitySnapshot.totalMiles;
@@ -1015,6 +1055,7 @@
     set("percent", `${percent}%`);
     set("contributions", formatNumber(communitySnapshot.totalContributions || 0, 0));
     status(reason === "error" ? "Offline - showing last known total" : "Live", reason === "error");
+    panel.querySelector(".community-stats")?.setAttribute("aria-busy", "false");
 
     const list = panel.querySelector("[data-community-recent]");
     if (list) {
@@ -1051,7 +1092,7 @@
     const recent = entries.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 3);
     const recentContainer = document.querySelector("[data-recent-entries]");
     if (recentContainer) renderEntryList(recentContainer, recent, "Your first entry is waiting. Log some miles to get underway.");
-    renderTrailForState(state);
+    renderTrailForState();
   }
 
   function renderProgress(state) {
@@ -1080,7 +1121,6 @@
     const sortedEntries = entries.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
     const history = document.querySelector("[data-history-entries]");
     if (history) renderEntryList(history, sortedEntries, "No miles logged yet. Add your first entry to begin your journey.", true);
-    renderTrailForState(state);
     renderSeasonHistory(state);
     renderJourneyLog(state);
   }
@@ -1191,6 +1231,7 @@
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (submitting) return;
       message.textContent = "";
       message.classList.remove("is-error");
       let valid = true;
@@ -1213,6 +1254,12 @@
 
       const rounded = Math.round(miles * 100) / 100;
       const community = window.OTDLE_COMMUNITY;
+      if (!community || !community.enabled) {
+        message.textContent = "Community contributions are unavailable. No miles were saved. Try again when the service is available.";
+        message.classList.add("is-error");
+        return;
+      }
+
       const finish = () => {
         try {
           addEntry(rounded, dateField.value, notesField.value.trim());
@@ -1221,9 +1268,7 @@
           message.classList.add("is-error");
           return;
         }
-        message.textContent = community && community.enabled
-          ? `${formatMiles(rounded)} added to the community expedition.`
-          : `${formatMiles(rounded)} added to your journey.`;
+        message.textContent = `${formatMiles(rounded)} added to the community expedition.`;
         form.reset();
         dateField.value = localDateString(new Date());
         dateField.max = localDateString(new Date());
@@ -1233,16 +1278,11 @@
         showStorageWarning();
       };
 
-      if (!community || !community.enabled) {
-        finish();
-        return;
-      }
-      if (submitting) return;
       submitting = true;
       submitButton.disabled = true;
       message.textContent = "Sending your miles to the community...";
       community.submit(rounded).then(finish, (error) => {
-        message.textContent = `Could not record your miles: ${error.message}. Nothing was saved; try again.`;
+        message.textContent = `Could not confirm your contribution: ${error.message}. Retrying the same amount is safe.`;
         message.classList.add("is-error");
       }).finally(() => {
         submitting = false;
@@ -1255,7 +1295,7 @@
     const fresh = recordProgress();
     const state = buildState();
     campaignState = state;
-    renderSharedSummary(state);
+    renderPersonalSummary(state);
     const page = document.body.dataset.page;
     if (page === "home") renderHome(state);
     if (page === "progress") renderProgress(state);
@@ -1307,7 +1347,7 @@
     if (history) {
       history.addEventListener("click", (event) => {
         const button = event.target instanceof Element ? event.target.closest("[data-delete-entry]") : null;
-        if (!button || !window.confirm("Delete this entry? Your wagon will move back by those miles.")) return;
+        if (!button || !window.confirm("Delete this private journal entry? Your community contribution will remain recorded, but your local wagon and hunt progress will move back by those miles.")) return;
         deleteEntry(button.dataset.deleteEntry);
         refreshCampaign();
         showStorageWarning();
@@ -1340,10 +1380,10 @@
       showStorageWarning();
     });
     document.querySelector("[data-reset-save]")?.addEventListener("click", () => {
-      if (!window.confirm("Start a new game? This permanently erases the miles, hunts and food saved in this browser. Download a backup first if you want to keep them.")) return;
+      if (!window.confirm("Start a new game? This permanently erases the miles, hunts and food saved in this browser. Community contributions remain recorded online. Download a backup first if you want to keep your private journal.")) return;
       clearSave();
       refreshCampaign();
-      say("Saved journey erased. You are back at Independence.");
+      say("Private journey erased. Community contributions remain recorded online.");
     });
   }
 

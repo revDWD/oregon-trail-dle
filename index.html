@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#f4f1e7">
   <meta name="description" content="Track your miles as you make your way west along the Oregon Trail.">
   <title>Oregon Trail DLE | Your journey west</title>
-  <link rel="stylesheet" href="assets/css/style.css">
-  <script src="assets/js/us-states.js" defer></script>
-  <script src="assets/js/trail-config.js?v=3" defer></script>
-  <script src="assets/js/supabase-config.js?v=3" defer></script>
-  <script src="assets/js/community.js?v=3" defer></script>
-  <script src="assets/js/script.js?v=3" defer></script>
+  <link rel="stylesheet" href="assets/css/style.css?v=5">
+  <script src="assets/js/us-states.js?v=5" defer></script>
+  <script src="assets/js/trail-config.js?v=5" defer></script>
+  <script src="assets/js/supabase-config.js?v=5" defer></script>
+  <script src="assets/js/community.js?v=5" defer></script>
+  <script src="assets/js/script.js?v=5" defer></script>
 </head>
 <body data-page="home">
   <header class="site-header">
@@ -22,7 +22,8 @@
     <nav class="site-nav" aria-label="Main navigation">
       <a class="nav-link is-active" href="index.html" aria-current="page">Home</a>
       <a class="nav-link" href="pages/log-mileage.html">Log miles</a>
-      <a class="nav-link" href="pages/progress.html">Progress</a>
+      <a class="nav-link" href="pages/hunt.html">Hunt</a>
+      <a class="nav-link" href="pages/progress.html">Journal</a>
     </nav>
   </header>
 
@@ -31,28 +32,10 @@
     <section class="map-hero-head" aria-labelledby="journey-heading">
       <div>
         <p class="eyebrow">Oregon Trail · 1843</p>
-        <h1 id="journey-heading">Current journey</h1>
-        <p>Every mile you move brings your wagon closer to Oregon City.</p>
+        <h1 id="journey-heading">Community Expedition</h1>
+        <p>Every contributed mile moves the wagon west.</p>
       </div>
       <a class="button button-primary" href="pages/log-mileage.html">Log today's miles <span aria-hidden="true">→</span></a>
-    </section>
-
-    <section class="trail-card community-card" aria-labelledby="community-heading" data-community-panel>
-      <div class="trail-card-heading">
-        <div>
-          <p class="eyebrow">Everyone, one wagon</p>
-          <h2 id="community-heading">Community Expedition</h2>
-        </div>
-        <span class="distance-chip" data-community-status role="status">Connecting...</span>
-      </div>
-      <div class="community-stats">
-        <div><span>Community miles traveled</span><strong data-community-miles>--</strong></div>
-        <div><span>Current landmark</span><strong data-community-landmark>--</strong></div>
-        <div><span>Trail completion</span><strong data-community-percent>--</strong></div>
-        <div><span>Contributions</span><strong data-community-contributions>--</strong></div>
-      </div>
-      <h3 class="community-recent-heading">Recent contributions</h3>
-      <ul class="journey-list" data-community-recent aria-live="polite"></ul>
     </section>
 
     <section class="trail-card map-hero-card" aria-labelledby="map-heading">
@@ -61,12 +44,12 @@
             <p class="eyebrow">Missouri to Oregon</p>
             <h2 id="map-heading">The Oregon Trail</h2>
           </div>
-          <span class="distance-chip">Follow your wagon west</span>
+          <span class="distance-chip">The community's route west</span>
         </div>
         <div class="trail-map" data-trail-map>
           <svg class="trail-svg us-map" viewBox="0 0 1000 570" role="group" aria-labelledby="home-map-title home-map-desc">
-            <title id="home-map-title">Interactive Oregon Trail map across the United States</title>
-            <desc id="home-map-desc">A geographically projected map of the contiguous United States with the Oregon Trail from Independence, Missouri, to Oregon City, Oregon. Select a numbered landmark for details.</desc>
+            <title id="home-map-title">Community progress on the Oregon Trail</title>
+            <desc id="home-map-desc">A map of the community expedition from Independence, Missouri, to Oregon City, Oregon. Select a numbered landmark for details.</desc>
             <g class="map-base" data-map-base aria-hidden="true"></g>
             <g data-map-features aria-hidden="true"></g>
             <g data-route-remaining aria-hidden="true"></g>
@@ -86,12 +69,12 @@
               <circle class="legend-wagon-wheel" cx="9" cy="22" r="4"></circle>
               <circle class="legend-wagon-wheel" cx="26" cy="22" r="4"></circle>
             </svg>
-            Your wagon
+            Community wagon
           </span>
         </div>
         <div class="fitness-progress">
-          <div><span>Fitness progress</span><strong><span data-total-miles>0</span> of 2,040 miles</strong></div>
-          <strong class="fitness-percent" data-progress-label>0% complete</strong>
+          <div><span>Community progress</span><strong><span data-total-miles>--</span> of 2,040 miles</strong></div>
+          <strong class="fitness-percent" data-progress-label>Loading…</strong>
           <div class="progress-track" role="progressbar" aria-label="Oregon Trail distance completed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progressbar>
             <span class="progress-fill" data-progress-fill></span>
           </div>
@@ -110,81 +93,32 @@
         <p class="map-disclaimer">State boundaries use Census-derived geography. Rivers and mountain ranges are hand-placed and approximate, as is the trail mileage.</p>
     </section>
 
-    <section class="section-block journey-summary" aria-labelledby="summary-heading">
-      <div class="section-heading">
+    <section class="trail-card community-card" aria-labelledby="community-heading" data-community-panel>
+      <div class="trail-card-heading">
         <div>
-          <p class="eyebrow">On the trail</p>
-          <h2 id="summary-heading">Journey summary</h2>
+          <p class="eyebrow">One trail, many travelers</p>
+          <h2 id="community-heading">Community Expedition</h2>
         </div>
-        <a class="text-link" href="pages/progress.html">View full journal <span aria-hidden="true">→</span></a>
+        <span class="distance-chip" data-community-status role="status">Loading community progress…</span>
       </div>
-      <div class="stats-grid">
-        <article class="stat-card">
-          <span class="stat-label">Miles traveled</span>
-          <strong class="stat-value" data-group-miles>0</strong>
-          <span class="stat-foot">saved on this device</span>
-        </article>
-        <article class="stat-card stat-card-location">
-          <span class="stat-label">Average per travel day</span>
-          <strong class="stat-value" data-avg-pace>0</strong>
-          <span class="stat-foot">miles on days you logged</span>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Distance to Oregon City</span>
-          <strong class="stat-value"><span data-distance-remaining>2,040</span></strong>
-          <span class="stat-foot">based on your mileage</span>
-        </article>
+      <div class="community-stats" aria-live="polite" aria-busy="true">
+        <div><span>Community miles traveled</span><strong data-community-miles>Loading…</strong></div>
+        <div><span>Current landmark</span><strong data-community-landmark>Loading…</strong></div>
+        <div><span>Trail completion</span><strong data-community-percent>Loading…</strong></div>
+        <div><span>Contributions</span><strong data-community-contributions>Loading…</strong></div>
       </div>
-    </section>
-
-    <section class="section-block camp-section" aria-labelledby="camp-heading">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Optional trail diversion</p>
-          <h2 id="camp-heading">Hunt for camp</h2>
-        </div>
-        <span class="distance-chip">A little frontier flavor</span>
-      </div>
-      <div class="camp-card">
-        <div class="camp-supplies" aria-live="polite">
-          <div><span>Food stores</span><strong><span data-camp-food>0</span> lb</strong></div>
-          <div><span>Searches ready</span><strong data-hunts-remaining>0</strong></div>
-          <div><span>Hunts won</span><strong data-hunts-won>0 / 0</strong></div>
-          <div><span>Win streak</span><strong data-hunt-streak>0</strong></div>
-        </div>
-        <p class="camp-intro">A critter is hiding nearby. Pick one place to search. Every 5 miles you log earns a hunt, and the food you win is added to your stores.</p>
-        <p class="hunt-opportunity-note" data-hunt-opportunity-note></p>
-        <div class="hunt-scene" aria-label="Choose one of three places where the animal may be hiding">
-          <button class="hunt-location" type="button" data-hunt-location="tree" disabled>
-            <span class="hunt-landscape" aria-hidden="true"><span class="hunt-ground"></span><span class="hunt-illustration" data-location-illustration>🌲</span></span>
-            <strong>Old pine</strong>
-            <small data-location-reveal>Look here</small>
-          </button>
-          <button class="hunt-location" type="button" data-hunt-location="bush" disabled>
-            <span class="hunt-landscape" aria-hidden="true"><span class="hunt-ground"></span><span class="hunt-illustration" data-location-illustration>🌿</span></span>
-            <strong>Sagebrush</strong>
-            <small data-location-reveal>Look here</small>
-          </button>
-          <button class="hunt-location" type="button" data-hunt-location="log" disabled>
-            <span class="hunt-landscape" aria-hidden="true"><span class="hunt-ground"></span><span class="hunt-illustration" data-location-illustration>🪵</span></span>
-            <strong>Fallen log</strong>
-            <small data-location-reveal>Look here</small>
-          </button>
-        </div>
-        <div class="hunt-footer">
-          <p class="hunt-message" data-hunt-message role="status" aria-live="polite">Log miles to unlock the first search.</p>
-          <button class="button button-secondary next-hunt-button" type="button" data-next-hunt hidden disabled>Search again</button>
-        </div>
-      </div>
+      <h3 class="community-recent-heading">Recent contributions</h3>
+      <ul class="journey-list" data-community-recent aria-live="polite"></ul>
+      <a class="text-link" href="pages/hunt.html">Visit the hunting grounds <span aria-hidden="true">→</span></a>
     </section>
 
     <section class="section-block recent-section" aria-labelledby="recent-heading">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Your field journal</p>
-          <h2 id="recent-heading">Recent entries</h2>
+          <p class="eyebrow">Saved in this browser</p>
+          <h2 id="recent-heading">Your recent entries</h2>
         </div>
-        <a class="text-link" href="pages/progress.html">View history <span aria-hidden="true">→</span></a>
+        <a class="text-link" href="pages/progress.html">Open your journal <span aria-hidden="true">→</span></a>
       </div>
       <div class="entry-list entry-list-compact" data-recent-entries>
         <p class="empty-state">Your first entry is waiting. <a href="pages/log-mileage.html">Log some miles</a> to get underway.</p>
@@ -194,7 +128,7 @@
 
   <footer class="site-footer">
     <span>Oregon Trail DLE</span>
-    <span>Your journey is saved privately in this browser.</span>
+    <span>Your private journal is saved here; community progress is online.</span>
   </footer>
 </body>
 </html>

@@ -10,6 +10,7 @@
   const POLL_MS = 30000;
   const HEARTBEAT_MS = 25000;
   const SOURCE_KEY = "oregon-trail-dle:source";
+  const PENDING_KEY = "oregon-trail-dle:pending-contribution";
   const TAG = "[community]";
 
   const baseUrl = String(SETTINGS.url || "").replace(/\/+$/, "");
@@ -27,7 +28,8 @@
   let heartbeatTimer = null;
   let retryDelay = 1000;
   let started = false;
-  let pendingSubmissionId = null;
+  let pendingSubmission = null;
+  let memorySource = null;
 
   function newId() {
     if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -49,8 +51,29 @@
       }
       return value;
     } catch (error) {
-      return "web-anonymous";
+      if (!memorySource) memorySource = newId();
+      return memorySource;
     }
+  }
+
+  function getPendingSubmission(miles) {
+    if (pendingSubmission && pendingSubmission.miles !== miles) pendingSubmission = null;
+    if (!pendingSubmission) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(PENDING_KEY));
+        if (saved && saved.miles === miles && typeof saved.id === "string") pendingSubmission = saved;
+      } catch (error) {
+        // sessionStorage can be unavailable in private browsing; keep the id in memory instead.
+      }
+    }
+    if (!pendingSubmission) pendingSubmission = { id: newId(), miles };
+    try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(pendingSubmission)); } catch (error) { /* memory fallback */ }
+    return pendingSubmission.id;
+  }
+
+  function clearPendingSubmission() {
+    pendingSubmission = null;
+    try { sessionStorage.removeItem(PENDING_KEY); } catch (error) { /* memory fallback */ }
   }
 
   function headers(extra) {
@@ -118,20 +141,19 @@
     const check = validateMiles(value);
     if (!check.ok) throw new Error(check.message);
     if (!enabled) throw new Error("Community progress is not configured.");
-    if (!pendingSubmissionId) pendingSubmissionId = newId();
-    const body = { p_miles: check.miles, p_source: getSource(), p_submission_id: pendingSubmissionId };
+    const body = { p_miles: check.miles, p_source: getSource(), p_submission_id: getPendingSubmission(check.miles) };
     log("Contribution submitting", body);
     try {
       const row = await request("/rest/v1/rpc/add_community_miles", { method: "POST", body: JSON.stringify(body) });
       log("DB write OK: add_community_miles", row);
-      pendingSubmissionId = null;
+      clearPendingSubmission();
       const result = Array.isArray(row) ? row[0] : row;
       publish({ ...normalize(result), recent: null, error: null }, "submit");
       fetchRecent().then((recent) => publish({ ...snapshot, recent, error: null }, "submit")).catch((error) => fail("recent read failed", error));
       return check.miles;
     } catch (error) {
       fail("Contribution failed", error);
-      if (error.status && error.status < 500) pendingSubmissionId = null;
+      if (error.status && error.status < 500) clearPendingSubmission();
       throw error;
     }
   }

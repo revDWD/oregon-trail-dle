@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = (relativePath) => readFile(path.join(root, relativePath), "utf8");
-const pages = ["index.html", "pages/log-mileage.html", "pages/progress.html"];
+const pages = ["index.html", "pages/log-mileage.html", "pages/hunt.html", "pages/progress.html"];
 
 test("the site is static: no server or database, and only community.js touches the network", async () => {
   const client = await read("assets/js/script.js");
@@ -39,12 +39,38 @@ test("pages have no collaborative wording or elements", async () => {
 
 test("pages keep the map, hunt, and hand-placed scenery", async () => {
   const [home, progress] = await Promise.all([read("index.html"), read("pages/progress.html")]);
-  assert.match(home, /data-next-hunt/);
-  for (const page of [home, progress]) {
-    assert.match(page, /data-map-features/);
-    assert.match(page, /data-map-base/);
-    assert.match(page, /us-states\.js/);
-    assert.doesNotMatch(page, /hillshade|us-relief|usgs/i);
-  }
+  const hunt = await read("pages/hunt.html");
+  assert.ok(home.indexOf("data-trail-map") < home.indexOf("data-community-panel"));
+  assert.match(hunt, /data-next-hunt/);
+  assert.match(hunt, /data-hunt-location/);
+  assert.match(home, /data-map-features/);
+  assert.match(home, /data-map-base/);
+  assert.match(home, /us-states\.js/);
+  assert.doesNotMatch(progress, /data-trail-map|data-community-panel/);
+  assert.doesNotMatch(home, /data-hunt-location/);
+  assert.doesNotMatch(home, /hillshade|us-relief|usgs/i);
   assert.match(await read("README.md"), /hand-placed/);
+});
+
+test("community text remains readable on parchment cards and its source is online", async () => {
+  const [css, home, log] = await Promise.all([
+    read("assets/css/style.css"),
+    read("index.html"),
+    read("pages/log-mileage.html")
+  ]);
+  assert.match(css, /\.trail-card,[\s\S]*?color:\s*var\(--ink\)/);
+  assert.match(css, /\.community-stats strong\s*\{[^}]*color:\s*var\(--green-dark\)/);
+  assert.match(home, /data-community-miles>Loading/);
+  assert.match(log, /Miles are sent to the Community Expedition/);
+  assert.match(log, /Community miles persist online/);
+});
+
+test("mileage is not recorded locally when community service is unavailable", async () => {
+  const client = await read("assets/js/script.js");
+  const formHandler = client.slice(client.indexOf("function initializeLogForm"), client.indexOf("function refreshCampaign"));
+  assert.match(formHandler, /Community contributions are unavailable\. No miles were saved/);
+  assert.doesNotMatch(formHandler, /added to your journey/);
+  assert.match(formHandler, /community\.submit\(rounded\)\.then\(finish/);
+  assert.match(client, /Delete this private journal entry\? Your community contribution will remain recorded/);
+  assert.match(client, /Community contributions remain recorded online/);
 });

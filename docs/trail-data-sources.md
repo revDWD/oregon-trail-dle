@@ -9,9 +9,14 @@
 - **Coordinates** are approximate decimal-degree latitude/longitude of each landmark, accurate to roughly a mile. The map line between landmarks is a simple polyline (landmarks plus a few unnamed shape points), **not the real GPS track** of the trail.
 - **Southbound** distances are computed as `totalMiles − marker`.
 
+- **Elevations** (`elevationFt`) are rounded approximations from general knowledge (USGS-style summit and gap figures, as commonly quoted). They are not survey values.
+- **Trailhead access notes** (`access`) name a commonly used road crossing or trailhead near each landmark. Check current conditions with the ATC or the land manager before relying on them for a real hike.
+- **Regions** (`regions`) are this project's own grouping of the trail into eight sections for the map and the Camp scenery. Their boundaries are rounded mile markers, not official ATC section definitions.
+- **Shape points** (unnamed points in `route`) only make the map line look like the trail's general course. They are approximate.
+
 ## What is not included
 
-No ATC logos, photographs, trail blazes or artwork are used. Landmark facts are short original descriptions written for this project.
+No ATC logos, photographs, trail blazes or artwork are used. Landmark facts are short original descriptions written for this project. Landmark illustrations (`ui/illustrations.js`), the camp scene and the expedition sprites are original, simple SVG/pixel drawings made for this project.
 
 ## Improving accuracy later
 

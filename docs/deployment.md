@@ -19,7 +19,31 @@ The site is static (no build step). GitHub Pages serves the repository root from
 2. Paste the whole of `supabase/migrations/20261101000000_at_fitness_schema.sql` and run it. It is idempotent and only creates `at_*` objects, so the existing Oregon tables are untouched.
 3. Open the site once, then check Dashboard > Authentication > Users shows a new anonymous user and `at_profiles` has a matching row.
 
+4. **Phase 2 (Camp, Expeditions, Trail Dispatches):** in a new query, paste the whole of `supabase/migrations/20261103000000_at_camp_dispatches.sql` and run it. It is also idempotent. Until it is applied, the app still works but Camp shows no dispatches or supplies, and saving an expedition fails with a friendly message.
+
 (Or with the Supabase CLI: `supabase link --project-ref eojzvyyhzdapwgsrtyne` then `supabase db push`.)
+
+## 2b. Let the organizer (Kevin) post Trail Dispatches
+
+Organizers are listed in `public.at_organizers`, which the app cannot write to.
+
+1. Kevin opens the site **on the device and browser he'll post from**, goes to **Camp**, and expands **Your hiker ID** (at the bottom). He sends you that ID.
+2. In the SQL Editor, run (replace the ID):
+
+   ```sql
+   insert into public.at_organizers (user_id, note)
+   values ('00000000-0000-0000-0000-000000000000', 'Kevin')
+   on conflict (user_id) do nothing;
+   ```
+
+3. Kevin reloads the site. A **Write a dispatch** button appears at Camp. He can choose "Everyone" or "Only <crew>", and can pin a dispatch to the top of the Trail page. Formatting: `**bold**`, `*italics*`, `[text](https://link)`, `- ` lists, `# ` heading, `> ` quote.
+
+Alternatives and notes:
+
+- Dispatches can also be added in **Table Editor > at_dispatches** (fill `title`, `body`, `author_name`; set `published_at` in the future to schedule one).
+- "Everyone" dispatches can be read by any visitor of the site, because every visitor is an anonymous signed-in user. Don't post private details there.
+- Remove an organizer: `delete from public.at_organizers where user_id = '...';`
+- If Kevin clears his browser data he gets a new hiker ID; repeat step 1–2.
 
 ## 3. Supabase Auth settings: anonymous sign-ins (there is no login screen)
 
@@ -62,7 +86,9 @@ For a separate staging database, create a second Supabase project, run the migra
 
 ## 7. Verification checklist after go-live
 
-- [ ] First visit starts automatically (no login) and the Profile page lets you set a trail name.
+- [ ] First visit starts automatically (no login) and Camp > "Your spot at camp" lets you set a trail name.
+- [ ] After the Phase 2 migration and organizer setup, a dispatch posted at Camp appears at the top of the Trail page for everyone.
+- [ ] A Hunt round saves to camp (the pantry total on Camp goes up); the 11th round in a day is politely refused.
 - [ ] Log an activity; trail percent and map marker update.
 - [ ] Create a challenge, copy the invite code, join from a second account; both appear on the leaderboard.
 - [ ] In a second browser (a second anonymous hiker), the first hiker's activities are not visible or editable.

@@ -105,3 +105,41 @@ export function ruleFromRow(row) {
     effectiveFrom: row.effective_from
   };
 }
+
+export function dispatchFromRow(row) {
+  return {
+    id: row.id,
+    challengeId: row.challenge_id || null,
+    title: row.title,
+    body: row.body,
+    authorName: row.author_name,
+    pinned: Boolean(row.pinned),
+    publishedAt: row.published_at,
+    updatedAt: row.updated_at || row.published_at
+  };
+}
+
+// Only organizer-settable columns. created_by is set by the database, never by the client.
+export function dispatchToRow(value) {
+  const row = {
+    title: String(value.title || "").trim(),
+    body: String(value.body || "").trim(),
+    author_name: String(value.authorName || "Camp").trim() || "Camp",
+    pinned: Boolean(value.pinned),
+    challenge_id: value.challengeId || null
+  };
+  if (value.publishedAt) row.published_at = value.publishedAt;
+  return row;
+}
+
+// at_camp_supplies rows (one per theme) -> { [theme]: { myScore, myRuns, crewScore, crewRuns } }.
+export function suppliesFromRows(rows) {
+  const out = {};
+  (rows || []).forEach((row) => {
+    out[row.theme] = {
+      myScore: Number(row.my_score) || 0, myRuns: Number(row.my_runs) || 0,
+      crewScore: Number(row.crew_score) || 0, crewRuns: Number(row.crew_runs) || 0
+    };
+  });
+  return out;
+}

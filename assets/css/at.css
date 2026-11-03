@@ -38,7 +38,7 @@ footer { max-width: 42rem; margin: 0 auto; padding: 0 1rem; color: var(--muted);
 .skip:focus { left: 0; }
 
 nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--forest-dark); z-index: 10; padding-bottom: env(safe-area-inset-bottom); }
-nav a { flex: 1; min-height: var(--tap); display: flex; align-items: center; justify-content: center; color: #fff; text-decoration: none; font-size: .8rem; padding: .6rem .1rem; border-top: 4px solid transparent; }
+nav a { flex: 1; min-width: 0; min-height: var(--tap); display: flex; align-items: center; justify-content: center; color: #fff; text-decoration: none; font-size: .74rem; padding: .6rem 0; border-top: 4px solid transparent; }
 nav a[aria-current="page"] { border-top-color: var(--amber); font-weight: 700; background: rgba(255,255,255,.1); }
 nav[hidden] { display: none; }
 
@@ -63,14 +63,123 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .stat dt { font-size: .85rem; color: var(--muted); }
 .stat dd { margin: 0; font-weight: 700; font-size: 1.1rem; }
 
-.trail-map { width: 100%; height: auto; max-height: 28rem; background: var(--sky); border-radius: 10px; display: block; }
-.map-states path { fill: #eadfc2; stroke: #b8a97f; stroke-width: .8; }
-.map-route { fill: none; stroke: var(--bark); stroke-width: 2; stroke-dasharray: 5 4; }
-.map-walked { fill: none; stroke: var(--forest); stroke-width: 4; stroke-linecap: round; }
-.map-landmark { fill: var(--paper); stroke: var(--bark); stroke-width: 1.5; }
-.map-landmark.passed { fill: var(--moss); }
+/* ---- Trail map ---- */
+.map-wrap { display: grid; gap: .6rem; }
+.map-tools { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.btn.small { padding: .35rem .8rem; font-size: .9rem; }
+.btn[aria-pressed="true"] { background: var(--forest); color: #fff; }
+.zoom-level { min-width: 2.5rem; text-align: center; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.map-frame { border-radius: 10px; overflow: hidden; border: 2px solid var(--bark); background: var(--sky); }
+.trail-map { --z: 1; width: 100%; height: auto; aspect-ratio: 1.054 / 1; max-height: 34rem; display: block; cursor: grab; user-select: none; -webkit-user-select: none; }
+.trail-map:focus-visible { outline: 3px solid #0b57d0; outline-offset: -3px; }
+.map-states path { fill: #eadfc2; stroke: #b8a97f; stroke-width: calc(.8px / var(--z)); }
+.map-region { fill: none; stroke-width: calc(12px / var(--z)); stroke-linecap: round; stroke-linejoin: round; opacity: .35; }
+.map-route { fill: none; stroke: var(--bark); stroke-width: calc(2px / var(--z)); stroke-dasharray: calc(5px / var(--z)) calc(4px / var(--z)); }
+.map-walked { fill: none; stroke: var(--forest); stroke-width: calc(4px / var(--z)); stroke-linecap: round; stroke-linejoin: round; }
+.map-posts circle { fill: var(--bark); transform-box: fill-box; transform-origin: center; transform: scale(calc(1 / var(--z))); }
+.map-posts text { font-size: calc(10px / var(--z)); fill: var(--bark); font-weight: 700; paint-order: stroke; stroke: var(--paper); stroke-width: calc(2px / var(--z)); }
+.map-mate { fill: #2f6b9a; stroke: #fff; stroke-width: 1; transform-box: fill-box; transform-origin: center; transform: scale(calc(1 / var(--z))); }
+.map-camp { fill: var(--amber); stroke: var(--bark); stroke-width: 1; transform-box: fill-box; transform-origin: center; transform: scale(calc(1 / var(--z))); }
+.map-landmark { cursor: pointer; outline: none; }
+.map-landmark circle { transform-box: fill-box; transform-origin: center; transform: scale(calc(1 / var(--z))); }
+.map-landmark .hit { fill: transparent; }
+.map-landmark .dot { fill: var(--paper); stroke: var(--bark); stroke-width: 1.5; }
+.map-landmark.passed .dot { fill: var(--moss); stroke: var(--forest-dark); }
+.map-landmark.next .dot { fill: var(--amber); }
+.map-landmark .pulse { fill: none; stroke: var(--amber); stroke-width: 2; animation: pulse 1.8s ease-out infinite; }
+.map-landmark[aria-pressed="true"] .dot { stroke: #0b57d0; stroke-width: 2.5; }
+.map-landmark:focus-visible .hit { stroke: #0b57d0; stroke-width: 2.5; fill: rgba(11,87,208,.12); }
+@keyframes pulse { from { opacity: 1; transform: scale(calc(1 / var(--z))); } to { opacity: 0; transform: scale(calc(2 / var(--z))); } }
+.map-hiker circle { transform-box: fill-box; transform-origin: center; transform: scale(calc(1 / var(--z))); }
 .map-hiker-halo { fill: rgba(224,164,58,.45); }
 .map-hiker-dot { fill: var(--amber); stroke: var(--forest-dark); stroke-width: 2; }
+.map-legend { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .85rem; color: var(--muted); }
+.map-legend li { display: flex; align-items: center; gap: .35rem; }
+.key { display: inline-block; width: .9rem; height: .9rem; border-radius: 50%; border: 2px solid var(--bark); }
+.key.you { background: var(--amber); border-color: var(--forest-dark); }
+.key.walked { border-radius: 2px; height: .3rem; width: 1.2rem; background: var(--forest); border: 0; }
+.key.next { background: var(--amber); }
+.key.mate { background: #2f6b9a; border-color: #fff; }
+.key.camp { border-radius: 0; background: var(--amber); clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; }
+.key.post { width: .5rem; height: .5rem; background: var(--bark); border: 0; }
+.map-detail { display: grid; gap: .75rem; grid-template-columns: 1fr; background: #fbf4e2; border: 1px dashed var(--bark); border-radius: 10px; padding: .75rem; }
+.map-detail h3 { margin: 0; font-family: Georgia, serif; color: var(--forest-dark); }
+.map-detail p { margin: .3rem 0; }
+.landmark-art { width: 100%; max-width: 16rem; height: auto; border-radius: 8px; border: 2px solid var(--bark); display: block; }
+.tag { display: inline-block; background: var(--forest); color: #fff; border-radius: 999px; padding: .1rem .7rem; font-size: .85rem; font-weight: 600; }
+.map-detail.passed .tag { background: var(--moss); color: var(--ink); }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: .15rem .75rem; margin: .4rem 0; font-size: .92rem; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.sections-title { margin: .4rem 0 0; font-size: 1rem; }
+.sections { list-style: none; padding: 0; margin: 0; display: grid; gap: .4rem; }
+.section-btn { width: 100%; min-height: var(--tap); display: grid; grid-template-columns: auto 1fr; gap: .1rem .6rem; align-items: center; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: .5rem .7rem; cursor: pointer; color: var(--ink); }
+.section-btn .swatch { grid-row: span 3; width: .9rem; align-self: stretch; border-radius: 4px; background: var(--region); }
+.section-name { font-weight: 700; }
+.section-bar { display: block; height: 6px; background: var(--sky); border-radius: 999px; overflow: hidden; }
+.section-bar span { display: block; height: 100%; background: var(--forest); }
+.sections li.current .section-btn { border: 2px solid var(--amber); background: #fff7e3; }
+.sections li.done .section-name::after { content: " ✓"; color: var(--forest); }
+.you { color: var(--bark); font-weight: 600; }
+@media (min-width: 40rem) {
+  .map-detail { grid-template-columns: 12rem 1fr; }
+}
+
+/* ---- Trail Dispatches ---- */
+.dispatch .eyebrow { margin: 0 0 .2rem; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; font-weight: 700; color: var(--bark); }
+.dispatch.featured { background: linear-gradient(180deg, #fff3da, var(--paper)); border: 2px solid var(--amber); }
+.dispatch.featured h2 { font-family: Georgia, serif; font-size: 1.35rem; }
+.dispatch h3 { margin: 0; font-family: Georgia, serif; color: var(--forest-dark); }
+.byline { color: var(--muted); font-size: .85rem; margin: .1rem 0 .6rem; }
+.rich p, .rich ul, .rich ol, .rich blockquote { margin: 0 0 .6rem; }
+.rich h3 { font-size: 1.05rem; margin: .4rem 0; }
+.rich blockquote { border-left: 4px solid var(--moss); padding-left: .75rem; color: var(--forest-dark); font-style: italic; }
+.rich a { color: var(--forest-dark); font-weight: 600; }
+.more-link { margin: -.5rem 0 1rem; text-align: right; }
+.dispatches > .btn { margin-bottom: 1rem; }
+.field.check { display: flex; align-items: center; gap: .6rem; }
+.field.check input { width: 1.5rem; min-height: 1.5rem; height: 1.5rem; margin: 0; }
+.field.check label { margin: 0; }
+
+/* ---- Camp ---- */
+.camp-card { padding: .6rem; }
+.camp-frame { border-radius: 10px; overflow: hidden; border: 3px solid var(--bark); background: var(--sky); }
+.camp-svg { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+.camp-caption { min-height: 3em; margin: .6rem .2rem; }
+.camp-times, .theme-switch { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0; }
+.camp-hot { cursor: pointer; outline: none; }
+.camp-hot:focus-visible > *:first-child, .camp-hot:hover > *:first-child { outline: 2px solid #fff; }
+.camp-hot:focus-visible { filter: drop-shadow(0 0 2px #0b57d0) drop-shadow(0 0 1px #fff); }
+.camp-banner-text { font: 700 9px Georgia, serif; fill: #fff; paint-order: stroke; stroke: var(--bark); stroke-width: 2px; }
+.camp-fire .flick { animation: flicker .5s steps(2) infinite; }
+.camp-smoke rect { animation: smoke 3s linear infinite; }
+.camp-clouds { animation: drift 40s linear infinite alternate; }
+.camp-stars .twinkle { animation: flicker 1.6s steps(2) infinite; }
+.camp-wander { animation: wander 18s ease-in-out infinite alternate; }
+.camp-hop { animation: hop 4s steps(4) infinite; }
+.camp-wave { animation: flicker .8s steps(2) infinite; }
+.camp-lantern { animation: flicker 2.2s steps(2) infinite; }
+.camp-weather .drop { animation: fall .8s linear infinite; }
+.camp-weather .flake { animation: fall 4s linear infinite; }
+.camp-weather .fogbank { animation: drift 20s ease-in-out infinite alternate; }
+.camp-banner .flag { animation: flicker 1.2s steps(2) infinite; }
+.camp-person.me .me-mark { animation: flicker 1s steps(2) infinite; }
+.time-dawn .camp-people, .time-dusk .camp-people { filter: saturate(.85); }
+.celebrate { font-weight: 700; color: var(--forest-dark); }
+.hiker-id { font-size: .85rem; }
+@keyframes flicker { 50% { opacity: .55; } }
+@keyframes smoke { from { transform: translateY(0); opacity: .8; } to { transform: translateY(-14px); opacity: 0; } }
+@keyframes drift { from { transform: translateX(-12px); } to { transform: translateX(12px); } }
+@keyframes wander { from { transform: translateX(0); } to { transform: translateX(-60px); } }
+@keyframes hop { 50% { transform: translateY(-3px); } }
+@keyframes fall { from { transform: translateY(-20px); } to { transform: translateY(40px); } }
+
+/* ---- Expedition (hunt / wildlife spotting) ---- */
+.expedition-frame { border: 3px solid var(--bark); border-radius: 10px; overflow: hidden; background: #9fc7d8; }
+.expedition-canvas { width: 100%; height: auto; display: block; image-rendering: pixelated; touch-action: none; cursor: crosshair; }
+.expedition-canvas:focus-visible { outline: 3px solid #0b57d0; outline-offset: -3px; }
+.expedition-hud { font-weight: 700; font-variant-numeric: tabular-nums; margin: .5rem 0; }
+.expedition-status { min-height: 1.5em; }
 
 .landmarks, .history, .badges { list-style: none; padding: 0; margin: 0; }
 .landmarks li { padding: .35rem 0; border-bottom: 1px dashed var(--line); }

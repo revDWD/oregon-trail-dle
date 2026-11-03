@@ -229,7 +229,6 @@ details.card > summary { cursor: pointer; font-weight: 700; color: var(--forest-
 details.card > summary:focus-visible, .timeline-wrap > summary:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
 .timeline-wrap { margin-top: 1rem; }
 .timeline-wrap > summary { cursor: pointer; font-weight: 700; color: var(--forest-dark); min-height: var(--tap); display: flex; align-items: center; }
-.join { border: 2px solid var(--amber); background: linear-gradient(180deg, #fff3da, var(--paper)); }
 @keyframes pop { 0% { transform: scale(.6); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
 
 table { width: 100%; border-collapse: collapse; }

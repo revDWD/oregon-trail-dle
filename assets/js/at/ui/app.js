@@ -13,7 +13,7 @@ import { trailView, logView, historyView, campView, wildlifeView } from "./views
 
 // Unknown routes fall back to the trail. Old bookmarks still work: #/hunt opens Wildlife Spotting;
 // #/crew, #/badges and #/hikers open Camp at "The hikers" (badges now live there, per hiker).
-// #/join/CODE adds this device to the expedition, then opens Camp.
+// Old #/join/CODE bookmarks are harmless: there is nothing to join any more, so they open Camp.
 const ROUTES = { trail: trailView, log: logView, camp: campView, wildlife: wildlifeView, history: historyView };
 const TITLES = { trail: "Trail", log: "Log Activity", camp: "Camp", wildlife: "Wildlife Spotting", history: "History" };
 const ALIASES = { hunt: "wildlife", crew: "camp", badges: "camp", hikers: "camp" };
@@ -28,7 +28,7 @@ const PAGE = 50;
 
 const state = {
   user: null, rules: DEFAULT_RULES, activities: [], hasMore: false, editingId: null, today: localDateString(),
-  member: false, expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], inviteLink: null, selectedHiker: null, lastHiker: null, flash: null,
+  expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], selectedHiker: null, lastHiker: null, flash: null,
   challenges: [], challenge: null, dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null
 };
 let game = null; // the running expedition, stopped whenever the page re-renders
@@ -39,8 +39,8 @@ let pendingDraw = false; // a background refresh changed data while the hiker wa
 
 const announce = (text) => { live.textContent = ""; setTimeout(() => { live.textContent = text; }, 30); };
 const rawRoute = () => location.hash.replace(/^#\/?/, "");
-const route = () => { const r = rawRoute(); const name = ALIASES[r] || r; return ROUTES[name] ? name : "trail"; };
-// Background refreshes must not wipe something the hiker is typing (a dispatch, an activity, a code).
+const route = () => { const r = rawRoute(); const name = ALIASES[r] || (/^join\//.test(r) ? "camp" : r); return ROUTES[name] ? name : "trail"; };
+// Background refreshes must not wipe something the hiker is typing (a dispatch, an activity).
 const typing = () => Boolean(state.dispatchEditing || document.activeElement?.closest?.("#app input, #app textarea, #app select"));
 // Redrawing replaces every element, so background redraws wait while focus is on a control in the page
 // (a map button, a landmark, a link): keyboard and screen-reader users keep their place.
@@ -94,7 +94,6 @@ async function loadAll() {
     state.challenges = challenges;
     const saved = localStorage.getItem(CHALLENGE_KEY);
     state.challenge = challenges.find((c) => c.id === saved) || challenges[0] || null;
-    await joinFromLink();
     await Promise.all([loadExpedition(false), loadCamp()]);
     render({ focus: true });
     if (state.flash) announce(state.flash.text);
@@ -102,32 +101,28 @@ async function loadAll() {
 }
 
 // Roster, per-hiker totals and the marks behind badges and the trail register. If the roster
-// migration isn't applied yet the app keeps working the old way (no hiker field, no join card).
+// migration isn't applied yet the app keeps working the old way (no hiker field).
 async function loadExpedition(draw = true) {
   try {
-    const member = await layer.expedition.isMember();
-    let hikers = []; let marks = [];
-    if (member) {
-      [hikers, marks] = await Promise.all([
-        layer.expedition.hikers(weekStart(localDateString())),
-        layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: PERSONAL_MARKS })
-      ]);
-    }
-    const changed = state.expeditionError || JSON.stringify([member, hikers, marks]) !== JSON.stringify([state.member, state.hikers, state.marks]);
-    Object.assign(state, { member, hikers, marks, expeditionUnavailable: false, expeditionError: false, deviceSummary: null });
+    const [hikers, marks] = await Promise.all([
+      layer.expedition.hikers(weekStart(localDateString())),
+      layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: PERSONAL_MARKS })
+    ]);
+    const changed = state.expeditionError || JSON.stringify([hikers, marks]) !== JSON.stringify([state.hikers, state.marks]);
+    Object.assign(state, { hikers, marks, expeditionUnavailable: false, expeditionError: false, deviceSummary: null });
     if (!state.selectedHiker || !hikers.some((x) => x.id === state.selectedHiker)) state.selectedHiker = (hikers.find((x) => x.id === state.lastHiker) || hikers[0] || {}).id || null;
     if (draw && (changed || pendingDraw)) redrawInBackground();
   } catch (e) {
     if (isMissingFunction(e)) {
-      // Migration not applied: no hiker field, no join card, progress from this device's summary.
+      // Migration not applied: no hiker field, progress from this device's summary.
       const deviceSummary = await layer.activities.summary(weekStart(localDateString())).catch(() => state.deviceSummary);
       const changed = !state.expeditionUnavailable || JSON.stringify(deviceSummary) !== JSON.stringify(state.deviceSummary);
-      Object.assign(state, { member: false, hikers: [], marks: [], expeditionUnavailable: true, expeditionError: false, deviceSummary });
+      Object.assign(state, { hikers: [], marks: [], expeditionUnavailable: true, expeditionError: false, deviceSummary });
       if (draw && (changed || pendingDraw)) redrawInBackground();
       return;
     }
-    // Timeouts, expired sessions, network: keep what we had (never drop a member back to the
-    // hiker-less form) and say so. A later refresh clears the error.
+    // Timeouts, expired sessions, network: keep what we had (never fall back to the hiker-less
+    // form) and say so. A later refresh clears the error.
     const wasError = state.expeditionError;
     state.expeditionError = true;
     if (!wasError || !draw) announce(friendly(e));
@@ -150,19 +145,6 @@ async function loadCamp() {
     layer.dispatches.isOrganizer()
   ]);
   state.dispatches = dispatches; state.isOrganizer = isOrganizer;
-}
-
-// #/join/CODE (the invite link) joins once, then opens Camp.
-async function joinFromLink() {
-  const match = /^join\/([A-Za-z0-9-]{4,40})$/.exec(rawRoute());
-  if (!match) return;
-  history.replaceState(null, "", "#/camp");
-  try {
-    await layer.expedition.join(match[1]);
-    state.flash = { route: "camp", text: "Welcome to the expedition! This device can now log miles for any hiker." };
-  } catch (e) {
-    state.flash = { route: "camp", text: `That invite link didn't work: ${friendly(e)}` };
-  }
 }
 
 async function reloadActivities() {
@@ -189,7 +171,7 @@ function earnedSnapshot() {
 async function afterActivityChange() {
   const before = earnedSnapshot();
   await Promise.all([reloadActivities(), loadExpedition(false)]);
-  return state.member && before.size ? newlyEarned(before) : [];
+  return state.hikers.length && before.size ? newlyEarned(before) : [];
 }
 
 const actions = {
@@ -229,21 +211,6 @@ const actions = {
     const more = await layer.activities.list({ limit: PAGE + 1, offset: state.activities.length });
     state.hasMore = more.length > PAGE; state.activities.push(...more.slice(0, PAGE)); render();
   },
-  async joinExpedition(code) {
-    try {
-      await layer.expedition.join(code);
-      await loadExpedition(false);
-      state.flash = null;
-      render({ focus: true }); announce("Welcome to the expedition!");
-    } catch (e) { setStatus(friendly(e), "join"); }
-  },
-  async showInvite() {
-    try {
-      const code = await layer.expedition.inviteCode();
-      state.inviteLink = `${location.origin}${location.pathname}#/join/${code}`;
-      render(); root.querySelector(".invite summary")?.focus();
-    } catch (e) { announce(friendly(e)); }
-  },
   async retryExpedition() {
     await loadExpedition(false);
     render({ focus: true });
@@ -270,7 +237,7 @@ const actions = {
       await loadExpedition(false);
       const who = (state.hikers.find((x) => x.id === summary.hikerId) || {}).name;
       if (who) return `Pinned to ${who}'s spot on the photo board at Camp: ${summary.score} photo points.`;
-      return state.member ? `Saved ${summary.score} photo points. Choose who's spotting to pin the next outing to a hiker.` : `Saved ${summary.score} photo points.`;
+      return state.hikers.length ? `Saved ${summary.score} photo points. Choose who's spotting to pin the next outing to a hiker.` : `Saved ${summary.score} photo points.`;
     } catch (e) { return friendly(e); }
   }
 };
@@ -313,11 +280,8 @@ function start() {
   window.addEventListener("hashchange", async () => {
     if (!state.user) return;
     state.editingId = null; state.dispatchEditing = null;
-    const joining = /^join\//.test(rawRoute());
-    if (joining) { await joinFromLink(); await loadExpedition(false); }
     if (state.flash && state.flash.route !== route()) state.flash = null; // shown once, on its own page
     render({ focus: true });
-    if (joining && state.flash) announce(state.flash.text);
     pendingDraw = false; // the navigation itself just redrew the page
     if (["trail", "camp"].includes(route()) || state.expeditionError) loadExpedition(true);
   });

@@ -230,3 +230,7 @@ Interpretations to confirm: "Memorials" became the **Trail register** (a record 
 2. A **landmark celebration** overlay at Camp the first time a device opens it after a new register entry, with a postcard illustration (reuse `ui/illustrations.js`).
 3. Make Camp the default route once the celebration and log shortcut exist, and keep Trail as the map page.
 4. **Weekly expedition challenge** on the camp banner ("30 miles together this week"), computed from `week_credited_miles`.
+
+### 9.3 Follow-up: open participation (2026-11-05)
+
+The invite link and join step were removed at the owner's request: "Select Name → Log Activity → Everything Updates". Migration `20261105000000_at_open_expedition.sql` makes every signed-in (anonymous) device a participant and drops `at_expedition_settings`, `at_expedition_members`, `at_join_expedition` and `at_expedition_invite_code`. Trade-off (accepted): anyone who finds the site can log miles for a hiker. Mitigations still in place: hikers must be active roster entries, logging limits and date windows still apply, each device can only edit or delete its own rows, and other devices see aggregates only. If abuse ever happens, the fix is to retire the device's rows in SQL (by `user_id`, shown in History > "About this device").

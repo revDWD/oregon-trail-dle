@@ -239,29 +239,23 @@ test("expedition results send only theme and score fields; supplies map per them
 test("expedition calls are refused when signed out", async () => {
   const client = createFakeClient({ session: null });
   const data = createDataLayer(client);
-  for (const attempt of [() => data.expedition.isMember(), () => data.expedition.join("ABC"), () => data.expedition.inviteCode(),
-    () => data.expedition.hikers(), () => data.expedition.marks()]) {
+  for (const attempt of [() => data.expedition.hikers(), () => data.expedition.marks()]) {
     await assert.rejects(attempt, (error) => error instanceof DataError && error.code === "auth");
   }
   assert.equal(client.calls.length, 0);
 });
 
-test("expedition roster: join normalizes the code, hikers and marks map from the aggregate RPCs", async () => {
+test("expedition roster: hikers and marks map from the aggregate RPCs (no joining)", async () => {
   const client = createFakeClient({
     session: signedIn,
     respond: (call) => {
-      if (call.name === "at_is_expedition_member") return { data: true, error: null };
-      if (call.name === "at_join_expedition") return { data: true, error: null };
       if (call.name === "at_expedition_hikers") return { data: [{ hiker_id: "h1", name: "David", sort_order: 1, active: true, total_credited_miles: "12.50", week_credited_miles: "2", activity_count: "3", first_activity_date: "2026-11-01", last_activity_date: "2026-11-04", active_dates: ["2026-11-01", "2026-11-04"], wildlife_runs: "1", wildlife_score: "24", first_spotted_on: "2026-11-02" }], error: null };
       if (call.name === "at_expedition_marks") return { data: [{ kind: "group", mark: "31.00", hiker_id: "h1", reached_on: "2026-11-03" }], error: null };
       return { data: null, error: null };
     }
   });
   const data = createDataLayer(client);
-  assert.equal(await data.expedition.isMember(), true);
-  assert.equal(await data.expedition.join(" d5313e-793b35 "), true);
-  assert.deepEqual(client.calls.at(-1).args, { p_code: "D5313E793B35" });
-  await assert.rejects(() => data.expedition.join("--"), (e) => e.code === "validation");
+  assert.deepEqual(Object.keys(data.expedition).sort(), ["hikers", "marks"], "no join or invite calls");
   const [david] = await data.expedition.hikers("2026-11-02");
   assert.deepEqual(client.calls.at(-1).args, { p_week_start: "2026-11-02" });
   assert.deepEqual(david, { id: "h1", name: "David", sortOrder: 1, active: true, totalMiles: 12.5, weekMiles: 2, activityCount: 3,

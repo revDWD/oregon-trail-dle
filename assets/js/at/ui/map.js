@@ -251,6 +251,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
 
   const pointers = new Map();
   let pinch = null;
+  function release(e) { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; }
   let dragged = false;
   root.addEventListener("pointerdown", (e) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -263,6 +264,8 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
   root.addEventListener("pointermove", (e) => {
     const prev = pointers.get(e.pointerId);
     if (!prev) return;
+    // A mouse released outside the map never sent pointerup here: forget it instead of panning on hover.
+    if (e.pointerType === "mouse" && !e.buttons) { release(e); return; }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2 && pinch) {
       const [a, b] = [...pointers.values()];
@@ -275,12 +278,16 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
       const b = viewBoxOf(view, base);
       const dx = ((prev.x - e.clientX) / r.width) * b.width;
       const dy = ((prev.y - e.clientY) / r.height) * b.height;
-      if (Math.abs(e.clientX - prev.x) + Math.abs(e.clientY - prev.y) > 2) dragged = true;
+      if (!dragged && Math.abs(e.clientX - prev.x) + Math.abs(e.clientY - prev.y) > 2) {
+        dragged = true;
+        // Capture only once a drag starts, so plain taps still reach the landmark under the pointer.
+        try { root.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+      }
       setView(panView(view, dx, dy, base));
     }
   });
-  const release = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; };
   root.addEventListener("pointerup", release);
+  root.addEventListener("lostpointercapture", release);
   root.addEventListener("pointercancel", release);
   // A drag that ends on a landmark should not select it.
   root.addEventListener("click", (e) => { if (dragged) { e.stopPropagation(); dragged = false; } }, true);

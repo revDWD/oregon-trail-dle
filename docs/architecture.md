@@ -18,7 +18,7 @@ This document is the Feature 1 deliverable: what the Oregon Trail codebase gave 
 | Accessibility | `:focus-visible`, `aria-live`, keyboard operable markers, `prefers-reduced-motion`, labels on inputs | **Keep and extend.** |
 | CSS | One 2,760-line pixel/parchment stylesheet, Oregon-specific | **Replace** with a new AT design system; reuse the "custom properties on `:root`" convention. |
 | Realtime | Hand-written Phoenix websocket client + polling fallback | **Not reused** (see §4). |
-| Oregon-only | wagon/camp scene, hunting minigame, Donner Party, food, settlers | **Removed** at Feature 5 (Oregon final state is preserved by the git tag `oregon-trail-final`). |
+| Oregon-only | wagon/camp scene, hunting minigame, Donner Party, food, settlers | **Removed** at Feature 5 (Oregon final state is preserved by the git tag `oregon-trail-final`). Camp and the hunt were **rebuilt for the AT in Phase 2** (§8). |
 | Tests | 34 passing tests: logic (vm), community client, story, static guardrails | Logic/community/story tests for removed code are deleted **with** that code. Static guardrail tests are rewritten for the new rules. |
 | AGENTS.md | Forbids accounts, leaderboards and network access outside one file | **Rewritten** (the new product explicitly requires them). Retained: no secrets, `textContent` only, no third-party CDN, zero npm runtime dependencies, tests required. |
 
@@ -90,3 +90,30 @@ See `docs/deployment.md`. In short: Supabase project URL, publishable (anon) key
 ## 7. Safety design
 
 Per-activity distance caps, a bounded back-dating window, no "streak lost" messaging (streaks forgive one rest day per week), no rewards that scale with speed or daily volume, and rest-friendly copy. Leaderboard emphasises the group total.
+
+## 8. Phase 2: map, Camp, Expeditions, Trail Dispatches (2026-11-03)
+
+Full review and rationale: `docs/review-and-roadmap.md`.
+
+```
+assets/js/at/
+  trail/appalachian-trail.js   + regions (8 sections with scene/colour), landmark elevation + access, more shape points
+  engine/progress.js           + regionAtMarker, regionsInOrder, mileMarkers, positionFor
+  engine/camp.js               camp context: time of day, seasonal weather, scale, campers, celebrations
+  engine/expedition.js         minigame rules (spawn/move/fire/startle/summary), injectable RNG
+  engine/expedition-themes.js  themes as data: hunt, wildlife (species, sprites, rewards)
+  engine/markdown.js           safe Markdown subset -> tree (https links only)
+  data/layer.js                + dispatches.{list,create,update,remove,isOrganizer}, expeditions.{record,supplies}
+  ui/map.js                    interactive map (pure view maths exported + renderTrailMap)
+  ui/camp-scene.js             pixel SVG camp; hotspots are buttons
+  ui/expedition-view.js        canvas + keyboard/pointer input; returns { element, stop }
+  ui/markdown-view.js          Markdown tree -> DOM nodes
+  ui/illustrations.js          original SVG landmark art by kind
+supabase/migrations/20261103000000_at_camp_dispatches.sql
+```
+
+- **Schema:** `at_organizers` (no API access), `at_dispatches` (published public or own-crew readable; organizer-only writes), `at_expedition_runs` (own rows; insert-only; 10/day; never touches miles), and `at_camp_supplies(challenge)` (aggregates only).
+- **Fail-soft:** if the Phase 2 migration has not been applied, `loadCamp()` swallows dispatch and supplies errors, and the rest of the app works.
+- **Map state** (zoom, selected landmark) lives in module memory so data refreshes don't reset it.
+- **Camp** uses crew progress (the group's combined credited miles in the challenge direction) when in a challenge, otherwise personal progress.
+- **Realtime is still not used.** Dispatches load with the app and after organizer edits.

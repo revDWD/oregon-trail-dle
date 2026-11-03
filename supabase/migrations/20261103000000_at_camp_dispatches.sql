@@ -156,17 +156,23 @@ begin
     select c.start_date into v_start from public.at_challenges c where c.id = p_challenge;
   end if;
   return query
-    select r.theme,
-           coalesce(sum(r.score) filter (where r.user_id = auth.uid()), 0)::bigint,
-           count(*) filter (where r.user_id = auth.uid()),
-           coalesce(sum(r.score) filter (where p_challenge is not null), 0)::bigint,
-           count(*) filter (where p_challenge is not null)
-      from public.at_expedition_runs r
-     where r.user_id = auth.uid()
-        or (p_challenge is not null and r.played_on >= v_start
-            and r.user_id in (select m.user_id from public.at_challenge_members m where m.challenge_id = p_challenge))
-     group by r.theme
-     order by r.theme;
+    with runs as (
+      select r.theme, r.score, r.user_id = auth.uid() as mine,
+             (p_challenge is not null and r.played_on >= v_start
+              and r.user_id in (select m.user_id from public.at_challenge_members m where m.challenge_id = p_challenge)) as crew
+        from public.at_expedition_runs r
+       where r.user_id = auth.uid()
+          or (p_challenge is not null and r.played_on >= v_start
+              and r.user_id in (select m.user_id from public.at_challenge_members m where m.challenge_id = p_challenge))
+    )
+    select runs.theme,
+           coalesce(sum(runs.score) filter (where runs.mine), 0)::bigint,
+           count(*) filter (where runs.mine),
+           coalesce(sum(runs.score) filter (where runs.crew), 0)::bigint,
+           count(*) filter (where runs.crew)
+      from runs
+     group by runs.theme
+     order by runs.theme;
 end $$;
 
 -- 4. Privileges: deny by default, then grant exactly what the app needs -----------------------------

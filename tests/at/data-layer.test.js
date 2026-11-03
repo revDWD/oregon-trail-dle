@@ -175,20 +175,28 @@ test("new camp/dispatch calls are refused when signed out", async () => {
   assert.equal(client.calls.length, 0);
 });
 
-test("dispatch list keeps public and current-crew dispatches, newest pinned first", async () => {
+test("dispatch list asks the server for public and current-crew dispatches only, pinned first", async () => {
+  const crewA = "11111111-1111-4111-8111-111111111111";
   const rows = [
     { id: "1", challenge_id: null, title: "Hi", body: "b", author_name: "Kevin", pinned: true, published_at: "2026-11-01T00:00:00Z" },
-    { id: "2", challenge_id: "crew-a", title: "A", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-02T00:00:00Z" },
-    { id: "3", challenge_id: "crew-b", title: "B", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-03T00:00:00Z" }
+    { id: "2", challenge_id: crewA, title: "A", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-02T00:00:00Z" }
   ];
   const client = createFakeClient({ session: signedIn, respond: () => ({ data: rows, error: null }) });
-  const list = await createDataLayer(client).dispatches.list({ challengeId: "crew-a" });
+  const data = createDataLayer(client);
+  const list = await data.dispatches.list({ challengeId: crewA });
   assert.deepEqual(list.map((d) => d.id), ["1", "2"]);
   assert.equal(list[0].authorName, "Kevin");
   const call = client.calls[0];
   assert.equal(call.table, "at_dispatches");
+  // Filtering happens before the page limit, so other crews' dispatches can't crowd out these.
+  assert.deepEqual(call.filters, [["or", `challenge_id.is.null,challenge_id.eq.${crewA}`]]);
   assert.deepEqual(call.order.map((o) => o[0]), ["pinned", "published_at"]);
   assert.doesNotMatch(call.columns, /created_by/);
+
+  await data.dispatches.list();
+  assert.deepEqual(client.calls[1].filters, [["or", "challenge_id.is.null"]]);
+  await data.dispatches.list({ challengeId: "x),challenge_id.neq.null" });
+  assert.deepEqual(client.calls[2].filters, [["or", "challenge_id.is.null"]], "malformed ids are never put in the filter");
 });
 
 test("creating a dispatch never sends created_by; non-organizers get a friendly error", async () => {

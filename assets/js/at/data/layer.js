@@ -11,6 +11,8 @@ import {
 } from "./mappers.js";
 import { DEFAULT_RULES } from "../engine/activities.js";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function createClientFromGlobal(config, globalObject = globalThis) {
   const lib = globalObject.supabase;
   if (!lib || typeof lib.createClient !== "function") throw new DataError("The Supabase library did not load.", "config");
@@ -192,12 +194,15 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
   const DISPATCH_COLUMNS = "id, challenge_id, title, body, author_name, pinned, published_at, updated_at";
 
   // Trail Dispatches. RLS decides what a hiker may read (public + their crews) and who may write
-  // (organizers only); the client-side filter just keeps other crews' dispatches off this screen.
+  // (organizers only). The query only asks for public dispatches plus this crew's, so other crews'
+  // dispatches never use up the page limit.
   const dispatches = {
     async list({ challengeId = null, limit = 20 } = {}) {
       await requireUser();
       const capped = Math.min(Math.max(Math.trunc(limit) || 20, 1), 100);
+      const crew = challengeId && UUID_RE.test(challengeId) ? challengeId : null;
       const rows = await run(client.from("at_dispatches").select(DISPATCH_COLUMNS)
+        .or(crew ? `challenge_id.is.null,challenge_id.eq.${crew}` : "challenge_id.is.null")
         .order("pinned", { ascending: false }).order("published_at", { ascending: false }).range(0, capped - 1));
       return rows.map(dispatchFromRow).filter((d) => !d.challengeId || d.challengeId === challengeId);
     },

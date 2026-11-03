@@ -319,6 +319,14 @@ select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where 
 select t.ok((select my_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 30, 'my share is reported separately');
 select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'wildlife') = 40, 'themes are kept apart');
 select t.ok(not exists (select 1 from public.at_camp_supplies(:'camp_chal') s where to_jsonb(s) ?| array['user_id', 'hits', 'shots']), 'camp supplies expose aggregates only');
+reset role;
+update public.at_challenges set start_date = current_date + 1 where id = :'camp_chal';
+set role authenticated;
+select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 0, 'my runs from before the crew started are not crew supplies');
+select t.ok((select my_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 30, 'but they still count as mine');
+reset role;
+update public.at_challenges set start_date = current_date - 7 where id = :'camp_chal';
+set role authenticated;
 select t.ok(t.rows($$update public.at_dispatches set pinned = false where title = 'Welcome, hikers!'$$) = 1, 'organizer can edit');
 select t.ok(t.rows($$delete from public.at_dispatches where title = 'Tomorrow'$$) = 1, 'organizer can delete');
 reset role;

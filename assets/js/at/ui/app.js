@@ -41,7 +41,10 @@ function derived() {
     ? computeProgress(TRAIL, state.groupSummary.totalCreditedMiles, direction) : state.progress;
 }
 
-function setStatus(text) { const el = root.querySelector("[data-status]"); if (el) el.textContent = text; }
+function setStatus(text, which) {
+  const el = root.querySelector(which ? `[data-status="${which}"]` : "[data-status]");
+  if (el) el.textContent = text;
+}
 
 function render({ focus = false } = {}) {
   state.today = localDateString();
@@ -181,7 +184,7 @@ const actions = {
       if (id) await layer.dispatches.update(id, value); else await layer.dispatches.create(value);
       state.dispatchEditing = null;
       await loadCamp(); render(); announce(id ? "Dispatch updated." : "Dispatch posted.");
-    } catch (e) { setStatus(friendly(e)); }
+    } catch (e) { setStatus(friendly(e), "dispatch"); }
   },
   async deleteDispatch(d) {
     if (!confirm(`Delete the dispatch "${d.title}"? This cannot be undone.`)) return;
@@ -199,8 +202,8 @@ const actions = {
     try {
       const goal = weeklyGoalMiles === "" || weeklyGoalMiles === null ? null : Number(weeklyGoalMiles);
       state.profile = await layer.profile.update({ displayName, weeklyGoalMiles: goal });
-      setStatus("Saved."); announce("Saved your spot at camp.");
-    } catch (e) { setStatus(friendly(e)); }
+      setStatus("Saved.", "profile"); announce("Saved your spot at camp.");
+    } catch (e) { setStatus(friendly(e), "profile"); }
   }
 };
 

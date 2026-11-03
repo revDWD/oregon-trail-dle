@@ -187,7 +187,7 @@ export function badgesView(s) {
 
 function dispatchForm(s, a, existing) {
   const d = existing || {};
-  const status = h("p", { class: "status", role: "status", "data-status": "" });
+  const status = h("p", { class: "status", role: "status", "data-status": "dispatch" });
   return h("form", { class: "card dispatch-form", novalidate: true, "aria-labelledby": "dispatch-form-title",
     onSubmit: (e) => {
       e.preventDefault();
@@ -202,7 +202,7 @@ function dispatchForm(s, a, existing) {
   h("h3", { id: "dispatch-form-title" }, existing ? "Edit dispatch" : "Post a new dispatch"),
   field("dTitle", "Title", h("input", { id: "dTitle", name: "dTitle", maxlength: 120, required: true, value: d.title || "" })),
   field("dBody", "Message", h("textarea", { id: "dBody", name: "dBody", rows: 7, maxlength: 5000, required: true, "aria-describedby": "dBody-hint" }, d.body || ""),
-    "Formatting: **bold**, *italics*, [link text](https://example.com), lines starting with - for lists, # for a heading, > for a quote. Leave a blank line between paragraphs."),
+    "Formatting: **bold**, *italics*, [link text](https://example.com) (https links only), lines starting with - for lists, # for a heading, > for a quote. Leave a blank line between paragraphs."),
   field("dAuthor", "Signed as", h("input", { id: "dAuthor", name: "dAuthor", maxlength: 40, value: d.authorName || "Kevin" })),
   field("dAudience", "Who can read it", h("select", { id: "dAudience", name: "dAudience" },
     h("option", { value: "everyone", selected: !d.challengeId }, "Everyone using the app"),
@@ -281,7 +281,7 @@ export function campView(s, a) {
       h("h2", { id: "spot-title" }, "Your spot at camp"),
       field("displayName", "Trail name", h("input", { id: "displayName", name: "displayName", maxlength: 40, required: true, value: s.profile?.displayName || "" }), "Visible to the friends in your challenges."),
       field("goal", "Weekly goal in trail miles (optional)", h("input", { id: "goal", name: "goal", type: "number", inputmode: "decimal", min: 1, max: 200, step: "0.5", value: s.profile?.weeklyGoalMiles ?? "" }), "Pick something that feels good. Leave empty for no goal."),
-      h("p", { class: "status", role: "status", "data-status": "" }),
+      h("p", { class: "status", role: "status", "data-status": "profile" }),
       h("button", { class: "btn primary", type: "submit" }, "Save")),
     h("div", { class: "card" }, h("h2", {}, "About your progress"),
       h("p", {}, "There is no login. Your miles are saved to the trail server and linked to this browser on this device."),

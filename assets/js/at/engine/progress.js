@@ -109,6 +109,12 @@ export function validateTrail(trail) {
   trail.route.forEach((point, index) => {
     if (index > 0 && point.miles < trail.route[index - 1].miles) problems.push(`route point ${index} is out of order`);
   });
+  (trail.regions || []).forEach((region, index, list) => {
+    const expectedStart = index === 0 ? 0 : list[index - 1].end;
+    if (region.start !== expectedStart) problems.push(`region ${region.id} must start where the previous one ends`);
+    if (!(region.end > region.start)) problems.push(`region ${region.id} is empty`);
+    if (index === list.length - 1 && region.end !== trail.totalMiles) problems.push("last region must end at totalMiles");
+  });
   const milestoneIds = new Set();
   trail.milestones.forEach((milestone) => {
     if (milestoneIds.has(milestone.id)) problems.push(`duplicate milestone ${milestone.id}`);
@@ -116,4 +122,45 @@ export function validateTrail(trail) {
     if ((milestone.miles === undefined) === (milestone.fraction === undefined)) problems.push(`${milestone.id} needs exactly one of miles/fraction`);
   });
   return problems;
+}
+
+// Regional section containing a northbound mile marker (the last region includes the far terminus).
+export function regionAtMarker(trail, marker) {
+  const regions = trail.regions || [];
+  if (!regions.length) return null;
+  const m = Math.min(Math.max(Number(marker) || 0, 0), trail.totalMiles);
+  return regions.find((r) => m >= r.start && m < r.end) || regions[regions.length - 1];
+}
+
+// Regions in the traveller's order, each with travel distances and how far this hiker is through it.
+export function regionsInOrder(trail, progress) {
+  const dir = progress.direction;
+  return (trail.regions || []).map((region) => {
+    const a = distanceFromStart(trail, region.start, dir);
+    const b = distanceFromStart(trail, region.end, dir);
+    const from = Math.min(a, b);
+    const to = Math.max(a, b);
+    const done = Math.min(Math.max(progress.distanceMiles - from, 0), to - from);
+    return { ...region, fromDistance: from, toDistance: to, lengthMiles: round2(to - from),
+      percent: Math.floor((done / (to - from)) * 100), current: progress.distanceMiles >= from && (progress.distanceMiles < to || (to === trail.totalMiles && progress.completed)) };
+  }).sort((x, y) => x.fromDistance - y.fromDistance);
+}
+
+// Mile posts every `step` travel miles, positioned along the route, for the map.
+export function mileMarkers(trail, direction, step = 250) {
+  const dir = normalizeDirection(trail, direction);
+  const out = [];
+  for (let d = step; d < trail.totalMiles; d += step) {
+    const marker = markerAt(trail, d, dir);
+    out.push({ distance: d, marker, ...coordinatesAtMarker(trail, marker) });
+  }
+  return out;
+}
+
+// Where a given credited mileage puts someone (used for crew markers on the map).
+export function positionFor(trail, creditedMiles, direction) {
+  const dir = normalizeDirection(trail, direction);
+  const distance = Math.min(sanitizeMiles(creditedMiles), trail.totalMiles);
+  const marker = markerAt(trail, distance, dir);
+  return { distance, marker, ...coordinatesAtMarker(trail, marker) };
 }

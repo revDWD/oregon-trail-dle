@@ -238,5 +238,90 @@ select t.ok(t.rows($$delete from public.at_challenges where id = '$$ || :'chal' 
 select t.ok(t.count('select 1 from public.at_activities') = 3, 'activities survive challenge deletion');
 reset role;
 
+
+-- Camp + Trail Dispatches (20261103000000_at_camp_dispatches.sql) ----------------------------------------------
+select t.ok(not exists (
+  select 1 from information_schema.role_table_grants
+   where table_schema = 'public' and table_name = 'at_organizers' and grantee in ('anon', 'authenticated')
+), 'nobody can read or write the organizer list through the API');
+select t.ok(not exists (
+  select 1 from information_schema.role_table_grants
+   where table_schema = 'public' and table_name in ('at_dispatches', 'at_expedition_runs') and grantee = 'anon'
+), 'anon has no access to dispatches or expedition runs');
+select t.ok(not exists (
+  select 1 from information_schema.column_privileges
+   where table_schema = 'public' and table_name = 'at_dispatches' and grantee = 'authenticated'
+     and column_name = 'created_by' and privilege_type in ('SELECT', 'INSERT', 'UPDATE')
+), 'the author user id of a dispatch is never exposed or client-settable');
+select t.ok(not has_function_privilege('anon', 'public.at_is_organizer()', 'execute'), 'anon cannot call at_is_organizer');
+select t.ok(not has_function_privilege('anon', 'public.at_camp_supplies(uuid)', 'execute'), 'anon cannot call at_camp_supplies');
+
+-- Alice is the organizer (added from the dashboard, i.e. as the table owner).
+insert into public.at_organizers (user_id, note) values ('aaaaaaaa-0000-4000-8000-000000000001', 'Kevin');
+
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', false) \gset
+set role authenticated;
+select t.ok(public.at_is_organizer(), 'alice is an organizer');
+select t.fails($$insert into public.at_organizers (user_id) values ('bbbbbbbb-0000-4000-8000-000000000002')$$, '42501', 'even organizers cannot add organizers from the app');
+select j ->> 'id' as camp_chal, j ->> 'invite_code' as camp_code from (select to_jsonb(public.at_create_challenge('Camp crew', 'nobo', current_date - 7)) as j) q \gset
+select t.ok(t.rows($$insert into public.at_dispatches (title, body, author_name, pinned) values ('Welcome, hikers!', 'First **dispatch**.', 'Kevin', true)$$) = 1, 'organizer can post a public dispatch');
+select t.ok(t.rows($$insert into public.at_dispatches (title, body, challenge_id) values ('Crew only', 'Secret plans', '$$ || :'camp_chal' || $$')$$) = 1, 'organizer can post a crew dispatch');
+select t.ok(t.rows($$insert into public.at_dispatches (title, body, published_at) values ('Tomorrow', 'Scheduled', now() + interval '1 day')$$) = 1, 'organizer can schedule a dispatch');
+select t.ok(t.count('select 1 from public.at_dispatches') = 3, 'organizer sees scheduled dispatches too');
+select t.fails($$select created_by from public.at_dispatches$$, '42501', 'created_by is not readable by API roles');
+reset role;
+select t.ok((select created_by from public.at_dispatches where title = 'Welcome, hikers!') = 'aaaaaaaa-0000-4000-8000-000000000001', 'created_by is forced to the poster');
+select t.ok((select title from public.at_dispatches where body = 'Secret plans') = 'Crew only', 'dispatch stored');
+
+-- Bob: ordinary hiker, joins the crew later
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
+set role authenticated;
+select t.ok(not public.at_is_organizer(), 'bob is not an organizer');
+select t.ok(t.count('select 1 from public.at_dispatches') = 1, 'non-members see only published public dispatches');
+select t.fails($$insert into public.at_dispatches (title, body) values ('Hacked', 'nope')$$, '42501', 'hikers cannot post dispatches');
+select t.ok(t.rows($$update public.at_dispatches set title = 'Hacked'$$) = 0, 'hikers cannot edit dispatches');
+select t.ok(t.rows($$delete from public.at_dispatches$$) = 0, 'hikers cannot delete dispatches');
+select t.fails($$update public.at_dispatches set created_by = null$$, '42501', 'created_by is not updatable');
+reset role;
+select t.ok((select count(*) from public.at_dispatches where title = 'Hacked') = 0, 'no dispatch was modified');
+
+-- Expedition runs: private rows, aggregate camp totals, no trail miles
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
+set role authenticated;
+select (select total_credited_miles from public.at_my_summary()) as bob_miles_before \gset
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 120, 3, 6)$$) = 1, 'bob records a hunt');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('wildlife', 40, 4, 5)$$) = 1, 'bob records a wildlife walk');
+select t.ok((select total_credited_miles from public.at_my_summary()) = :'bob_miles_before', 'expeditions never add trail miles');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 5000, 1, 1)$$, '23514', 'scores are capped');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 10, 5, 1)$$, '23514', 'hits cannot exceed shots');
+select t.fails($$insert into public.at_expedition_runs (user_id, theme, score) values ('aaaaaaaa-0000-4000-8000-000000000001', 'hunt', 10)$$, '42501', 'user_id cannot be set by the client');
+select t.ok((select my_score from public.at_camp_supplies() where theme = 'hunt') = 120, 'my camp supplies without a crew');
+select t.fails($$select * from public.at_camp_supplies('$$ || :'camp_chal' || $$')$$, '42501', 'non-members cannot read crew supplies');
+select public.at_join_challenge(:'camp_code');
+select t.ok(t.count('select 1 from public.at_dispatches') = 2, 'members see crew dispatches');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 3');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 4');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 5');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 6');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 7');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 8');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 9');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 10');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$, '54000', 'daily expedition cap');
+select t.fails($$update public.at_expedition_runs set score = 400$$, '42501', 'runs cannot be edited');
+reset role;
+
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', false) \gset
+set role authenticated;
+select t.ok(t.count('select 1 from public.at_expedition_runs') = 0, 'other hikers runs are private');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 30, 1, 2)$$) = 1, 'alice records a hunt');
+select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 158, 'crew pantry sums members runs');
+select t.ok((select my_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 30, 'my share is reported separately');
+select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'wildlife') = 40, 'themes are kept apart');
+select t.ok(not exists (select 1 from public.at_camp_supplies(:'camp_chal') s where to_jsonb(s) ?| array['user_id', 'hits', 'shots']), 'camp supplies expose aggregates only');
+select t.ok(t.rows($$update public.at_dispatches set pinned = false where title = 'Welcome, hikers!'$$) = 1, 'organizer can edit');
+select t.ok(t.rows($$delete from public.at_dispatches where title = 'Tomorrow'$$) = 1, 'organizer can delete');
+reset role;
+
 \o
 \echo RLS TESTS PASSED

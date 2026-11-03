@@ -24,13 +24,17 @@ run_pg "$BIN/initdb" -D "$WORK/data" -A trust -U postgres >/dev/null
 run_pg "$BIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses=''" -l "$WORK/log" -w start >/dev/null
 
 # Copy the SQL next to the cluster so the postgres OS user can read it wherever the repo lives.
-cp "$HERE/supabase-shim.sql" "$HERE/rls.test.sql" "$HERE/../migrations/20261101000000_at_fitness_schema.sql" "$WORK/"
+cp "$HERE/supabase-shim.sql" "$HERE"/*.test.sql "$HERE"/../migrations/*.sql "$WORK/"
 chmod a+r "$WORK"/*.sql
 export PGOPTIONS="-c client_min_messages=warning"
 PSQL=("$BIN/psql" -h "$WORK" -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -d postgres)
 run_pg "${PSQL[@]}" -f "$WORK/supabase-shim.sql"
-run_pg "${PSQL[@]}" -f "$WORK/20261101000000_at_fitness_schema.sql"
-# Re-running the migration must be harmless (idempotency check).
-run_pg "${PSQL[@]}" -f "$WORK/20261101000000_at_fitness_schema.sql" >/dev/null 2>"$WORK/rerun.err" \
-  || { cat "$WORK/rerun.err" >&2; echo "migration is not re-runnable" >&2; exit 1; }
+# Migrations run in filename (timestamp) order, then all of them again: re-running must be harmless.
+MIGRATIONS=()
+for f in "$HERE"/../migrations/*.sql; do MIGRATIONS+=("$(basename "$f")"); done
+for m in "${MIGRATIONS[@]}"; do run_pg "${PSQL[@]}" -f "$WORK/$m"; done
+for m in "${MIGRATIONS[@]}"; do
+  run_pg "${PSQL[@]}" -f "$WORK/$m" >/dev/null 2>"$WORK/rerun.err" \
+    || { cat "$WORK/rerun.err" >&2; echo "$m is not re-runnable" >&2; exit 1; }
+done
 run_pg "${PSQL[@]}" -f "$WORK/rls.test.sql"

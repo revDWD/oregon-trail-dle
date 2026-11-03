@@ -121,3 +121,49 @@ test("milestones resolve fractions against total length", () => {
   assert.ok(at(1099).includes("halfway"));
   assert.equal(at(2198).length, TRAIL.milestones.length);
 });
+
+test("regions tile the whole trail in order and every landmark falls in one", async () => {
+  const { regionAtMarker } = await import("../../assets/js/at/engine/progress.js");
+  assert.ok(TRAIL.regions.length >= 6);
+  assert.equal(TRAIL.regions[0].start, 0);
+  assert.equal(TRAIL.regions.at(-1).end, TRAIL.totalMiles);
+  assert.equal(regionAtMarker(TRAIL, 0).id, "georgia");
+  assert.equal(regionAtMarker(TRAIL, TRAIL.totalMiles).id, "maine");
+  assert.equal(regionAtMarker(TRAIL, 1026).id, "mid-atlantic");
+  TRAIL.landmarks.forEach((l) => assert.ok(regionAtMarker(TRAIL, l.miles), l.id));
+  const broken = { ...TRAIL, regions: [{ ...TRAIL.regions[0] }, { ...TRAIL.regions[1], start: 90 }] };
+  assert.ok(validateTrail(broken).some((p) => p.includes("must start")));
+});
+
+test("landmarks have approximate elevation and access notes", () => {
+  TRAIL.landmarks.forEach((l) => {
+    assert.ok(l.elevationFt > 0 && l.elevationFt < 7000, `${l.id} elevation`);
+    assert.ok(typeof l.access === "string" && l.access.length > 10, `${l.id} access`);
+  });
+});
+
+test("regionsInOrder reports per-region progress in travel order (both directions)", async () => {
+  const { regionsInOrder } = await import("../../assets/js/at/engine/progress.js");
+  const nobo = regionsInOrder(TRAIL, computeProgress(TRAIL, 100, "nobo"));
+  assert.equal(nobo[0].id, "georgia");
+  assert.equal(nobo[0].percent, 100);
+  assert.ok(nobo[1].current);
+  assert.equal(nobo.filter((r) => r.current).length, 1);
+  const sobo = regionsInOrder(TRAIL, computeProgress(TRAIL, 10, "sobo"));
+  assert.equal(sobo[0].id, "maine");
+  assert.ok(sobo[0].current && sobo[0].percent < 10);
+  const done = regionsInOrder(TRAIL, computeProgress(TRAIL, 5000, "nobo"));
+  assert.ok(done.every((r) => r.percent === 100));
+});
+
+test("mile markers and crew positions are placed along the route", async () => {
+  const { mileMarkers, positionFor } = await import("../../assets/js/at/engine/progress.js");
+  const marks = mileMarkers(TRAIL, "nobo", 500);
+  assert.deepEqual(marks.map((m) => m.distance), [500, 1000, 1500, 2000]);
+  assert.equal(mileMarkers(TRAIL, "sobo", 500)[0].marker, TRAIL.totalMiles - 500);
+  const start = positionFor(TRAIL, 0, "sobo");
+  assert.equal(start.marker, TRAIL.totalMiles);
+  assert.ok(Math.abs(start.lat - 45.9044) < 0.01);
+  assert.equal(positionFor(TRAIL, -5, "nobo").distance, 0);
+  assert.equal(positionFor(TRAIL, 99999, "nobo").distance, TRAIL.totalMiles);
+});

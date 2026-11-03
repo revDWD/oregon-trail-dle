@@ -142,13 +142,13 @@ assets/js/at/
   ui/badge-art.js        13 original 12x12 pixel sprites -> SVG medallions (locked = greyscale)
   engine/activities.js   validateActivity({ hikers, originalDate }): hiker required when a roster exists
   engine/camp.js         timeOfDay(hour): morning/day/evening/night from the device clock
-  data/layer.js          + expedition.{isMember, join, inviteCode, hikers, marks}
+  data/layer.js          + expedition.{hikers, marks}
 supabase/migrations/20261104000000_at_hikers.sql
 ```
 
-- **Why a roster, not accounts:** there is no login, and devices are anonymous. The roster (`at_hikers`) names the real people. A device is just a pen they write with: it joins the expedition once (invite link), may log for any active hiker, and still alone owns its rows. This keeps the existing "own rows only" RLS unchanged.
-- **Schema:** `at_hikers` (roster, no API access), `at_expedition_settings` (singleton invite code, no API access), `at_expedition_members` (devices that joined, no API access), and `hiker_id` on `at_activities` / `at_expedition_runs`. The `at_check_hiker` trigger allows a hiker only for members (42501) and only active roster hikers (23503); an unchanged hiker on an old row is always allowed.
-- **Reads are aggregates only:** `at_expedition_hikers(week_start)` (per hiker: total/week miles, counts, first/last dates, distinct active dates, photo points, first wildlife date) and `at_expedition_marks(group[], personal[])` (who crossed each mile mark, and when, max 100 marks). Both are `SECURITY DEFINER` with `search_path = ''`, members only. No notes, device IDs or per-activity rows leave a device.
+- **Why a roster, not accounts:** there is no login, and devices are anonymous. The roster (`at_hikers`) names the real people. A device is just a pen they write with: it may log for any active hiker (no joining since 20261105), and still alone owns its rows. This keeps the existing "own rows only" RLS unchanged.
+- **Schema:** `at_hikers` (roster, no API access) and `hiker_id` on `at_activities` / `at_expedition_runs` (the invite-code and membership tables were dropped in 20261105). The `at_check_hiker` trigger allows a hiker only for signed-in devices (42501) and only active roster hikers (23503); an unchanged hiker on an old row is always allowed.
+- **Reads are aggregates only:** `at_expedition_hikers(week_start)` (per hiker: total/week miles, counts, first/last dates, distinct active dates, photo points, first wildlife date) and `at_expedition_marks(group[], personal[])` (who crossed each mile mark, and when, max 100 marks). Both are `SECURITY DEFINER` with `search_path = ''`, signed-in only. No notes, device IDs or per-activity rows leave a device.
 - **Badges are derived, not stored:** mileage badges from per-hiker totals and personal marks; "Landmark Reached" and "Milestone Participation" from group marks; rhythm from active dates with one rest day allowed. They can't be lost (dates are all-time), so there's nothing punitive. New badges are celebrated once, after logging (`newlyEarned` in `app.js`).
 - **Removed from the UI:** crews (join/start), "Your spot at camp" (trail name, weekly goal), the About card, the manual day/night buttons, the Badges tab, and the Trail welcome and friends cards. The challenge tables and RPCs stay in the database (dispatches can still target a crew).
 - **Fail-soft:** before the migration, the roster RPCs fail with a non-network error, so `expeditionUnavailable` hides the join card and hiker field, and logging works as before.

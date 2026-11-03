@@ -247,24 +247,9 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
   };
 
   // The expedition: one shared journey with an official roster of hikers (David, Kevin, ...).
-  // A device joins once with the invite code; members log miles for any hiker and see per-hiker
-  // aggregates. Totals are computed in Postgres, never from other devices' raw activity rows.
+  // Any signed-in device logs miles for any hiker and sees per-hiker aggregates (no joining).
+  // Totals are computed in Postgres, never from other devices' raw activity rows.
   const expedition = {
-    async isMember() {
-      await requireUser();
-      return (await run(client.rpc("at_is_expedition_member"))) === true;
-    },
-    async join(code) {
-      await requireUser();
-      const cleaned = String(code || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-      if (!cleaned) throw new DataError("Enter the expedition invite code.", "validation");
-      return (await run(client.rpc("at_join_expedition", { p_code: cleaned }))) === true;
-    },
-    // Organizers only (the database refuses everyone else).
-    async inviteCode() {
-      await requireUser();
-      return run(client.rpc("at_expedition_invite_code"));
-    },
     async hikers(weekStart) {
       await requireUser();
       return (await run(client.rpc("at_expedition_hikers", weekStart ? { p_week_start: weekStart } : {}))).map(hikerFromRow);

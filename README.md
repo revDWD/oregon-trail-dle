@@ -10,7 +10,7 @@ A friends-based fitness game: log walks, hikes, runs and rides, and turn them in
 - **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles
 - Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
 - Static frontend (GitHub Pages) + Supabase Auth/Postgres with Row Level Security
-- No login: each browser gets a Supabase anonymous user automatically, and joins the expedition once with an invite link
+- No login and no joining: each browser gets a Supabase anonymous user automatically. Pick your name, log an activity, and everything updates
 - Unofficial and unaffiliated with the Appalachian Trail Conservancy. Mileage is approximate (see `docs/trail-data-sources.md`).
 
 ## Run locally
@@ -42,7 +42,7 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 |---|---|
 | Trail | "Message from Camp", expedition progress, the interactive map, this week by hiker, landmarks |
 | Log Activity | Log an activity for a hiker (the dropdown remembers the last hiker on this device) |
-| Camp | Camp scene (automatic time of day), **the hikers** (pick one: miles, badges, milestones, journey), the trail register, Trail Dispatches (organizers can post), the organizer's invite link |
+| Camp | Camp scene (automatic time of day), **the hikers** (pick one: miles, badges, milestones, journey), the trail register, Trail Dispatches (organizers can post) |
 | Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; choose who's spotting; the habitat follows the expedition's section |
 | History | Activities logged on this device: edit, delete, or assign a hiker to older entries |
 
@@ -55,7 +55,7 @@ insert into public.at_hikers (name, sort_order) values ('Sarah', 3);            
 update public.at_hikers set active = false where name = 'Sarah';               -- retire (their miles stay)
 ```
 
-Each phone or computer joins the expedition once by opening the invite link (the organizer sees it at Camp > "Invite another device").
+Anyone using the site can log for any hiker on the roster. A new hiker shows up at Camp (and in the Log Activity dropdown) as soon as they're added.
 
 ## Setup and deployment
 

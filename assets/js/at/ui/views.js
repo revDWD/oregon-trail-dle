@@ -30,23 +30,13 @@ const day = (ymd) => {
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
 };
 
-// A one-time message (a celebration, or the result of an invite link) for the page it belongs to.
+// A one-time message (a celebration) for the page it belongs to.
 const flashNote = (s, page) => (s.flash && s.flash.route === page ? h("p", { class: "card celebrate" }, s.flash.text) : null);
 const activeHikers = (s) => (s.hikers || []).filter((x) => x.active);
+// The roster is loaded (anyone can log for any hiker; there is nothing to join).
+const hasRoster = (s) => !s.expeditionUnavailable && (s.hikers || []).length > 0;
 const hikerName = (s, id) => (s.hikers || []).find((x) => x.id === id)?.name || null;
 
-// Shown to devices that haven't opened the invite link yet. Hidden entirely until the roster
-// migration exists, so the app keeps working before setup.
-function joinCard(s, a) {
-  if (s.expeditionUnavailable) return null;
-  return h("form", { class: "card join", novalidate: true, "aria-labelledby": "join-title",
-    onSubmit: (e) => { e.preventDefault(); a.joinExpedition(new FormData(e.target).get("code")); } },
-  h("h2", { id: "join-title" }, "Join the expedition"),
-  h("p", {}, "This device isn't on the expedition yet. Open the invite link from Kevin, or type its code here. Each phone or computer only needs to do this once."),
-  field("code", "Invite code", h("input", { id: "code", name: "code", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", required: true })),
-  h("p", { class: "status", role: "status", "data-status": "join" }),
-  h("button", { class: "btn primary", type: "submit" }, "Join the expedition"));
-}
 
 // Kevin's (the organizer's) latest message: pinned first, then newest.
 function dispatchCard(d, { featured = false, actions = null } = {}) {
@@ -69,7 +59,6 @@ export function trailView(s, a) {
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, p.completed ? "The expedition finished the Appalachian Trail!" : "The expedition"),
     flashNote(s, "trail"),
     featured ? [dispatchCard(featured, { featured: true }), (s.dispatches || []).length > 1 ? h("p", { class: "more-link" }, h("a", { href: "#/camp" }, "Read earlier dispatches at Camp")) : null] : null,
-    s.member ? null : joinCard(s, a),
     h("div", { class: "card hero" },
       h("p", { class: "big" }, `${p.percent}%`),
       bar(Math.floor(p.percent), "Trail completed together"),
@@ -87,7 +76,7 @@ export function trailView(s, a) {
       group.next ? h("p", {}, `Next group milestone: ${group.next.title}, ${formatMiles(group.remainingToNext)} to go.`) : h("p", {}, "Every group milestone reached!"),
       group.everyoneMovedThisWeek ? h("p", {}, "Everyone moved this week. Great teamwork!") : null,
       h("p", { class: "hint" }, pickTip(Number(s.today.replaceAll("-", "")))),
-      s.member || s.expeditionUnavailable ? h("p", { class: "row" }, h("a", { class: "btn primary", href: "#/log" }, "Log an activity")) : null),
+      h("p", { class: "row" }, h("a", { class: "btn primary", href: "#/log" }, "Log an activity"))),
     trivia ? h("div", { class: "card" }, h("h2", {}, trivia.upcoming ? `Coming up: ${trivia.title}` : `Remember: ${trivia.title}`), h("p", {}, trivia.text)) : null,
     h("div", { class: "card" }, h("h2", {}, "Landmarks"),
       h("ol", { class: "landmarks" }, p.landmarks.map((l) => h("li", { class: l.passed ? "passed" : "" },
@@ -143,21 +132,20 @@ export function activityForm({ rules, existing, onSubmit, onCancel, today, hiker
 }
 
 export function logView(s, a) {
-  const blocked = !s.member && !s.expeditionUnavailable;
-  // If we couldn't check membership, don't ask a device that may already have joined to join again.
-  const unknown = blocked && s.expeditionError;
+  // Never fall back to a form without the hiker field while the roster is just unreachable.
+  const unknown = !s.expeditionUnavailable && !hasRoster(s);
   return h("section", { "aria-labelledby": "page-title" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "Log activity"),
     h("p", {}, "Every mile counts, whatever the pace. Rest when you need to."),
     unknown ? h("div", { class: "card", role: "status" }, h("p", {}, "We couldn't reach the expedition just now, so the hiker list isn't available. We'll keep trying."),
       h("button", { class: "btn primary", type: "button", onClick: () => a.retryExpedition() }, "Try again"))
-      : blocked ? joinCard(s, a) : activityForm({ rules: s.rules, today: s.today, hikers: s.member ? activeHikers(s) : null, lastHikerId: s.lastHiker, onSubmit: a.createActivity }));
+      : activityForm({ rules: s.rules, today: s.today, hikers: hasRoster(s) ? activeHikers(s) : null, lastHikerId: s.lastHiker, onSubmit: a.createActivity }));
 }
 
 export function historyView(s, a) {
   // Editing an old activity of a retired hiker keeps that hiker selectable.
   const rosterFor = (act) => {
-    if (!s.member) return null;
+    if (!hasRoster(s)) return null;
     const list = activeHikers(s);
     const own = (s.hikers || []).find((x) => x.id === act.hikerId);
     return own && !list.includes(own) ? [...list, own] : list;
@@ -169,7 +157,7 @@ export function historyView(s, a) {
       return h("li", { class: "card" },
         h("p", {}, h("strong", {}, `${name ? `${name} · ` : ""}${ACTIVITY_LABELS[act.type]} · ${formatMiles(act.actualMiles)}`), ` on ${act.date}`),
         h("p", { class: "hint" }, `Credited ${formatMiles(act.creditedMiles)} of trail${act.durationMinutes ? ` · ${act.durationMinutes} min` : ""}`),
-        !act.hikerId && s.member ? h("p", { class: "unassigned" }, "No hiker yet, so these miles don't count for the expedition. Edit to choose who hiked them.") : null,
+        !act.hikerId && hasRoster(s) ? h("p", { class: "unassigned" }, "No hiker yet, so these miles don't count for the expedition. Edit to choose who hiked them.") : null,
         act.notes ? h("p", {}, act.notes) : null,
         h("div", { class: "row" },
           h("button", { class: "btn", type: "button", "aria-label": `Edit ${ACTIVITY_LABELS[act.type]} on ${act.date}`, onClick: () => a.edit(act.id) }, "Edit"),
@@ -183,7 +171,7 @@ export function historyView(s, a) {
     s.hasMore ? h("button", { class: "btn", type: "button", onClick: a.loadMore }, "Load older activities") : null,
     h("details", { class: "card device" }, h("summary", {}, "About this device"),
       h("p", {}, "There is no login. Activities are saved to the trail server and linked to this browser on this device."),
-      h("p", { class: "hint" }, "Clearing this browser's site data or using private browsing starts over as a new device (open the invite link again). Miles already logged for a hiker keep counting."),
+      h("p", { class: "hint" }, "Clearing this browser's site data or using private browsing starts over as a new device. Miles already logged for a hiker keep counting."),
       h("p", {}, "Device ID: ", h("code", { class: "hiker-id" }, s.user.id)),
       h("p", { class: "hint" }, "The trip organizer may ask for this to let this device post Trail Dispatches.")));
 }
@@ -222,7 +210,7 @@ function hikerPanel(s, hk) {
 
 function hikersSection(s, a, select) {
   const hikers = s.hikers || [];
-  if (!s.member) return null;
+  if (!hasRoster(s)) return null;
   const panel = h("div", { id: "hiker-panel" });
   const buttons = new Map();
   const show = (id) => {
@@ -298,7 +286,6 @@ export function campView(s, a) {
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "Camp"),
     h("p", {}, `${timeLabel} in ${where}. The expedition is camped ${formatMiles(prog.creditedMiles)} from Springer Mountain.`),
     flashNote(s, "camp"),
-    s.member ? null : joinCard(s, a),
     h("div", { class: "card camp-card" },
       h("div", { class: "camp-frame" }, scene),
       caption,
@@ -309,16 +296,13 @@ export function campView(s, a) {
         group.next ? stat(`Group goal: ${group.next.title}`, `${formatMiles(group.remainingToNext)} to go`) : stat("Group goals", "All reached!")),
       ctx.celebration ? h("p", { class: "celebrate" }, `🎉 Camp is celebrating passing ${ctx.celebration.name}!`) : null),
     hikersSection(s, a, select),
-    s.member ? registerSection(s) : null,
+    hasRoster(s) ? registerSection(s) : null,
     h("section", { class: "dispatches", "aria-labelledby": "dispatches-title" },
       h("h2", { id: "dispatches-title" }, "Trail Dispatches"),
       h("p", { class: "hint" }, "Updates, stories and encouragement from the trip organizer."),
       s.isOrganizer && editing === "new" ? dispatchForm(s, a, null) : null,
       s.isOrganizer && editing !== "new" ? h("button", { class: "btn primary", type: "button", onClick: () => a.editDispatch("new") }, "Write a dispatch") : null,
-      archive.length ? archive : h("p", { class: "card" }, s.dispatchesUnavailable ? "Dispatches will appear here once camp is set up." : "No dispatches yet. Check back soon!")),
-    s.isOrganizer && !s.expeditionUnavailable ? h("details", { class: "card invite", open: Boolean(s.inviteLink) }, h("summary", {}, "Invite another device"),
-      s.inviteLink ? [h("p", {}, h("code", { class: "hiker-id" }, s.inviteLink)), h("p", { class: "hint" }, "Open this link once on each phone or computer that logs miles. Share it privately.")]
-        : h("button", { class: "btn", type: "button", onClick: a.showInvite }, "Show invite link")) : null);
+      archive.length ? archive : h("p", { class: "card" }, s.dispatchesUnavailable ? "Dispatches will appear here once camp is set up." : "No dispatches yet. Check back soon!")));
 }
 
 function dispatchForm(s, a, existing) {
@@ -351,7 +335,7 @@ function dispatchForm(s, a, existing) {
 
 function photoBoard(s, theme) {
   const roster = (s.hikers || []).filter((x) => x.active || x.wildlifeRuns);
-  if (!s.member || !roster.length) return h("p", {}, "Join the expedition to pin photos to the board at Camp.");
+  if (!roster.length) return h("p", {}, "Photos pinned to a hiker show up here and on the board at Camp.");
   const total = expeditionTotals(s.hikers).wildlifeScore; // s.hikers is fresh after a save; s.totals isn't
   return [
     h("ul", { class: "week-hikers" }, roster.map((x) => h("li", {}, h("span", {}, x.name),
@@ -366,7 +350,7 @@ export function wildlifeView(s, a) {
   const reducedMotion = Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   const saved = h("p", { class: "status", role: "status" });
   const board = h("div", {}, photoBoard(s, theme));
-  const roster = s.member ? activeHikers(s) : [];
+  const roster = activeHikers(s);
   const who = roster.length ? h("select", { id: "spotter", name: "spotter", "aria-describedby": "spotter-hint", onChange: (e) => a.rememberHiker(e.target.value) },
     h("option", { value: "", selected: !roster.some((x) => x.id === s.lastHiker) }, "Choose a hiker"),
     roster.map((x) => h("option", { value: x.id, selected: x.id === s.lastHiker }, x.name))) : null;

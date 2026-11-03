@@ -140,3 +140,14 @@ test("background refreshes keep the page usable (focus, fail-soft, fresh photo t
   assert.doesNotMatch(app, /e\.code === "network"\) \{ announce\(friendly\(e\)\); return; \}/);
   assert.match(views, /expeditionTotals\(s\.hikers\)\.wildlifeScore/, "photo board total uses the freshly loaded hikers");
 });
+
+test("no invite codes or join flow: select a name, log, everything updates", () => {
+  const app = read("assets/js/at/ui/app.js");
+  const views = read("assets/js/at/ui/views.js");
+  const layer = read("assets/js/at/data/layer.js");
+  for (const [name, text] of [["app.js", app], ["views.js", views], ["layer.js", layer]]) {
+    assert.doesNotMatch(text, /joinCard|joinExpedition|showInvite|inviteLink|joinFromLink|at_join_expedition|at_expedition_invite_code|isMember\(/, `${name} still has join/invite code`);
+    assert.doesNotMatch(text, /Join the expedition|invite link/i, `${name} still mentions joining`);
+  }
+  assert.match(app, /\/\^join\\\/\/\.test\(r\) \? "camp"/, "old invite links open Camp");
+});

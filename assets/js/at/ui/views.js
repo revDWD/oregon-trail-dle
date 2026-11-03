@@ -78,10 +78,7 @@ export function trailView(s, a) {
       h("p", { class: "hint" }, pickTip(Number(s.today.replaceAll("-", "")))),
       h("p", { class: "row" }, h("a", { class: "btn primary", href: "#/log" }, "Log an activity"))),
     trivia ? h("div", { class: "card" }, h("h2", {}, trivia.upcoming ? `Coming up: ${trivia.title}` : `Remember: ${trivia.title}`), h("p", {}, trivia.text)) : null,
-    h("div", { class: "card" }, h("h2", {}, "Landmarks"),
-      h("ol", { class: "landmarks" }, p.landmarks.map((l) => h("li", { class: l.passed ? "passed" : "" },
-        h("span", { class: "mark", "aria-hidden": "true" }, l.passed ? "✓" : "•"),
-        h("span", {}, `${l.name}, ${l.state}`), h("span", { class: "hint" }, ` ${formatMiles(l.distance)}${l.passed ? " (passed)" : ""}`))))));
+    null);
 }
 
 // `hikers` (roster objects) makes choosing a hiker required; null keeps the pre-roster form.
@@ -190,14 +187,16 @@ function hikerPanel(s, hk) {
       stat("Share of the expedition", `${hikerShare(hk, s.totals)}%`),
       stat("This week", formatMiles(hk.weekMiles)),
       stat("Badges earned", `${earned} of ${badges.length}`)),
-    next ? [bar(next.percent, `Progress to the ${next.title} badge`), h("p", { class: "hint" }, `${formatMiles(next.remaining)} to the ${next.title} badge.`)]
+    next ? [bar(next.percent, "Progress to the next mileage badge"), h("p", { class: "hint" }, `${formatMiles(next.remaining)} to the next mileage badge.`)]
       : h("p", {}, "Every mileage badge earned. Legendary!"),
     h("h4", {}, "Badges"),
-    h("ul", { class: "badge-grid" }, badges.map((b) => h("li", { class: `badge${b.earned ? " earned" : ""}` },
-      badgeArt(b.art, { earned: b.earned }),
-      h("strong", {}, b.title),
-      h("span", { class: "hint" }, h("span", { class: "sr-only" }, b.earned ? "Earned. " : "Not yet earned. "),
-        b.earned ? (b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned") : b.description)))),
+    // Locked badges stay a mystery (silhouette only); earning one reveals its art, name and story.
+    h("ul", { class: "badge-grid" }, badges.map((b) => b.earned
+      ? h("li", { class: "badge earned" }, badgeArt(b.art, { earned: true }), h("strong", {}, b.title),
+        h("span", { class: "badge-desc" }, b.description),
+        h("span", { class: "hint" }, b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned"))
+      : h("li", { class: "badge locked" }, badgeArt(b.art, { earned: false }), h("strong", {}, "Locked"),
+        h("span", { class: "sr-only" }, "Not yet earned. Keep hiking to discover it.")))),
     h("h4", {}, "Milestones reached"),
     ms.landmarks.length || ms.groupMilestones.length
       ? h("ul", { class: "milestones" },

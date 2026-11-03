@@ -6,7 +6,8 @@ A friends-based fitness game: log walks, hikes, runs and rides, and turn them in
 - **Interactive trail map**: zoom/pan/pinch, regional sections, mile posts, landmark detail cards with original illustrations
 - **Trail Dispatches**: the organizer's announcements ("Message from Camp" on the Trail page, full archive at Camp), with simple formatting
 - **Camp, the hub**: a pixel-art camp that follows the device clock (morning, day, evening, night) and grows with the expedition's miles. Pick a hiker to see their miles contributed, badges, milestones and journey; the trail register shows who carried the group past each landmark
-- **Per-hiker badges** with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
+- **Journey progress** on the Trail map: each region lists its landmarks (✓ passed, ➜ next, ○ ahead); tap one to see it on the map
+- **Per-hiker badges** (locked ones stay mystery silhouettes until earned) with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
 - **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles
 - Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
 - Static frontend (GitHub Pages) + Supabase Auth/Postgres with Row Level Security

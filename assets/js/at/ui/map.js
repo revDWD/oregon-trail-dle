@@ -4,7 +4,7 @@
 // or pinch. Everything shown on the map is also available as text (detail panel + lists).
 import { h, svg, formatMiles } from "./dom.js";
 import { landmarkArt } from "./illustrations.js";
-import { mileMarkers, regionsInOrder, positionFor } from "../engine/progress.js";
+import { mileMarkers, journeyProgress, positionFor } from "../engine/progress.js";
 
 // Same simplified Albers projection that generated us-states.js (viewBox 0 0 1000 570).
 const P = {
@@ -300,15 +300,23 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     btn("Show where the expedition is and the next landmark", "Find us", () => setView(focusHere(), "Showing the expedition and the next landmark.")),
     btn("Show the whole trail", "Whole trail", () => setView(defaultView(base), "Showing the whole trail.")));
 
-  // Sections: progress per region; choosing one frames it on the map.
-  const sections = h("ol", { class: "sections" }, regionsInOrder(trail, progress).map((r) => h("li", { class: r.current ? "current" : r.percent >= 100 ? "done" : "" },
+  // Journey progress: regions (parents) with their landmarks (children). Choosing a region frames it
+  // on the map; choosing a landmark opens its details, exactly like tapping it on the map.
+  const landmarkRow = (l) => h("li", { class: `jl ${l.status}` },
+    h("button", { type: "button", class: "jl-btn", "aria-label": `${l.name}, ${l.state}, mile ${formatMiles(l.distance)}: ${l.status === "passed" ? "reached" : l.status === "next" ? `next landmark, ${formatMiles(l.milesToGo)} to go` : `${formatMiles(l.milesToGo)} ahead`}. Show details.`,
+      onClick: () => { select(l.id); panel.scrollIntoView?.({ block: "nearest" }); } },
+    h("span", { class: "mark", "aria-hidden": "true" }, l.status === "passed" ? "✓" : l.status === "next" ? "➜" : "○"),
+    h("span", { class: "jl-name" }, l.name, l.status === "next" ? h("span", { class: "you" }, " · next") : null),
+    h("span", { class: "hint" }, l.status === "passed" ? `mile ${formatMiles(l.distance)}` : `${formatMiles(l.milesToGo)} to go`)));
+  const sections = h("ol", { class: "sections journey" }, journeyProgress(trail, progress).map((r) => h("li", { class: r.current ? "current" : r.percent >= 100 ? "done" : "" },
     h("button", { type: "button", class: "section-btn", style: `--region:${r.color}`,
       "aria-label": `${r.name} (${r.states}), ${formatMiles(r.lengthMiles)}, ${r.percent}% walked${r.current ? ", the expedition is here" : ""}. Show on map.`,
       onClick: () => { setView(fitView(routeSlice(trail, r.start, r.end), base, 24), `Showing ${r.name}.`); root.scrollIntoView?.({ block: "nearest" }); } },
       h("span", { class: "swatch", "aria-hidden": "true" }),
       h("span", { class: "section-name" }, r.name, r.current ? h("span", { class: "you" }, " · we are here") : null),
       h("span", { class: "section-bar", "aria-hidden": "true" }, h("span", { style: `width:${r.percent}%` })),
-      h("span", { class: "hint" }, `${r.states} · ${formatMiles(r.lengthMiles)} · ${r.percent}%`)))));
+      h("span", { class: "hint" }, `${r.states} · ${formatMiles(r.lengthMiles)} · ${r.percent}%${r.landmarks.length ? ` · ${r.passedCount} of ${r.landmarks.length} landmarks` : ""}`)),
+    r.landmarks.length ? h("ol", { class: "journey-landmarks", "aria-label": `Landmarks in ${r.name}` }, r.landmarks.map(landmarkRow)) : null)));
 
   const legend = h("ul", { class: "map-legend", "aria-label": "Map key" },
     h("li", {}, h("span", { class: "key you", "aria-hidden": "true" }), "The expedition"),
@@ -321,7 +329,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
   apply();
   select(memory.selectedId, { announce: false });
   return h("div", { class: "map-wrap" }, toolbar, h("div", { class: "map-frame" }, root), legend, live, panel,
-    h("h3", { class: "sections-title" }, "Trail sections"), sections);
+    h("h3", { class: "sections-title" }, "Journey progress"), sections);
 }
 
 // Testing hook: forget remembered zoom/selection.

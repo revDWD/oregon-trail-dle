@@ -123,3 +123,13 @@ test("every badge has 12x12 pixel art", async () => {
     rows.forEach((row) => assert.equal(row.length, 12, `${name} rows are 12 wide`));
   });
 });
+
+test("locked badges are silhouettes; their names and descriptions stay hidden until earned", async () => {
+  const { readFileSync } = await import("node:fs");
+  const views = readFileSync("assets/js/at/ui/views.js", "utf8");
+  const art = readFileSync("assets/js/at/ui/badge-art.js", "utf8");
+  assert.match(views, /h\("li", \{ class: "badge locked" \}, badgeArt\(b\.art, \{ earned: false \}\), h\("strong", \{\}, "Locked"\)/);
+  assert.doesNotMatch(views, /: b\.description\)/, "no description for locked badges");
+  assert.doesNotMatch(views, /to the \$\{next\.title\} badge/, "the next badge's name stays a surprise");
+  assert.match(art, /pixels\(rows, earned \? null : "#[0-9a-f]{6}"\)/, "locked art is a one-colour silhouette");
+});

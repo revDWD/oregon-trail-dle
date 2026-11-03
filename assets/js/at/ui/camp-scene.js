@@ -1,6 +1,6 @@
-// Camp diorama: a pixel-art SVG of the crew's camp, rebuilt for the Appalachian Trail from the old
-// Oregon Trail camp. Backdrop follows the crew's trail section; tents, fire, food bags and lanterns grow
-// with crew progress; every crew member sits at camp. Motion is CSS-only and disabled by
+// Camp diorama: a pixel-art SVG of the crew's camp on the Appalachian Trail. Backdrop follows the
+// crew's trail section; tents, fire and lanterns grow with crew miles; the bear bag line holds one bag
+// per hiker; the photo board fills with Wildlife Spotting points; every crew member sits at camp. Motion is CSS-only and disabled by
 // prefers-reduced-motion. Interactive parts are focusable buttons that report what was chosen.
 import { svg } from "./dom.js";
 
@@ -97,8 +97,8 @@ function fire(root, level, onSelect, label) {
   [0, 1, 2].forEach((i) => px(smoke, 158 + i * 2, 120 - tall - i * 8, 4, 4, "rgba(220,220,220,.55)"));
 }
 
-function foodLine(root, bags, onSelect, label) {
-  const g = hotspot(root, "pantry", label, onSelect);
+function bearBagLine(root, bags, onSelect, label) {
+  const g = hotspot(root, "bags", label, onSelect);
   px(g, 236, 68, 4, 56, "#5b4636"); px(g, 296, 66, 4, 58, "#5b4636");
   g.append(svg("path", { d: "M238 74 Q268 84 298 72", stroke: "#e8dcc0", fill: "none", "stroke-width": 1 }));
   for (let i = 0; i < Math.max(bags, 0); i += 1) {
@@ -171,8 +171,8 @@ const SPOTS = [[118, 158], [134, 166], [182, 162], [198, 154], [124, 140], [196,
 const TENT_SPOTS = [[200, 124], [232, 136], [86, 128], [262, 150], [52, 150], [280, 128], [20, 160], [228, 168]];
 
 /**
- * @param ctx  campContext() result plus { crewName, dispatchTitle, crewMiles, pantryLabel, photoLabel }
- * @param onSelect  called with "shelter" | "fire" | "pantry" | "board" | "person:<id>"
+ * @param ctx  campContext() result plus { dispatchTitle, crewLabel, bagLabel, photoLabel }
+ * @param onSelect  called with "shelter" | "fire" | "bags" | "board" | "person:<id>"
  */
 export function renderCampScene(ctx, onSelect) {
   const root = svg("svg", { class: `camp-svg time-${ctx.time}`, viewBox: `0 0 ${W} ${H}`, role: "group",
@@ -182,7 +182,7 @@ export function renderCampScene(ctx, onSelect) {
   shelter(root, onSelect, ctx.dispatchTitle ? `Shelter register: latest dispatch "${ctx.dispatchTitle}"` : "Shelter register");
   for (let i = 0; i < ctx.scale.tents; i += 1) { const [x, y] = TENT_SPOTS[i]; tent(root, x, y, SHIRTS[(i * 3 + 1) % SHIRTS.length]); }
   board(root, ctx.supplies.photos || 0, onSelect, `Photo board: ${ctx.photoLabel}`);
-  foodLine(root, ctx.scale.foodBags, onSelect, `Bear bag line: ${ctx.pantryLabel}`);
+  bearBagLine(root, ctx.scale.bearBags, onSelect, `Bear bag line: ${ctx.bagLabel}`);
   lanterns(root, ctx.scale.lanterns);
   fire(root, ctx.scale.fire, onSelect, `Campfire: ${ctx.crewLabel}`);
   const people = group(root, { class: "camp-people" });

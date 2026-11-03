@@ -1,6 +1,8 @@
-// Expedition engine: the camp minigame loop (spawn, move, aim, fire, score), independent of theme
-// and of the DOM. Ported from the Oregon Trail hunt and generalised so a theme (hunt, wildlife
-// spotting, ...) only supplies data. Randomness is injected (`rng` returns [0, 1)) so tests are exact.
+// Expedition engine: the original Oregon Trail DLE hunt rules, ported almost line for line and
+// parameterised by a theme (engine/expedition-themes.js). Wildlife spotting uses them as follows:
+// shots are frames of film, the magazine is film wound four frames at a time, and a hit is a photo
+// (the animal bolts off afterwards instead of being removed).
+// Pure and DOM-free. Randomness is injected (`random` returns [0, 1)) so tests are exact.
 
 export const WIDTH = 320;
 export const HEIGHT = 180;
@@ -11,165 +13,283 @@ const MAX_ANIMALS = 6;
 const HIT_PAD = 2;
 const STARTLE_RADIUS = 46;
 const LEAVE_AFTER = 14;
+const LOCAL_CHANCE = 0.65;
 
-export const defaultRng = () => {
-  const buf = new Uint32Array(1);
-  globalThis.crypto.getRandomValues(buf);
-  return buf[0] / 2 ** 32;
+export const defaultRandom = () => {
+  const buffer = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(buffer);
+  return buffer[0] / 4294967296;
 };
 
-const between = (rng, [lo, hi]) => lo + (hi - lo) * rng();
+const between = (random, range) => range[0] + random() * (range[1] - range[0]);
+const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
 
-export function spriteSize(sp) {
-  return { w: Math.max(...sp.sprite.map((row) => row.length)) * 2, h: sp.sprite.length * 2 };
+export function speciesOf(theme, id) {
+  return theme.species.find((sp) => sp.id === id) || null;
 }
 
-// Weighted pick of a species for a habitat scene.
-export function pickSpecies(theme, scene, rng) {
-  const weights = theme.species.map((sp) => sp.weight + (sp.habitats[scene] || 0));
-  const total = weights.reduce((a, b) => a + b, 0);
-  let roll = rng() * total;
-  for (let i = 0; i < weights.length; i += 1) {
-    roll -= weights[i];
-    if (roll < 0) return theme.species[i];
+export function habitatOf(theme, id) {
+  return theme.habitats[id] ? id : Object.keys(theme.habitats)[0];
+}
+
+export function pickSpecies(theme, habitat, random) {
+  const weights = theme.habitats[habitatOf(theme, habitat)].animals;
+  const ids = Object.keys(weights);
+  const total = ids.reduce((sum, id) => sum + weights[id], 0);
+  let roll = random() * total;
+  for (const id of ids) {
+    roll -= weights[id];
+    if (roll < 0) return speciesOf(theme, id);
   }
-  return theme.species[theme.species.length - 1];
+  return speciesOf(theme, ids[ids.length - 1]);
 }
 
-export function createRound(theme, { scene = "southern-ridges", rng = defaultRng, speedFactor = 1 } = {}) {
+// Where the outing happens: usually the section the hiker (or crew) is in, sometimes somewhere else
+// on the trail, as in the original. Cold habitats bring snow from November to March.
+export function chooseOuting(theme, localHabitat, { random = defaultRandom, month = 6 } = {}) {
+  const ids = Object.keys(theme.habitats);
+  const habitat = random() < LOCAL_CHANCE ? habitatOf(theme, localHabitat) : ids[Math.floor(random() * ids.length)];
+  const winter = month <= 3 || month >= 11;
+  const pool = theme.habitats[habitat].cold && winter ? theme.coldWeathers : theme.weathers;
+  const autumn = month >= 9 && month <= 11;
+  return { habitat, weather: pool[Math.floor(random() * pool.length)], autumn };
+}
+
+// options: { habitat, weather, autumn, speedFactor } (speedFactor < 1 for reduced motion).
+export function newRound(theme, options = {}) {
+  const r = theme.rounds;
   return {
-    theme, scene, speedFactor,
-    time: theme.roundSeconds, ammo: theme.ammo, loaded: Math.min(theme.magazine, theme.ammo),
-    reload: 0, cooldown: 0, flash: 0,
-    aim: { x: WIDTH / 2, y: (HEIGHT + MIN_Y) / 2 },
-    animals: [], nextSpawn: 0.3, nextId: 1, nextGroup: 1,
-    score: 0, hits: 0, shots: 0, caught: {}, effects: [], over: false,
-    rng
+    theme,
+    random: options.random || defaultRandom,
+    habitat: habitatOf(theme, options.habitat),
+    weather: options.weather || "clear",
+    autumn: Boolean(options.autumn),
+    speedFactor: options.speedFactor || 1,
+    clock: 0,
+    nextHerd: 1,
+    clip: Math.min(r.magazine, r.ammo),
+    reload: 0,
+    fireCooldown: 0,
+    shots: 0,
+    hits: 0,
+    timeLeft: r.seconds,
+    ammo: r.ammo,
+    score: 0,
+    spotted: [],
+    aim: { x: WIDTH / 2, y: HEIGHT / 2 },
+    animals: [],
+    popups: [],
+    puffs: [],
+    spawnIn: 0.2,
+    flash: 0,
+    over: false
   };
 }
 
+const active = (state) => state.animals.filter((animal) => !animal.snapped);
+
+// Herd animals sometimes arrive as a small group that tends to move together.
 function spawn(state) {
-  if (state.animals.length >= MAX_ANIMALS) return;
-  const { rng, theme } = state;
-  const sp = pickSpecies(theme, state.scene, rng);
-  const size = spriteSize(sp);
-  const fromLeft = rng() < 0.5;
-  const count = Math.min(sp.group > 1 ? 1 + Math.floor(rng() * sp.group) : 1, MAX_ANIMALS - state.animals.length);
-  const group = state.nextGroup++;
-  const baseY = sp.ground ? MIN_Y + 20 + rng() * (HEIGHT - MIN_Y - 24 - size.h) : 14 + rng() * (MIN_Y - 6);
-  for (let i = 0; i < count; i += 1) {
+  const spec = pickSpecies(state.theme, state.habitat, state.random);
+  const fromLeft = state.random() < 0.5;
+  const baseY = MIN_Y + 8 + state.random() * (HEIGHT - MIN_Y - 8 - spec.h - 8);
+  let count = 1;
+  const groupSize = spec.herd || spec.flock;
+  if (groupSize && state.random() < 0.5) count = Math.min(1 + Math.ceil(state.random() * (groupSize - 1)), MAX_ANIMALS + 1 - active(state).length);
+  const herdId = count > 1 ? state.nextHerd++ : 0;
+  for (let i = 0; i < Math.max(count, 1); i += 1) {
     state.animals.push({
-      id: state.nextId++, kind: sp.id, group, w: size.w, h: size.h,
-      x: fromLeft ? -size.w - i * (size.w + 6) : WIDTH + i * (size.w + 6),
-      y: Math.min(Math.max(baseY + (i % 2) * 8, sp.ground ? MIN_Y : 6), HEIGHT - size.h - 2),
-      dir: fromLeft ? 1 : -1, mult: 1, timer: between(rng, sp.move.timer), paused: 0, age: 0,
-      startled: false, photographed: false
+      kind: spec.id,
+      herdId,
+      x: fromLeft ? -spec.w - i * (spec.w + 6) : WIDTH + i * (spec.w + 6),
+      y: clamp(baseY + (i % 2 ? 10 : -4) * (i ? 1 : 0), MIN_Y, HEIGHT - spec.h - 6),
+      dir: fromLeft ? 1 : -1
     });
   }
 }
 
-function speciesOf(state, animal) {
-  return state.theme.species.find((sp) => sp.id === animal.kind);
+// Animals pushed by tests or spawn() get their behaviour state lazily so plain {kind, x, y, dir} objects work.
+function prepare(state, animal) {
+  if (animal.age !== undefined) return;
+  animal.age = 0;
+  animal.phase = state.random() * 6;
+  animal.mult = 1;
+  animal.drift = 0;
+  animal.pause = 0;
+  animal.timer = 0.3 + state.random();
 }
 
-function moveAnimal(state, a, dt) {
-  const sp = speciesOf(state, a);
-  const { rng } = state;
-  a.age += dt;
-  if (a.paused > 0) { a.paused -= dt; return; }
-  a.timer -= dt;
-  if (a.timer <= 0 && !a.startled) {
-    a.timer = between(rng, sp.move.timer);
-    const r = rng();
-    const onScreen = a.x > 0 && a.x + a.w < WIDTH;
-    if (r < sp.move.pause && onScreen) a.paused = between(rng, sp.move.pauseTime);
-    else if (r < sp.move.pause + sp.move.turn && onScreen && a.age < LEAVE_AFTER) a.dir *= -1;
-    a.mult = between(rng, sp.move.mult);
+function decide(state, animal, spec) {
+  const rule = spec.behavior;
+  const random = state.random;
+  const inside = animal.x > 16 && animal.x + spec.w < WIDTH - 16;
+  const roll = random();
+  animal.timer = between(random, rule.timer);
+  const mate = animal.herdId ? state.animals.find((other) => other !== animal && other.herdId === animal.herdId && !other.snapped) : null;
+  if (mate && random() < 0.6) {
+    animal.dir = mate.dir;
+    animal.mult = mate.mult;
+    animal.drift = mate.drift;
+    return;
   }
-  a.x += a.dir * sp.speed * a.mult * state.speedFactor * dt;
+  if (roll < rule.pause) {
+    animal.pause = between(random, rule.pauseTime);
+    animal.drift = 0;
+    return;
+  }
+  if (roll < rule.pause + rule.turn && inside && animal.age < LEAVE_AFTER) animal.dir = -animal.dir;
+  animal.mult = between(random, rule.mult);
+  animal.drift = (random() * 2 - 1) * rule.drift;
 }
 
-export function step(state, dt, input = {}) {
+function move(state, animal, dt) {
+  const spec = speciesOf(state.theme, animal.kind);
+  prepare(state, animal);
+  animal.age += dt;
+  if (animal.age >= LEAVE_AFTER && animal.pause > 0) animal.pause = 0;
+  if (animal.pause > 0) {
+    animal.pause -= dt;
+    return;
+  }
+  animal.timer -= dt;
+  if (animal.timer <= 0 && !animal.snapped) decide(state, animal, spec);
+  animal.phase += dt * 9 * animal.mult;
+  animal.x += animal.dir * spec.speed * animal.mult * state.speedFactor * dt;
+  const low = MIN_Y;
+  const high = HEIGHT - spec.h - 6;
+  animal.y = clamp(animal.y + animal.drift * dt, low, high);
+  if (animal.y === low || animal.y === high) animal.drift = -animal.drift;
+}
+
+function bolt(state, animal, dir) {
+  prepare(state, animal);
+  animal.dir = dir;
+  animal.pause = 0;
+  animal.mult = 2;
+  animal.timer = 1.2;
+}
+
+// A photo or a missed frame spooks nearby skittish animals so they bolt away from the viewfinder;
+// their herd-mates follow.
+export function startle(state) {
+  const { x, y } = state.aim;
+  const spooked = [];
+  state.animals.forEach((animal) => {
+    const spec = speciesOf(state.theme, animal.kind);
+    if (!spec.skittish || animal.snapped) return;
+    const dx = animal.x + spec.w / 2 - x;
+    const dy = animal.y + spec.h / 2 - y;
+    if (Math.hypot(dx, dy) > STARTLE_RADIUS) return;
+    bolt(state, animal, dx >= 0 ? 1 : -1);
+    spooked.push(animal);
+  });
+  spooked.forEach((scared) => {
+    if (!scared.herdId) return;
+    state.animals.forEach((mate) => {
+      if (mate.herdId !== scared.herdId || mate === scared || mate.snapped) return;
+      bolt(state, mate, scared.dir);
+    });
+  });
+  return spooked.length;
+}
+
+function ageEffects(list, dt, life) {
+  list.forEach((item) => { item.age += dt; });
+  return list.filter((item) => item.age < life);
+}
+
+// input: { dx, dy } in -1..1. Advances the round by dt seconds.
+export function step(state, dt, input) {
   if (state.over) return state;
-  const d = Math.min(Math.max(dt, 0), 0.1);
-  let dx = input.dx || 0;
-  let dy = input.dy || 0;
-  const len = Math.hypot(dx, dy);
-  if (len > 1) { dx /= len; dy /= len; }
-  state.aim.x = Math.min(Math.max(state.aim.x + dx * AIM_SPEED * d, 0), WIDTH);
-  state.aim.y = Math.min(Math.max(state.aim.y + dy * AIM_SPEED * d, 0), HEIGHT);
-  state.time = Math.max(state.time - d, 0);
-  state.cooldown = Math.max(state.cooldown - d, 0);
-  state.flash = Math.max(state.flash - d, 0);
+  const d = clamp(Number(dt) || 0, 0, 0.1);
+  const move2 = input || { dx: 0, dy: 0 };
+  const length = Math.hypot(move2.dx || 0, move2.dy || 0) || 1;
+  const scale = length > 1 ? 1 / length : 1;
+  state.aim.x = clamp(state.aim.x + (move2.dx || 0) * scale * AIM_SPEED * d, 0, WIDTH);
+  state.aim.y = clamp(state.aim.y + (move2.dy || 0) * scale * AIM_SPEED * d, 0, HEIGHT);
+  state.timeLeft = Math.max(state.timeLeft - d, 0);
+  state.clock += d;
+  state.fireCooldown = Math.max(state.fireCooldown - d, 0);
   if (state.reload > 0) {
-    state.reload -= d;
-    if (state.reload <= 0) { state.reload = 0; state.loaded = Math.min(state.theme.magazine, state.ammo); }
+    state.reload = Math.max(state.reload - d, 0);
+    if (state.reload === 0) state.clip = Math.min(state.theme.rounds.magazine, state.ammo);
   }
-  state.effects = state.effects.map((e) => ({ ...e, life: e.life - d })).filter((e) => e.life > 0);
-  state.nextSpawn -= d;
-  if (state.nextSpawn <= 0) { spawn(state); state.nextSpawn = SPAWN_EVERY * (0.7 + state.rng() * 0.6); }
-  state.animals.forEach((a) => moveAnimal(state, a, d));
-  state.animals = state.animals.filter((a) => a.x > -a.w * 6 - 40 && a.x < WIDTH + a.w * 6 + 40);
-  if (state.time <= 0 || state.ammo <= 0) state.over = true;
+  state.flash = Math.max(state.flash - d, 0);
+  state.popups = ageEffects(state.popups, d, 1.1);
+  state.puffs = ageEffects(state.puffs, d, 0.35);
+
+  state.spawnIn -= d;
+  if (state.spawnIn <= 0 && active(state).length < MAX_ANIMALS) {
+    spawn(state);
+    state.spawnIn = SPAWN_EVERY;
+  }
+  state.animals.forEach((animal) => move(state, animal, d));
+  state.animals = state.animals.filter((animal) => animal.x > -40 && animal.x < WIDTH + 40);
+
+  if (state.timeLeft <= 0 || (state.ammo <= 0 && state.flash <= 0)) state.over = true;
   return state;
 }
 
 export function animalAt(state, x, y) {
-  return state.animals.find((a) => !a.photographed && x >= a.x - HIT_PAD && x <= a.x + a.w + HIT_PAD && y >= a.y - HIT_PAD && y <= a.y + a.h + HIT_PAD) || null;
+  return state.animals.findIndex((animal) => {
+    if (animal.snapped) return false;
+    const spec = speciesOf(state.theme, animal.kind);
+    return x >= animal.x - HIT_PAD && x <= animal.x + spec.w + HIT_PAD && y >= animal.y - HIT_PAD && y <= animal.y + spec.h + HIT_PAD;
+  });
 }
 
-// Fire / snap at the current aim. Returns what happened so the UI can announce it.
+// Takes a photo at the current aim point; the first animal under the viewfinder is the subject.
+// Returns { result: "hit" | "miss" | "reloading" | "cooldown" | "empty" | "over", species?, value? }.
 export function fire(state) {
-  const theme = state.theme;
   if (state.over) return { result: "over" };
+  if (state.ammo <= 0 || state.clip <= 0) return { result: state.reload > 0 ? "reloading" : "empty" };
   if (state.reload > 0) return { result: "reloading" };
-  if (state.cooldown > 0) return { result: "cooldown" };
-  if (state.loaded <= 0 || state.ammo <= 0) return { result: "empty" };
-  state.ammo -= 1; state.loaded -= 1; state.shots += 1;
-  state.cooldown = theme.cooldownSeconds; state.flash = 0.08;
-  const target = animalAt(state, state.aim.x, state.aim.y);
-  let outcome;
-  if (target) {
-    const sp = speciesOf(state, target);
-    state.hits += 1;
-    state.caught[sp.id] = (state.caught[sp.id] || 0) + 1;
-    state.score = Math.min(state.score + sp.value, theme.maxScore);
-    if (theme.removeOnHit) state.animals = state.animals.filter((a) => a !== target);
-    else target.photographed = true;
-    state.effects.push({ kind: "hit", x: state.aim.x, y: state.aim.y, life: 0.6, text: `+${sp.value}` });
-    outcome = { result: "hit", species: sp, value: sp.value };
-  } else {
-    state.effects.push({ kind: "miss", x: state.aim.x, y: state.aim.y, life: 0.4 });
-    if (theme.startleOnMiss) startle(state, state.aim.x, state.aim.y);
-    outcome = { result: "miss" };
+  if (state.fireCooldown > 0) return { result: "cooldown" };
+  const rules = state.theme.rounds;
+  state.ammo -= 1;
+  state.clip -= 1;
+  state.shots += 1;
+  state.fireCooldown = rules.cooldownSeconds;
+  state.flash = 0.12;
+  if (state.clip === 0 && state.ammo > 0) state.reload = rules.reloadSeconds;
+  const { x, y } = state.aim;
+  const index = animalAt(state, x, y);
+  if (index < 0) {
+    state.puffs.push({ x, y, age: 0, hit: false });
+    startle(state);
+    return { result: "miss" };
   }
-  if (state.loaded <= 0 && state.ammo > 0) state.reload = theme.reloadSeconds || 0.001;
-  if (state.ammo <= 0) state.over = true;
-  return outcome;
+  const animal = state.animals[index];
+  const spec = speciesOf(state.theme, animal.kind);
+  animal.snapped = true;
+  state.hits += 1;
+  startle(state);
+  bolt(state, animal, animal.x + spec.w / 2 >= x ? 1 : -1);
+  animal.mult = 2.4;
+  const value = Math.max(Math.min(spec.value, rules.maxScore - state.score), 0);
+  state.score += value;
+  state.spotted.push(spec.id);
+  state.puffs.push({ x, y, age: 0, hit: true });
+  state.popups.push({ x: animal.x + spec.w / 2, y: animal.y, age: 0, text: value > 0 ? `+${value} ${state.theme.unitShort}` : state.theme.fullText });
+  return { result: "hit", species: spec, value };
 }
 
-export function startle(state, x, y) {
-  const groups = new Set();
-  state.animals.forEach((a) => {
-    const sp = speciesOf(state, a);
-    if (!sp.skittish) return;
-    if (Math.hypot(a.x + a.w / 2 - x, a.y + a.h / 2 - y) <= STARTLE_RADIUS) groups.add(a.group);
-  });
-  state.animals.forEach((a) => {
-    if (!groups.has(a.group)) return;
-    a.startled = true; a.paused = 0; a.mult = 2.2;
-    a.dir = a.x + a.w / 2 < x ? -1 : 1;
-  });
-  return groups.size;
+// "2 white-tailed deer, 1 wild turkey" in the order first spotted.
+export function spottedList(theme, ids) {
+  const counts = new Map();
+  ids.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
+  return [...counts].map(([id, n]) => `${n} ${speciesOf(theme, id).name}`).join(", ");
 }
 
 export function summary(state) {
+  const caught = {};
+  state.spotted.forEach((id) => { caught[id] = (caught[id] || 0) + 1; });
   return {
     theme: state.theme.id,
-    score: Math.min(Math.round(state.score), state.theme.maxScore),
+    score: Math.min(Math.round(state.score), state.theme.rounds.maxScore),
     hits: state.hits,
     shots: state.shots,
     accuracy: state.shots ? Math.round((state.hits / state.shots) * 100) : 0,
-    caught: { ...state.caught }
+    caught
   };
 }

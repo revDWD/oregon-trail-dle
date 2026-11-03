@@ -36,7 +36,7 @@ Technical debt found, and what happened to it:
    - `ui/expedition-view.js`: canvas and input.
 
    Adding a "birding" or "trail clean-up" theme is a data change.
-5. **Leaderboard polling vs Realtime.** This is unchanged and still correct. RLS hides other users' activity rows from Realtime, so polling the aggregate RPC every 60 s on the Crew page is simpler and leaks nothing.
+5. **Leaderboard polling vs Realtime.** This is unchanged and still correct. RLS hides other users' activity rows from Realtime, so polling the aggregate RPC every 60 s (on the Crew page, which is Camp's crew section since Phase 3) is simpler and leaks nothing.
 6. **`localStorage` rule.** Camp time-of-day and expedition-theme choices are kept in memory, not in storage, so the "only the selected challenge in localStorage" rule still holds.
 
 ## 3. Database review
@@ -55,11 +55,11 @@ New migration: `20261103000000_at_camp_dispatches.sql`. It is idempotent and onl
 | `at_organizers(user_id, note)` | Who may post dispatches | RLS on, and all API privileges revoked. Rows are added only from the SQL editor. Clients ask through `at_is_organizer()` (SECURITY DEFINER, fixed `search_path`). |
 | `at_dispatches` | Kevin's announcements | Everyone signed in can read **published public** dispatches. Members can also read their crew's. Only organizers can insert, update or delete. A trigger trims fields and forces `created_by = auth.uid()`. `created_by` is not even selectable. Future `published_at` means scheduled (hidden until then). |
 | `at_expedition_runs` | Minigame results | Insert and read **own** rows only, and there is no update or delete. A trigger forces `user_id`, `played_on` and `created_at`, and caps runs at **10 per day**. Score is 0–400 and hits ≤ shots ≤ 100. |
-| `at_camp_supplies(challenge)` | Pantry and photo-board totals | Returns only aggregates: your totals, plus crew totals since the challenge started. Non-members get an error. |
+| `at_camp_supplies(challenge)` | Photo-board totals (per theme) | Returns only aggregates: your totals, plus crew totals since the challenge started. Non-members get an error. |
 
 Decisions:
 
-- **Expeditions never award trail miles.** Only real activity moves you on the trail. The minigame stocks the camp (food and photos), which is cosmetic and cooperative.
+- **Expeditions never award trail miles.** Only real activity moves you on the trail. The minigame fills the camp photo board, which is cosmetic and cooperative.
 - **No achievements table yet.** Badges are still derived (deterministic, so they cannot drift).
 - **Public dispatches are visible to any visitor.** Every visitor is an anonymous signed-in user, so anything posted as "Everyone" is effectively public. Crew-only dispatches are limited by RLS. Kevin should not post private information as "Everyone".
 
@@ -107,15 +107,18 @@ The Oregon camp diorama is rebuilt as an Appalachian Trail camp.
   - Time of day follows the local clock, with Dawn/Day/Sunset/Night preview buttons.
 - **The camp grows with progress:**
   - Tents, fire and lanterns grow with miles.
-  - The bear-bag line fills from hunt results, and the photo board from wildlife spotting.
+  - The bear-bag line holds one bag per hiker at camp (Phase 3; it used to fill from hunt results), and the photo board fills from Wildlife Spotting.
   - A celebration banner appears soon after the crew passes a landmark.
 - **Interaction:** every crew member sits at camp, and recent movers arrive. The fire, shelter register, bear bags, photo board and each hiker are focusable buttons that describe themselves.
 - **The page also has:**
-  - "Around the fire" stats (crew miles, section, next landmark, next group milestone, pantry, photos);
+  - "Around the fire" stats (crew miles, section, next landmark, photo board, hikers at camp);
+  - "Your crew" (Phase 3: start/join, standings, group milestone, invite);
   - the dispatch archive;
   - "Your spot at camp", which holds the old Profile settings.
 
 ### 5.3 Expedition minigame (Hunting restored, built to evolve)
+
+> Superseded in Phase 3 (§8): the hunt theme and the theme switch are gone, and Wildlife Spotting now uses the original hunt's full rules and renderer.
 
 - **Camp hunt** keeps the Oregon rules: 30 s, 12 shots, a 4-round magazine, a 1.1 s reload, and misses that startle nearby animals.
 - **Wildlife spotting** is the first Appalachian Trail replacement theme. It uses a camera, one photo per animal, and rarer animals score more.
@@ -134,23 +137,58 @@ Each proposal is scored by motivation value against complexity. **Next** items a
 | Idea | Value | Plan | Size |
 |---|---|---|---|
 | **Landmark celebration screen** (Next) | High | On the first render after `passedLandmarks` grows, show a dismissible full-card celebration with the landmark art and trivia. Remember the last celebrated landmark id per challenge in `localStorage`; it is a harmless preference. Respect reduced motion. | S |
-| **Weekly crew challenge** (Next) | High | New table `at_weekly_challenges(challenge_id, week_start, goal_miles, title)` that organizers write. An RPC returns crew progress for the week from `at_activities`. Show it on Camp and Crew. Cooperative, with no individual ranking. | M |
+| **Weekly crew challenge** (Next) | High | New table `at_weekly_challenges(challenge_id, week_start, goal_miles, title)` that organizers write. An RPC returns crew progress for the week from `at_activities`. Show it in Camp's crew section. Cooperative, with no individual ranking. | M |
 | **Recent activity feed** (Next) | High | A privacy change: other members currently see aggregates only. Add an opt-in `share_activity_feed` profile flag and an RPC `at_crew_feed(challenge, limit)` that returns name, type, credited miles and date (never notes) for opted-in members. Show it at Camp as "Who rolled into camp". | M |
 | **Monthly group goal** | Medium | Same table and RPC as the weekly challenge, with `period = 'month'`. | S after weekly |
 | **Virtual postcards** | Medium | When a landmark is passed, unlock a postcard: the landmark art plus a short line, collectable on the Badges page. Derived from progress, so no table is needed. | S |
 | **Trail journal entries** | Medium | Notes already exist on activities and are private. Add an optional "share to camp" journal table with organizer moderation. Use Markdown via the existing renderer. | M |
-| **Recent-mileage leaderboard** | Medium | Already returned by `at_leaderboard` (this week). Add a "last 7 days" sort toggle on Crew. | S |
+| **Recent-mileage leaderboard** | Medium | Already returned by `at_leaderboard` (this week). Add a "last 7 days" sort toggle to the standings on Camp. | S |
 | **Longest streak / consecutive workouts** | Careful | Rhythm already exists, with forgiving rest days. Show "best rhythm" but never a "streak lost" message, to avoid encouraging unsafe daily exercise. | S |
 | **Milestone notifications** | Medium | Web Push needs a service worker plus a server-side sender (an Edge Function and keys). Defer. In-app celebration covers most of the value. | L |
 | **Animated progression between landmarks** | Fun | After logging, animate the hiker marker from the old position to the new one (disabled under reduced motion). Map memory already keeps the view. | S |
 | **Seasonal themes** | Fun | Camp weather is already seasonal. Add seasonal decorations (fall leaves, snow) keyed off the date. | S |
-| **More expedition themes** | Fun | Birding (song ID trivia), foraging (identify safe berries, with a "look, don't eat" message), scavenger hunt (find items on the map), trail clean-up (Leave No Trace). Each is a new entry in `expedition-themes.js` plus a `reward.key`, with no engine changes. | S each |
+| **More expedition themes** | Fun | Birding (song ID trivia), foraging (identify safe berries, with a "look, don't eat" message), scavenger hunt (find items on the map), trail clean-up (Leave No Trace). Each is a new entry in `expedition-themes.js` (species/subjects, habitats, words), with no engine changes. | S each |
 | **Personal badges** | Exists | Landmark, distance and rhythm badges are already derived. | — |
-| **Group badges** | Exists | Group milestones exist on Crew. Show them as badges on the Badges page. | S |
+| **Group badges** | Exists | Group milestones exist in Camp's crew section. Show them as badges on the Badges page. | S |
 
 ## 7. Phased roadmap
 
-1. **Phase 2 (this PR):** map overhaul, Profile removed, Camp, Expedition (hunt + wildlife spotting), Trail Dispatches, docs.
-2. **Phase 3, celebrate and connect:** landmark celebration screens, postcards, animated progress, the weekly crew challenge and the opt-in activity feed.
-3. **Phase 4, story:** shared trail journal, monthly goals, seasonal camp, more expedition themes.
-4. **Phase 5, reach:** optional email upgrade for anonymous hikers (to keep progress across devices), push notifications, and an optional real AT GIS centerline for the map, after checking its licence.
+1. **Phase 2 (done):** map overhaul, Profile removed, Camp, Expedition (hunt + wildlife spotting), Trail Dispatches, docs.
+2. **Phase 3 (done):** Wildlife Spotting restored from the original hunt, Crew tab folded into Camp, six tabs, small UX fixes (§8).
+3. **Phase 4, celebrate and connect:** landmark celebration screens, postcards, animated progress, the weekly crew challenge and the opt-in activity feed.
+4. **Phase 5, story:** shared trail journal, monthly goals, seasonal camp, more expedition themes.
+5. **Phase 6, reach:** optional email upgrade for anonymous hikers (to keep progress across devices), push notifications, and an optional real AT GIS centerline for the map, after checking its licence.
+
+## 8. Phase 3: Wildlife Spotting restored, navigation simplified (2026-11-04)
+
+### 8.1 What changed
+
+- **Wildlife Spotting is the original hunt, re-themed.** The Phase 2 wildlife theme was a new, simpler game (one photo per animal, plain sprites). The original Oregon Trail DLE hunt had better pacing and visuals. It is now ported faithfully, including herds and flocks that move together, pausing and grazing animals, startled animals bolting, the 4-frame magazine and winding delay, seeded scenery with tall grass that hides wildlife, weather, pop-ups and sound. Hunting words and images are replaced: a camera viewfinder, "frames of film", "winding", "photo points" and "the photo board". Nine AT species and eight habitats follow the trail section.
+- **One tab, no toggle.** The Camp hunt / Wildlife theme switch is gone. The tab is "Wildlife Spotting" (`#/wildlife`).
+- **Crew tab removed.** Crew features live in Camp's "Your crew" section. Nothing was lost: start, join, standings, group milestone, invite, refresh and leave all moved. `#/crew` and `#/hunt` still work as aliases.
+- **The pantry is gone.** Camp no longer mentions food. The bear-bag line shows one bag per hiker.
+
+### 8.2 Lightweight UX review
+
+| Finding | Change |
+|---|---|
+| 7 tabs on a 375px phone; Crew and Camp overlapped (both about the group). | **6 tabs.** Crew folded into Camp, so the group lives in one place. The nav labels wrap to two lines, and targets stay ≥ 44px. |
+| Finishing a round needed an extra "bring it to camp" step in the original. | **Auto-save** on finish, with a status line ("Pinned to the photo board at Camp: N photo points"). The board total updates in place. |
+| Empty rounds used up the 10-a-day allowance. | Rounds that score 0 are not saved. |
+| The Trail page had no direct way to log after reading progress. | **"Log an activity"** button in the "This week" card. |
+| Solo hikers had no hint that crews exist once the Crew tab was gone. | A "Start or join a crew at Camp" prompt on Trail, shown only when you're in no crew. It focuses the crew section. |
+| Crew errors (wrong invite code) appeared in whichever status line came first. | A dedicated crew status line (`data-status="crew"`). |
+| The 60 s standings poll re-rendered the whole page and could wipe typing. | Re-render only on change, and never while a form field is focused or a dispatch is being edited. |
+| After joining or leaving, focus jumped to the page title. | Focus returns to the "Your crew" heading. |
+| "A eastern cottontail", "1 of 1 frames". | Grammar fixed (a/an, singular/plural). |
+| Weather particles still moved under reduced motion. | Frozen under reduced motion (animals move at 60% speed, as before). |
+
+### 8.3 Recommended next (AT community fitness theme)
+
+1. **Species collection ("Field guide")** (S): record which species each hiker has photographed (derived from `at_expedition_runs`; needs a `caught` JSON column or a small `at_sightings` table) and show it on Badges. It gives a long-term reason to play in every trail section.
+2. **Section-locked rare sightings** (S): moose and elk appear only where the crew is, so reaching Maine "unlocks" moose. Celebrate the first moose photo at Camp.
+3. **Weekly crew photo challenge** (M): "Photograph 5 turkeys as a crew this week", tied to the weekly crew challenge in §6.
+4. **Birding theme** (S): a second theme object with songbirds, a shorter round and a "listen" hint. No engine change.
+5. **Camp photo board details** (S): tap the board to see the crew's top outing this week (aggregate only).
+6. **Landmark celebration + postcards** (S): still the highest-value next step from §6.
+

@@ -101,7 +101,7 @@ assets/js/at/
   engine/progress.js           + regionAtMarker, regionsInOrder, mileMarkers, positionFor
   engine/camp.js               camp context: time of day, seasonal weather, scale, campers, celebrations
   engine/expedition.js         minigame rules (spawn/move/fire/startle/summary), injectable RNG
-  engine/expedition-themes.js  themes as data: hunt, wildlife (species, sprites, rewards)
+  engine/expedition-themes.js  themes as data (Phase 3: wildlife only; species, sprites, habitats)
   engine/markdown.js           safe Markdown subset -> tree (https links only)
   data/layer.js                + dispatches.{list,create,update,remove,isOrganizer}, expeditions.{record,supplies}
   ui/map.js                    interactive map (pure view maths exported + renderTrailMap)
@@ -117,3 +117,16 @@ supabase/migrations/20261103000000_at_camp_dispatches.sql
 - **Map state** (zoom, selected landmark) lives in module memory so data refreshes don't reset it.
 - **Camp** uses crew progress (the group's combined credited miles in the challenge direction) when in a challenge, otherwise personal progress.
 - **Realtime is still not used.** Dispatches load with the app and after organizer edits.
+
+## 9. Phase 3: Wildlife Spotting restored, six tabs (2026-11-04)
+
+- **Navigation:** Trail, Log, History, Camp, Wildlife Spotting, Badges. The Crew tab is gone; its features (start/join, standings, group milestone, invite, leave) are the "Your crew" section on Camp, because Camp already follows the crew's combined miles. `app.js` keeps `ALIASES = { hunt: "wildlife", crew: "camp" }` so old links work, and `#/crew` focuses the crew heading.
+- **Wildlife Spotting** replaces the two-theme Expedition page (no theme switch). It is the original `assets/js/hunt-game.js` from tag `oregon-trail-final`, ported:
+  - `engine/expedition.js`: the original rules almost line for line (spawn timing, herds/flocks, per-species behaviour timers, startle radius, 4-frame magazine with 1.1 s reload, 0.28 s cooldown, 12 frames, 30 s, 400-point cap). A photographed animal is marked `snapped` and bolts off instead of being removed.
+  - `engine/expedition-themes.js`: 9 AT species (cottontail to moose) with outlined pixel-part sprites and walk cycles, and 8 habitats keyed by the trail region `scene` (elk only on the southern balds, moose only in the north). The outing is local 65% of the time; cold habitats snow in winter; hardwoods turn in autumn.
+  - `ui/expedition-view.js`: the original canvas renderer (seeded scenery, backdrops, tall grass drawn over animals, weather, pop-ups, flash), a camera viewfinder instead of a rifle sight, the 4-box HUD (Time / Film left / Winding / Photo points), Web Audio tones with a sound toggle, document-level keys while running, tap/click to snap.
+  - Results auto-save on finish (no extra "bring it to camp" click). Rounds that score 0 are not saved, so they never use the 10-a-day allowance.
+- **Camp engine:** `campScale(miles, people)` no longer takes food; `bearBags` = hikers at camp (max 6). `campContext` supplies are `{ photos }`.
+- **Background refresh:** the 60 s standings poll re-renders Camp only when the data changed and nobody is typing in a form, so dispatch drafts and trail-name edits are never wiped.
+- **Database:** unchanged. No migration. `at_expedition_runs.theme` already accepts `wildlife`; old `hunt` rows are ignored by the UI.
+

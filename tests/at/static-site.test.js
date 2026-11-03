@@ -98,18 +98,32 @@ test("every page-level view has an h1 that receives focus on navigation", () => 
   assert.ok(h1s >= 6);
 });
 
-test("navigation has no Profile tab and every nav link has a route", () => {
+test("navigation: no Profile or Crew tab, Wildlife Spotting replaces Hunt, every link has a route", () => {
   const html = read("index.html");
   const app = read("assets/js/at/ui/app.js");
   const links = [...html.matchAll(/<a href="#\/([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(links, ["trail", "log", "history", "crew", "camp", "hunt", "badges"]);
+  assert.deepEqual(links, ["trail", "log", "history", "camp", "wildlife", "badges"]);
+  assert.match(html, /<a href="#\/wildlife">Wildlife Spotting<\/a>/);
   assert.ok(!/#\/profile/.test(html + read("assets/js/at/ui/views.js")), "no links to the removed profile page");
   const routes = app.match(/const ROUTES = \{([^}]*)\}/)[1];
   links.forEach((l) => assert.match(routes, new RegExp(`\\b${l}:`)));
-  assert.ok(!/\bprofile:/.test(routes));
+  assert.ok(!/\b(profile|crew|hunt):/.test(routes), "removed tabs have no routes of their own");
+  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "camp" \}/, "old bookmarks redirect");
+  // Every in-app #/ link points at a route or an alias.
+  const views = read("assets/js/at/ui/views.js");
+  const targets = new Set([...views.matchAll(/href: "#\/([a-z]+)"/g)].map((m) => m[1]));
+  targets.forEach((t) => assert.ok(new RegExp(`\\b${t}:`).test(routes) || t === "crew" || t === "hunt", `#/${t} has a route`));
+  assert.ok(!/huntView|crewView|setHuntTheme|theme-switch/.test(app + views), "no leftover hunt/crew tab code");
 });
 
 test("the expedition loop is stopped whenever the page re-renders", () => {
   const app = read("assets/js/at/ui/app.js");
   assert.match(app, /if \(game\) \{ game\.stop\(\); game = null; \}/);
+});
+
+test("starting a round from the keyboard does not also take a photo", () => {
+  const view = read("assets/js/at/ui/expedition-view.js");
+  const start = view.slice(view.indexOf('canvas.addEventListener("keydown"'));
+  assert.match(start.slice(0, start.indexOf("});")), /event\.stopPropagation\(\);\s*(\/\/[^\n]*\n\s*)?begin\(\);/);
+  assert.match(view, /on \? "addEventListener" : "removeEventListener"/);
 });

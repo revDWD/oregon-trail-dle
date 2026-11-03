@@ -88,7 +88,7 @@ For a separate staging database, create a second Supabase project, run the migra
 
 - [ ] First visit starts automatically (no login) and Camp > "Your spot at camp" lets you set a trail name.
 - [ ] After the Phase 2 migration and organizer setup, a dispatch posted at Camp appears at the top of the Trail page for everyone.
-- [ ] A Hunt round saves to camp (the pantry total on Camp goes up); the 11th round in a day is politely refused.
+- [ ] A Wildlife Spotting round that scores saves to the photo board (the photo total on Camp goes up); the 11th round in a day is politely refused.
 - [ ] Log an activity; trail percent and map marker update.
 - [ ] Create a challenge, copy the invite code, join from a second account; both appear on the leaderboard.
 - [ ] In a second browser (a second anonymous hiker), the first hiker's activities are not visible or editable.

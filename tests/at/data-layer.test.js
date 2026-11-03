@@ -170,7 +170,7 @@ test("new camp/dispatch calls are refused when signed out", async () => {
   for (const attempt of [
     () => data.dispatches.list(), () => data.dispatches.create({ title: "t", body: "b" }), () => data.dispatches.update("d", {}),
     () => data.dispatches.remove("d"), () => data.dispatches.isOrganizer(),
-    () => data.expeditions.record({ theme: "hunt", score: 1, hits: 1, shots: 1 }), () => data.expeditions.supplies()
+    () => data.expeditions.record({ theme: "wildlife", score: 1, hits: 1, shots: 1 }), () => data.expeditions.supplies()
   ]) await assert.rejects(attempt, (error) => error instanceof DataError && error.code === "auth");
   assert.equal(client.calls.length, 0);
 });
@@ -222,15 +222,15 @@ test("organizer check is a UI hint that fails closed", async () => {
 
 test("expedition results send only theme and score fields; supplies map per theme", async () => {
   const client = createFakeClient({ session: signedIn, respond: (c) => c.kind === "rpc"
-    ? { data: [{ theme: "hunt", my_score: "120", my_runs: "2", crew_score: "300", crew_runs: "5" }], error: null }
-    : { data: [{ id: "r1", theme: "hunt", score: 80, played_on: "2026-11-03" }], error: null } });
+    ? { data: [{ theme: "wildlife", my_score: "120", my_runs: "2", crew_score: "300", crew_runs: "5" }], error: null }
+    : { data: [{ id: "r1", theme: "wildlife", score: 80, played_on: "2026-11-03" }], error: null } });
   const data = createDataLayer(client);
-  await data.expeditions.record({ theme: "hunt", score: 79.6, hits: 2, shots: 5 });
+  await data.expeditions.record({ theme: "wildlife", score: 79.6, hits: 2, shots: 5 });
   const insert = client.calls.find((c) => c.op === "insert");
   assert.equal(insert.table, "at_expedition_runs");
-  assert.deepEqual(insert.payload, { theme: "hunt", score: 80, hits: 2, shots: 5 });
+  assert.deepEqual(insert.payload, { theme: "wildlife", score: 80, hits: 2, shots: 5 });
   const supplies = await data.expeditions.supplies("crew-a");
-  assert.deepEqual(supplies, { hunt: { myScore: 120, myRuns: 2, crewScore: 300, crewRuns: 5 } });
+  assert.deepEqual(supplies, { wildlife: { myScore: 120, myRuns: 2, crewScore: 300, crewRuns: 5 } });
   assert.deepEqual(client.calls.at(-1).args, { p_challenge: "crew-a" });
   await data.expeditions.supplies();
   assert.deepEqual(client.calls.at(-1).args, {});

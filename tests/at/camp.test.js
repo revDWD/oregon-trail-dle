@@ -24,12 +24,14 @@ test("weather is deterministic and seasonal", () => {
   assert.equal(hashString("abc"), hashString("abc"));
 });
 
-test("camp grows with miles and supplies but stays capped", () => {
-  const small = campScale(0, 0, 1);
-  const big = campScale(100000, 100000, 50);
-  assert.equal(small.tents, 1); assert.equal(small.fire, 1); assert.equal(small.foodBags, 0); assert.equal(small.stage, "early");
-  assert.equal(big.tents, 8); assert.equal(big.hikers, 10); assert.equal(big.foodBags, 6); assert.equal(big.fire, 3); assert.equal(big.stage, "late");
-  assert.equal(campScale(-5, Number.NaN, 0).tents, 1);
+test("camp grows with miles and hikers but stays capped", () => {
+  const small = campScale(0, 1);
+  const big = campScale(100000, 50);
+  assert.equal(small.tents, 1); assert.equal(small.fire, 1); assert.equal(small.bearBags, 1); assert.equal(small.stage, "early");
+  assert.equal(big.tents, 8); assert.equal(big.hikers, 10); assert.equal(big.bearBags, 6); assert.equal(big.fire, 3); assert.equal(big.stage, "late");
+  assert.equal(campScale(-5, Number.NaN).tents, 1);
+  assert.equal(campScale(0, 3).bearBags, 3, "one bear bag per hiker at camp");
+  assert.ok(!("foodBags" in small), "the Oregon Trail pantry is gone");
 });
 
 test("celebrations follow a recently passed landmark, not the start", () => {
@@ -52,11 +54,12 @@ test("camp people come from leaderboard rows with stable seeds and recent arriva
 });
 
 test("camp context picks the region scene from crew progress", () => {
-  const ctx = campContext({ trail: TRAIL, progress: computeProgress(TRAIL, 1030), board: [], supplies: { food: 250, photos: 0 }, today: "2026-06-01", hour: 13 });
+  const ctx = campContext({ trail: TRAIL, progress: computeProgress(TRAIL, 1030), board: [], supplies: { photos: 40 }, today: "2026-06-01", hour: 13 });
   assert.equal(ctx.region.id, "mid-atlantic");
   assert.equal(ctx.scene, "rocky-ridges");
   assert.equal(ctx.time, "day");
-  assert.equal(ctx.scale.foodBags, 2);
+  assert.equal(ctx.scale.bearBags, 1, "a solo camp hangs one bag");
+  assert.equal(ctx.supplies.photos, 40);
   assert.equal(ctx.celebration.name, "Harpers Ferry");
   assert.equal(ctx.next.name, "Pen Mar");
 });

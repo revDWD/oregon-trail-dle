@@ -180,3 +180,17 @@ export function positionFor(trail, creditedMiles, direction) {
   const marker = markerAt(trail, distance, dir);
   return { distance, marker, ...coordinatesAtMarker(trail, marker) };
 }
+
+// The story so far: the landmark before the most recent one, the most recent one reached and the
+// next one ahead (each may be null). Feeds "Previous / Current / Next" under the map.
+export function journeyWindow(progress) {
+  const passed = progress.passedLandmarks || [];
+  const current = passed.length ? passed[passed.length - 1] : null;
+  return {
+    previous: passed.length > 1 ? passed[passed.length - 2] : null,
+    current,
+    next: progress.nextLandmark || null,
+    milesPastCurrent: current ? Math.max(0, Math.round((progress.distanceMiles - current.distance) * 100) / 100) : 0,
+    milesToNext: progress.nextLandmark ? progress.distanceToNext : 0
+  };
+}

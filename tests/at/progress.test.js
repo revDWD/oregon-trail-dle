@@ -185,3 +185,35 @@ test("journeyProgress: regions are parents, every landmark sits in exactly one r
   const done = journeyProgress(TRAIL, computeProgress(TRAIL, 99999, "nobo"));
   assert.ok(done.every((r) => r.passedCount === r.landmarks.length), "finished: all passed, none next");
 });
+
+test("journeyWindow: previous, current and next landmarks tell the story so far", async () => {
+  const { journeyWindow } = await import("../../assets/js/at/engine/progress.js");
+  const start = journeyWindow(computeProgress(TRAIL, 0, "nobo"));
+  assert.equal(start.previous, null);
+  assert.equal(start.current.id, "springer-mountain");
+  assert.equal(start.next.id, "neel-gap");
+  const mid = journeyWindow(computeProgress(TRAIL, 140, "nobo"));
+  assert.deepEqual([mid.previous.id, mid.current.id, mid.next.id], ["bly-gap", "nantahala", "fontana-dam"]);
+  assert.equal(mid.milesPastCurrent, 4);
+  assert.equal(mid.milesToNext, 25);
+  const end = journeyWindow(computeProgress(TRAIL, 99999, "nobo"));
+  assert.equal(end.current.id, "katahdin");
+  assert.equal(end.next, null);
+});
+
+test("landmark stories: keyed by real landmarks, short, safe links and credited photos", async () => {
+  const { LANDMARK_STORIES } = await import("../../assets/js/at/trail/landmark-stories.js");
+  const ids = new Set(TRAIL.landmarks.map((l) => l.id));
+  for (const [id, story] of Object.entries(LANDMARK_STORIES)) {
+    assert.ok(ids.has(id), `unknown landmark ${id}`);
+    for (const key of Object.keys(story)) assert.ok(["history", "nature", "didYouKnow", "kevin", "photo", "learnMore"].includes(key), `${id}.${key}`);
+    for (const key of ["history", "nature", "didYouKnow", "kevin"]) if (story[key]) assert.ok(story[key].length <= 400, `${id}.${key} too long`);
+    if (story.learnMore) assert.match(story.learnMore.url, /^https:\/\//);
+    if (story.photo) {
+      assert.ok(story.photo.credit && story.photo.alt, `${id} photo needs credit and alt text`);
+      assert.match(story.photo.src, /^(assets\/img\/landmarks\/|https:\/\/)/);
+    }
+  }
+  assert.ok(TRAIL.landmarks.every((l) => LANDMARK_STORIES[l.id]?.history), "every landmark has a story");
+  assert.doesNotMatch(JSON.stringify(LANDMARK_STORIES), /donner/i);
+});

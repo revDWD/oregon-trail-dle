@@ -7,6 +7,7 @@ A friends-based fitness game: log walks, hikes, runs and rides, and turn them in
 - **Trail Dispatches**: the organizer's announcements ("Message from Camp" on the Trail page, full archive at Camp), with simple formatting
 - **Camp, the hub**: a pixel-art camp that follows the device clock (morning, day, evening, night) and grows with the expedition's miles. Pick a hiker to see their miles contributed, badges, milestones and journey; the trail register shows who carried the group past each landmark
 - **Journey progress** on the Trail map: each region lists its landmarks (✓ passed, ➜ next, ○ ahead); tap one to see it on the map
+- **Landmark stories**: tap any landmark for why it matters, nature notes, a "Did you know?" and Kevin's Trail Notes; a Previous / Current / Next strip under the map tells the journey so far
 - **Per-hiker badges** (locked ones stay mystery silhouettes until earned) with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
 - **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles
 - Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
@@ -43,7 +44,7 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 |---|---|
 | Trail | "Message from Camp", expedition progress, the interactive map, this week by hiker, landmarks |
 | Log Activity | Log an activity for a hiker (the dropdown remembers the last hiker on this device) |
-| Camp | Camp scene (automatic time of day), **the hikers** (pick one: miles, badges, milestones, journey), the trail register, Trail Dispatches (organizers can post) |
+| Camp | **Trail Dispatches** first, then the camp scene (automatic time of day), **the hikers** (pick one: miles, badges, milestones, journey), the trail register |
 | Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; choose who's spotting; the habitat follows the expedition's section |
 | History | Activities logged on this device: edit, delete, or assign a hiker to older entries |
 

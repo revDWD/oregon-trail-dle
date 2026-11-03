@@ -262,3 +262,23 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 /* Locked badges: a silhouette until earned */
 .badge.locked strong { color: #6b6256; letter-spacing: .04em; }
 .badge .badge-desc { font-size: .82rem; line-height: 1.3; }
+
+/* Previous / Current / Next under the map */
+.journey-window { list-style: none; margin: .6rem 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+.jw-btn { width: 100%; height: 100%; min-height: var(--tap); display: grid; gap: .1rem; align-content: start; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: .45rem .55rem; font: inherit; color: var(--ink); cursor: pointer; }
+.jw-btn.empty { cursor: default; }
+.jw-btn strong { font-size: .92rem; line-height: 1.2; }
+.jw-btn .hint { margin: 0; font-size: .8rem; }
+.jw-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.jw.previous .jw-btn { background: #f3f6ef; }
+.jw.current .jw-btn { border: 2px solid var(--forest); }
+.jw.next .jw-btn { border: 2px solid var(--amber); background: #fff7e3; }
+@media (max-width: 22rem) { .journey-window { grid-template-columns: 1fr; } }
+
+/* Landmark stories in the detail panel */
+.landmark-story { display: grid; gap: .5rem; margin-top: .6rem; border-top: 1px dotted var(--bark); padding-top: .6rem; }
+.story-part h4 { margin: 0; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--forest-dark); }
+.story-part p { margin: .15rem 0 0; }
+.story-part.kevin { background: #fff7e3; border-left: 4px solid var(--amber); border-radius: 6px; padding: .4rem .6rem; font-family: Georgia, serif; }
+.story-photo { margin: 0; }
+.story-photo img { width: 100%; height: auto; border-radius: 8px; display: block; }

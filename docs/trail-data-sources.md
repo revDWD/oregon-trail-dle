@@ -23,3 +23,14 @@ No ATC logos, photographs, trail blazes or artwork are used. Landmark facts are 
 1. Replace values from the ATC's current Data Book or the official GIS centerline (ATC publishes the route as GIS data; check its licence before copying).
 2. Keep `landmarks` strictly increasing; run `npm test` (`validateTrail` checks order, range, coordinates and milestones).
 3. Changing mile markers changes where players appear to be, but never changes stored activity data (activities store credited miles, not positions).
+
+## Landmark stories (history, nature, Kevin's Trail Notes)
+
+`assets/js/at/trail/landmark-stories.js` holds the educational text shown in each landmark's detail panel: **Why it matters**, **Nature notes**, **Did you know?** and the optional **Kevin's Trail Notes**. The text is original. It was written for this game from widely published general knowledge (National Park Service park pages, state park information and common trail references), and uncertain claims are hedged ("said to be", "usually translated"). It is not copied from any source. `learnMore` links point to official pages (nps.gov/appa, /grsm, /shen, /hafe, /dewa, and baxterstatepark.org).
+
+**Photos** are supported but none are included yet. Add `photo: { src, alt, credit, license, sourceUrl }` to a landmark only when you have the right to use the image:
+- your own photo;
+- a public-domain US government image, such as many NPS photos; check that the credit doesn't name a third party;
+- or a Library of Congress item marked "No known restrictions".
+
+Save the file, resized to about 800 px wide, in `assets/img/landmarks/`, and always keep the credit. A test checks that every photo has alt text and a credit.

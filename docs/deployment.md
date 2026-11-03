@@ -49,6 +49,7 @@ Alternatives and notes:
 - Dispatches can also be added in **Table Editor > at_dispatches** (fill `title`, `body`, `author_name`; set `published_at` in the future to schedule one).
 - "Everyone" dispatches can be read by any visitor of the site, because every visitor is an anonymous signed-in user. Don't post private details there.
 - Remove an organizer: `delete from public.at_organizers where user_id = '...';`
+- **Landmark notes** ("Kevin's Trail Notes" in each landmark's map panel) are different from dispatches. They live in `assets/js/at/trail/landmark-stories.js`. To add one, open that file on GitHub, click the pencil, add a line like `kevin: "Watch for the wild ponies!",` inside the landmark's `{ }`, and commit. The site updates in about a minute. Use dispatches for news and updates, and landmark notes for evergreen commentary about a place.
 - If Kevin clears his browser data he gets a new device ID; repeat steps 1–2.
 
 ## 3. Supabase Auth settings: anonymous sign-ins (there is no login screen)

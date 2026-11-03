@@ -6,7 +6,8 @@
 
 import {
   DataError, toDataError, activityFromRow, activityToInsert, activityToUpdate,
-  profileFromRow, challengeFromRow, leaderboardFromRows, ruleFromRow
+  profileFromRow, challengeFromRow, leaderboardFromRows, ruleFromRow,
+  dispatchFromRow, dispatchToRow, suppliesFromRows
 } from "./mappers.js";
 import { DEFAULT_RULES } from "../engine/activities.js";
 
@@ -188,5 +189,56 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
     }
   };
 
-  return { auth, profile, rules, activities, challenges };
+  const DISPATCH_COLUMNS = "id, challenge_id, title, body, author_name, pinned, published_at, updated_at";
+
+  // Trail Dispatches. RLS decides what a hiker may read (public + their crews) and who may write
+  // (organizers only); the client-side filter just keeps other crews' dispatches off this screen.
+  const dispatches = {
+    async list({ challengeId = null, limit = 20 } = {}) {
+      await requireUser();
+      const capped = Math.min(Math.max(Math.trunc(limit) || 20, 1), 100);
+      const rows = await run(client.from("at_dispatches").select(DISPATCH_COLUMNS)
+        .order("pinned", { ascending: false }).order("published_at", { ascending: false }).range(0, capped - 1));
+      return rows.map(dispatchFromRow).filter((d) => !d.challengeId || d.challengeId === challengeId);
+    },
+    async create(value) {
+      await requireUser();
+      return dispatchFromRow(await run(client.from("at_dispatches").insert(dispatchToRow(value)).select(DISPATCH_COLUMNS).single()));
+    },
+    async update(id, value) {
+      await requireUser();
+      const row = await run(client.from("at_dispatches").update(dispatchToRow(value)).eq("id", id).select(DISPATCH_COLUMNS).maybeSingle());
+      if (!row) throw new DataError("Only organizers can edit dispatches.", "forbidden");
+      return dispatchFromRow(row);
+    },
+    async remove(id) {
+      await requireUser();
+      const rows = await run(client.from("at_dispatches").delete().eq("id", id).select("id"));
+      if (!rows.length) throw new DataError("Only organizers can delete dispatches.", "forbidden");
+    },
+    // UI hint only (shows the compose form); RLS enforces the real rule.
+    async isOrganizer() {
+      await requireUser();
+      try {
+        return (await run(client.rpc("at_is_organizer"))) === true;
+      } catch (error) {
+        return false;
+      }
+    }
+  };
+
+  // Camp minigame results. They stock the camp; they never add trail miles.
+  const expeditions = {
+    async record({ theme, score, hits, shots }) {
+      await requireUser();
+      const payload = { theme, score: Math.round(score), hits: Math.round(hits), shots: Math.round(shots) };
+      return run(client.from("at_expedition_runs").insert(payload).select("id, theme, score, played_on").single());
+    },
+    async supplies(challengeId = null) {
+      await requireUser();
+      return suppliesFromRows(await run(client.rpc("at_camp_supplies", challengeId ? { p_challenge: challengeId } : {})));
+    }
+  };
+
+  return { auth, profile, rules, activities, challenges, dispatches, expeditions };
 }

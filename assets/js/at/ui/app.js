@@ -6,9 +6,12 @@ import { computeProgress } from "../engine/progress.js";
 import { DEFAULT_RULES, localDateString } from "../engine/activities.js";
 import { computeRhythm, weekStart } from "../engine/game.js";
 import { h, clear } from "./dom.js";
-import { trailView, logView, historyView, crewView, badgesView, profileView } from "./views.js";
+import { trailView, logView, historyView, crewView, campView, huntView, badgesView } from "./views.js";
+import { DEFAULT_THEME } from "../engine/expedition-themes.js";
 
-const ROUTES = { trail: trailView, log: logView, history: historyView, crew: crewView, badges: badgesView, profile: profileView };
+// The old #/profile route is gone (its settings live at Camp); unknown routes fall back to the trail.
+const ROUTES = { trail: trailView, log: logView, history: historyView, crew: crewView, camp: campView, hunt: huntView, badges: badgesView };
+const TITLES = { trail: "Trail", log: "Log", history: "History", crew: "Crew", camp: "Camp", hunt: "Expedition", badges: "Badges" };
 const root = document.getElementById("app");
 const nav = document.getElementById("nav");
 const live = document.getElementById("live");
@@ -17,8 +20,11 @@ const PAGE = 50;
 
 const state = {
   user: null, profile: null, rules: DEFAULT_RULES, activities: [], hasMore: false, summary: { totalCreditedMiles: 0, weekCreditedMiles: 0, activeDates: [] },
-  challenges: [], challenge: null, board: [], groupSummary: null, inviteCode: null, editingId: null, today: localDateString()
+  challenges: [], challenge: null, board: [], groupSummary: null, inviteCode: null, editingId: null, today: localDateString(),
+  dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null, supplies: {},
+  huntTheme: DEFAULT_THEME, campTime: null // in-memory preferences only
 };
+let game = null; // the running expedition, stopped whenever the page re-renders
 let layer = null;
 let timer = null;
 
@@ -30,12 +36,16 @@ function derived() {
   const direction = state.challenge?.direction || TRAIL.defaultDirection;
   state.progress = computeProgress(TRAIL, state.summary.totalCreditedMiles, direction);
   state.rhythm = computeRhythm(state.summary.activeDates, state.today);
+  // Camp follows the crew's combined miles when in a challenge, otherwise the hiker's own.
+  state.campProgress = state.challenge && state.groupSummary
+    ? computeProgress(TRAIL, state.groupSummary.totalCreditedMiles, direction) : state.progress;
 }
 
 function setStatus(text) { const el = root.querySelector("[data-status]"); if (el) el.textContent = text; }
 
 function render({ focus = false } = {}) {
   state.today = localDateString();
+  if (game) { game.stop(); game = null; }
   clear(root);
   nav.hidden = !state.user;
   if (!state.user) {
@@ -45,7 +55,7 @@ function render({ focus = false } = {}) {
     const name = route();
     root.append(ROUTES[name](state, actions));
     nav.querySelectorAll("a").forEach((a) => (a.getAttribute("href") === `#/${name}` ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-    document.title = `${name[0].toUpperCase()}${name.slice(1)} · AT Fitness Tracker`;
+    document.title = `${TITLES[name]} · AT Fitness Tracker`;
   }
   if (focus) root.querySelector("[data-focus]")?.focus();
 }
@@ -62,7 +72,7 @@ async function loadAll() {
     state.summary = summary; state.challenges = challenges;
     const saved = localStorage.getItem(CHALLENGE_KEY);
     state.challenge = challenges.find((c) => c.id === saved) || challenges[0] || null;
-    await loadBoard(false);
+    await Promise.all([loadBoard(false), loadCamp()]);
     render({ focus: true });
   } catch (e) { root.replaceChildren(h("p", { class: "card", role: "alert" }, friendly(e))); }
 }
@@ -74,6 +84,17 @@ async function loadBoard(draw = true) {
     state.board = board; state.groupSummary = groupSummary;
     if (draw && route() === "crew") render();
   } catch (e) { announce(friendly(e)); }
+}
+
+// Camp data is optional: if the camp migration isn't applied yet the rest of the app still works.
+async function loadCamp() {
+  const challengeId = state.challenge?.id || null;
+  const [dispatches, isOrganizer, supplies] = await Promise.all([
+    layer.dispatches.list({ challengeId }).then((d) => { state.dispatchesUnavailable = false; return d; }).catch(() => { state.dispatchesUnavailable = true; return []; }),
+    layer.dispatches.isOrganizer(),
+    layer.expeditions.supplies(challengeId).catch(() => ({}))
+  ]);
+  state.dispatches = dispatches; state.isOrganizer = isOrganizer; state.supplies = supplies;
 }
 
 async function refreshSummary() {
@@ -126,7 +147,7 @@ const actions = {
       state.challenge = state.challenges.find((c) => c.id === created.id) || state.challenges[0];
       state.inviteCode = created.inviteCode;
       localStorage.setItem(CHALLENGE_KEY, state.challenge.id);
-      await loadBoard(false); render({ focus: true }); announce("Challenge created.");
+      await Promise.all([loadBoard(false), loadCamp()]); render({ focus: true }); announce("Challenge created.");
     } catch (e) { announce(friendly(e)); setStatus(friendly(e)); }
   },
   async joinChallenge(code) {
@@ -135,7 +156,7 @@ const actions = {
       state.challenges = await layer.challenges.listMine();
       state.challenge = state.challenges[state.challenges.length - 1];
       localStorage.setItem(CHALLENGE_KEY, state.challenge.id);
-      await loadBoard(false); render({ focus: true }); announce("Joined the challenge.");
+      await Promise.all([loadBoard(false), loadCamp()]); render({ focus: true }); announce("Joined the challenge.");
     } catch (e) { announce(friendly(e)); setStatus(friendly(e)); }
   },
   async leaveChallenge() {
@@ -144,18 +165,41 @@ const actions = {
       await layer.challenges.leave(state.challenge.id);
       state.challenges = await layer.challenges.listMine();
       state.challenge = state.challenges[0] || null; state.inviteCode = null;
-      await loadBoard(false); render({ focus: true });
+      await Promise.all([loadBoard(false), loadCamp()]); render({ focus: true });
     } catch (e) { announce(friendly(e)); }
   },
   async showInvite() {
     try { state.inviteCode = await layer.challenges.inviteCode(state.challenge.id); render(); } catch (e) { announce(friendly(e)); }
   },
   async refresh() { await loadBoard(true); announce("Leaderboard refreshed."); },
+  registerGame(g) { game = g; },
+  setHuntTheme(id) { state.huntTheme = id; render(); announce("Expedition changed."); },
+  setCampTime(t) { state.campTime = t; render(); },
+  editDispatch(id) { state.dispatchEditing = id; render(); root.querySelector("#dTitle")?.focus(); },
+  async saveDispatch(id, value) {
+    try {
+      if (id) await layer.dispatches.update(id, value); else await layer.dispatches.create(value);
+      state.dispatchEditing = null;
+      await loadCamp(); render(); announce(id ? "Dispatch updated." : "Dispatch posted.");
+    } catch (e) { setStatus(friendly(e)); }
+  },
+  async deleteDispatch(d) {
+    if (!confirm(`Delete the dispatch "${d.title}"? This cannot be undone.`)) return;
+    try { await layer.dispatches.remove(d.id); await loadCamp(); render(); announce("Dispatch deleted."); } catch (e) { announce(friendly(e)); }
+  },
+  // Returns a message for the expedition page; does not re-render (the finished round stays on screen).
+  async recordExpedition(summary) {
+    try {
+      await layer.expeditions.record(summary);
+      state.supplies = await layer.expeditions.supplies(state.challenge?.id || null).catch(() => state.supplies);
+      return `Added to camp: ${summary.score} ${summary.theme === "wildlife" ? "photo points" : "lb of food"}.`;
+    } catch (e) { return friendly(e); }
+  },
   async saveProfile({ displayName, weeklyGoalMiles }) {
     try {
       const goal = weeklyGoalMiles === "" || weeklyGoalMiles === null ? null : Number(weeklyGoalMiles);
       state.profile = await layer.profile.update({ displayName, weeklyGoalMiles: goal });
-      setStatus("Saved."); announce("Profile saved.");
+      setStatus("Saved."); announce("Saved your spot at camp.");
     } catch (e) { setStatus(friendly(e)); }
   }
 };
@@ -190,7 +234,7 @@ function start() {
   layer.auth.onChange(onAuth);
   render();
   boot();
-  window.addEventListener("hashchange", () => { if (state.user) { state.editingId = null; render({ focus: true }); if (route() === "crew") loadBoard(true); } });
+  window.addEventListener("hashchange", () => { if (state.user) { state.editingId = null; state.dispatchEditing = null; render({ focus: true }); if (route() === "crew") loadBoard(true); } });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) { loadBoard(true); } });
 }
 

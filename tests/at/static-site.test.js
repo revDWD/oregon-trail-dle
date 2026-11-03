@@ -97,3 +97,19 @@ test("every page-level view has an h1 that receives focus on navigation", () => 
   assert.equal(h1s, focus);
   assert.ok(h1s >= 6);
 });
+
+test("navigation has no Profile tab and every nav link has a route", () => {
+  const html = read("index.html");
+  const app = read("assets/js/at/ui/app.js");
+  const links = [...html.matchAll(/<a href="#\/([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(links, ["trail", "log", "history", "crew", "camp", "hunt", "badges"]);
+  assert.ok(!/#\/profile/.test(html + read("assets/js/at/ui/views.js")), "no links to the removed profile page");
+  const routes = app.match(/const ROUTES = \{([^}]*)\}/)[1];
+  links.forEach((l) => assert.match(routes, new RegExp(`\\b${l}:`)));
+  assert.ok(!/\bprofile:/.test(routes));
+});
+
+test("the expedition loop is stopped whenever the page re-renders", () => {
+  const app = read("assets/js/at/ui/app.js");
+  assert.match(app, /if \(game\) \{ game\.stop\(\); game = null; \}/);
+});

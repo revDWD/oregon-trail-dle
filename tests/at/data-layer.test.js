@@ -163,3 +163,67 @@ test("mappers: row to activity and activity to insert", () => {
   assert.equal(activityFromRow(row).conversionFactor, 0.25);
   assert.equal(activityToInsert({ date: "d", type: "walking", actualMiles: 1, durationMinutes: 5, notes: "n" }).client_id, undefined);
 });
+
+test("new camp/dispatch calls are refused when signed out", async () => {
+  const client = createFakeClient({ session: null });
+  const data = createDataLayer(client);
+  for (const attempt of [
+    () => data.dispatches.list(), () => data.dispatches.create({ title: "t", body: "b" }), () => data.dispatches.update("d", {}),
+    () => data.dispatches.remove("d"), () => data.dispatches.isOrganizer(),
+    () => data.expeditions.record({ theme: "hunt", score: 1, hits: 1, shots: 1 }), () => data.expeditions.supplies()
+  ]) await assert.rejects(attempt, (error) => error instanceof DataError && error.code === "auth");
+  assert.equal(client.calls.length, 0);
+});
+
+test("dispatch list keeps public and current-crew dispatches, newest pinned first", async () => {
+  const rows = [
+    { id: "1", challenge_id: null, title: "Hi", body: "b", author_name: "Kevin", pinned: true, published_at: "2026-11-01T00:00:00Z" },
+    { id: "2", challenge_id: "crew-a", title: "A", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-02T00:00:00Z" },
+    { id: "3", challenge_id: "crew-b", title: "B", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-03T00:00:00Z" }
+  ];
+  const client = createFakeClient({ session: signedIn, respond: () => ({ data: rows, error: null }) });
+  const list = await createDataLayer(client).dispatches.list({ challengeId: "crew-a" });
+  assert.deepEqual(list.map((d) => d.id), ["1", "2"]);
+  assert.equal(list[0].authorName, "Kevin");
+  const call = client.calls[0];
+  assert.equal(call.table, "at_dispatches");
+  assert.deepEqual(call.order.map((o) => o[0]), ["pinned", "published_at"]);
+  assert.doesNotMatch(call.columns, /created_by/);
+});
+
+test("creating a dispatch never sends created_by; non-organizers get a friendly error", async () => {
+  const client = createFakeClient({ session: signedIn, respond: (c) => c.op === "insert"
+    ? { data: null, error: { code: "42501", message: "new row violates row-level security policy" } }
+    : { data: [], error: null } });
+  const data = createDataLayer(client);
+  await assert.rejects(() => data.dispatches.create({ title: " Hello ", body: "**Hi**", authorName: "" }), (e) => e.code === "forbidden");
+  const payload = client.calls.find((c) => c.op === "insert").payload;
+  assert.deepEqual(Object.keys(payload).sort(), ["author_name", "body", "challenge_id", "pinned", "title"]);
+  assert.equal(payload.title, "Hello");
+  assert.equal(payload.author_name, "Camp");
+  await assert.rejects(() => data.dispatches.update("x", { title: "t", body: "b" }), (e) => e.code === "forbidden");
+  await assert.rejects(() => data.dispatches.remove("x"), (e) => e.code === "forbidden");
+});
+
+test("organizer check is a UI hint that fails closed", async () => {
+  const yes = createDataLayer(createFakeClient({ session: signedIn, respond: () => ({ data: true, error: null }) }));
+  assert.equal(await yes.dispatches.isOrganizer(), true);
+  const broken = createDataLayer(createFakeClient({ session: signedIn, respond: () => ({ data: null, error: { code: "PGRST202", message: "function not found" } }) }));
+  assert.equal(await broken.dispatches.isOrganizer(), false);
+});
+
+test("expedition results send only theme and score fields; supplies map per theme", async () => {
+  const client = createFakeClient({ session: signedIn, respond: (c) => c.kind === "rpc"
+    ? { data: [{ theme: "hunt", my_score: "120", my_runs: "2", crew_score: "300", crew_runs: "5" }], error: null }
+    : { data: [{ id: "r1", theme: "hunt", score: 80, played_on: "2026-11-03" }], error: null } });
+  const data = createDataLayer(client);
+  await data.expeditions.record({ theme: "hunt", score: 79.6, hits: 2, shots: 5 });
+  const insert = client.calls.find((c) => c.op === "insert");
+  assert.equal(insert.table, "at_expedition_runs");
+  assert.deepEqual(insert.payload, { theme: "hunt", score: 80, hits: 2, shots: 5 });
+  const supplies = await data.expeditions.supplies("crew-a");
+  assert.deepEqual(supplies, { hunt: { myScore: 120, myRuns: 2, crewScore: 300, crewRuns: 5 } });
+  assert.deepEqual(client.calls.at(-1).args, { p_challenge: "crew-a" });
+  await data.expeditions.supplies();
+  assert.deepEqual(client.calls.at(-1).args, {});
+});

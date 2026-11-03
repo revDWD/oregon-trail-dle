@@ -294,3 +294,14 @@ test("roster errors are friendly", () => {
   assert.equal(toDataError({ code: "23503", message: "insert violates foreign key constraint at_x_fkey" }).message, "That item no longer exists. Please reload and try again.");
   assert.equal(toDataError({ code: "P0002", message: "That invite code was not found" }).message, "That invite code was not found");
 });
+
+test("isMissingFunction: only a missing RPC means the migration isn't applied", async () => {
+  const { isMissingFunction } = await import("../../assets/js/at/data/mappers.js");
+  assert.equal(isMissingFunction(toDataError({ code: "PGRST202", message: "Could not find the function public.at_is_expedition_member" })), true);
+  assert.equal(isMissingFunction(toDataError({ code: "42883", message: "function public.at_expedition_hikers(date) does not exist" })), true);
+  assert.equal(isMissingFunction(toDataError({ code: "57014", message: "canceling statement due to statement timeout" })), false);
+  assert.equal(isMissingFunction(toDataError({ message: "JWT expired" })), false);
+  assert.equal(isMissingFunction(toDataError({ code: "42501", message: "permission denied" })), false);
+  assert.equal(isMissingFunction(toDataError({ message: "Failed to fetch" })), false);
+  assert.equal(isMissingFunction(null), false);
+});

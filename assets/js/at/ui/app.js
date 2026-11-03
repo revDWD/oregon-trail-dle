@@ -1,6 +1,7 @@
 // App shell: anonymous session, hash routing, state and actions. All Supabase access goes through the data layer.
 import { SUPABASE_CONFIG } from "../config.js";
 import { createClientFromGlobal, createDataLayer } from "../data/layer.js";
+import { isMissingFunction } from "../data/mappers.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { computeProgress } from "../engine/progress.js";
 import { DEFAULT_RULES, localDateString } from "../engine/activities.js";
@@ -27,25 +28,33 @@ const PAGE = 50;
 
 const state = {
   user: null, rules: DEFAULT_RULES, activities: [], hasMore: false, editingId: null, today: localDateString(),
-  member: false, expeditionUnavailable: false, hikers: [], marks: [], inviteLink: null, selectedHiker: null, lastHiker: null, flash: null,
+  member: false, expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], inviteLink: null, selectedHiker: null, lastHiker: null, flash: null,
   challenges: [], challenge: null, dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null
 };
 let game = null; // the running expedition, stopped whenever the page re-renders
 let layer = null;
 let timer = null;
 let shownTime = null; // camp's time of day when it was last drawn
+let pendingDraw = false; // a background refresh changed data while the hiker was using the page
 
 const announce = (text) => { live.textContent = ""; setTimeout(() => { live.textContent = text; }, 30); };
 const rawRoute = () => location.hash.replace(/^#\/?/, "");
 const route = () => { const r = rawRoute(); const name = ALIASES[r] || r; return ROUTES[name] ? name : "trail"; };
 // Background refreshes must not wipe something the hiker is typing (a dispatch, an activity, a code).
 const typing = () => Boolean(state.dispatchEditing || document.activeElement?.closest?.("#app input, #app textarea, #app select"));
+// Redrawing replaces every element, so background redraws wait while focus is on a control in the page
+// (a map button, a landmark, a link): keyboard and screen-reader users keep their place.
+const busy = () => typing() || Boolean(document.activeElement?.closest?.("#app button, #app a, #app summary, #app [tabindex]:not(h1)"));
 const friendly = (e) => (e && e.message) || "Something went wrong.";
 const readHiker = () => { try { return localStorage.getItem(HIKER_KEY); } catch (e) { return null; } };
 const saveHiker = (id) => { try { if (id) localStorage.setItem(HIKER_KEY, id); } catch (e) { /* preference only */ } };
 
 function derived() {
   state.totals = expeditionTotals(state.hikers);
+  // Before the roster migration, progress comes from this device's own summary (the pre-Phase 8 behaviour).
+  if (state.expeditionUnavailable && state.deviceSummary) {
+    state.totals = { ...state.totals, totalMiles: state.deviceSummary.totalCreditedMiles, weekMiles: state.deviceSummary.weekCreditedMiles, activityCount: state.deviceSummary.activityCount };
+  }
   state.progress = computeProgress(TRAIL, state.totals.totalMiles, DIRECTION);
   state.register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
 }
@@ -104,14 +113,33 @@ async function loadExpedition(draw = true) {
         layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: PERSONAL_MARKS })
       ]);
     }
-    const changed = JSON.stringify([member, hikers, marks]) !== JSON.stringify([state.member, state.hikers, state.marks]);
-    Object.assign(state, { member, hikers, marks, expeditionUnavailable: false });
+    const changed = state.expeditionError || JSON.stringify([member, hikers, marks]) !== JSON.stringify([state.member, state.hikers, state.marks]);
+    Object.assign(state, { member, hikers, marks, expeditionUnavailable: false, expeditionError: false, deviceSummary: null });
     if (!state.selectedHiker || !hikers.some((x) => x.id === state.selectedHiker)) state.selectedHiker = (hikers.find((x) => x.id === state.lastHiker) || hikers[0] || {}).id || null;
-    if (draw && changed && ["trail", "camp"].includes(route()) && !typing()) render();
+    if (draw && (changed || pendingDraw)) redrawInBackground();
   } catch (e) {
-    if (e && e.code === "network") { announce(friendly(e)); return; }
-    Object.assign(state, { member: false, hikers: [], marks: [], expeditionUnavailable: true });
+    if (isMissingFunction(e)) {
+      // Migration not applied: no hiker field, no join card, progress from this device's summary.
+      const deviceSummary = await layer.activities.summary(weekStart(localDateString())).catch(() => state.deviceSummary);
+      const changed = !state.expeditionUnavailable || JSON.stringify(deviceSummary) !== JSON.stringify(state.deviceSummary);
+      Object.assign(state, { member: false, hikers: [], marks: [], expeditionUnavailable: true, expeditionError: false, deviceSummary });
+      if (draw && (changed || pendingDraw)) redrawInBackground();
+      return;
+    }
+    // Timeouts, expired sessions, network: keep what we had (never drop a member back to the
+    // hiker-less form) and say so. A later refresh clears the error.
+    const wasError = state.expeditionError;
+    state.expeditionError = true;
+    if (!wasError || !draw) announce(friendly(e));
+    if (draw && !wasError) redrawInBackground();
   }
+}
+
+function redrawInBackground() {
+  if (!["trail", "camp", "log"].includes(route())) return;
+  if (busy()) { pendingDraw = true; return; }
+  pendingDraw = false;
+  render();
 }
 
 // Camp data is optional: if the camp migration isn't applied yet the rest of the app still works.
@@ -216,6 +244,11 @@ const actions = {
       render(); root.querySelector(".invite summary")?.focus();
     } catch (e) { announce(friendly(e)); }
   },
+  async retryExpedition() {
+    await loadExpedition(false);
+    render({ focus: true });
+    if (state.expeditionError) announce("Still can't reach the expedition. Check your connection and try again.");
+  },
   registerGame(g) { game = g; },
   editDispatch(id) { state.dispatchEditing = id; render(); root.querySelector("#dTitle")?.focus(); },
   async saveDispatch(id, value) {
@@ -251,8 +284,8 @@ function onAuth(event, user) {
   // Camp also redraws when the time of day changes (morning, day, evening, night).
   timer = setInterval(() => {
     if (document.hidden) return;
-    if (["trail", "camp"].includes(route())) loadExpedition(true);
-    if (route() === "camp" && timeOfDay(new Date().getHours()) !== shownTime && !typing()) render();
+    if (["trail", "camp"].includes(route()) || state.expeditionError) loadExpedition(true);
+    if (route() === "camp" && timeOfDay(new Date().getHours()) !== shownTime && !busy()) render();
   }, 60000);
 }
 
@@ -285,7 +318,8 @@ function start() {
     if (state.flash && state.flash.route !== route()) state.flash = null; // shown once, on its own page
     render({ focus: true });
     if (joining && state.flash) announce(state.flash.text);
-    if (["trail", "camp"].includes(route())) loadExpedition(true);
+    pendingDraw = false; // the navigation itself just redrew the page
+    if (["trail", "camp"].includes(route()) || state.expeditionError) loadExpedition(true);
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) loadExpedition(true); });
 }

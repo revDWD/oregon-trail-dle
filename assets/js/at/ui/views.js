@@ -11,7 +11,7 @@ import { regionAtMarker } from "../engine/progress.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { ACTIVITY_TYPES, ACTIVITY_LABELS, MAX_NOTES_LENGTH, validateActivity, ruleFor, localDateString } from "../engine/activities.js";
 import { groupMilestoneStatus, triviaFor, pickTip } from "../engine/game.js";
-import { hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
+import { expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
 
 const field = (id, label, control, hint, error) => h("div", { class: "field" },
   h("label", { for: id }, label), control,
@@ -144,10 +144,14 @@ export function activityForm({ rules, existing, onSubmit, onCancel, today, hiker
 
 export function logView(s, a) {
   const blocked = !s.member && !s.expeditionUnavailable;
+  // If we couldn't check membership, don't ask a device that may already have joined to join again.
+  const unknown = blocked && s.expeditionError;
   return h("section", { "aria-labelledby": "page-title" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "Log activity"),
     h("p", {}, "Every mile counts, whatever the pace. Rest when you need to."),
-    blocked ? joinCard(s, a) : activityForm({ rules: s.rules, today: s.today, hikers: s.member ? activeHikers(s) : null, lastHikerId: s.lastHiker, onSubmit: a.createActivity }));
+    unknown ? h("div", { class: "card", role: "status" }, h("p", {}, "We couldn't reach the expedition just now, so the hiker list isn't available. We'll keep trying."),
+      h("button", { class: "btn primary", type: "button", onClick: () => a.retryExpedition() }, "Try again"))
+      : blocked ? joinCard(s, a) : activityForm({ rules: s.rules, today: s.today, hikers: s.member ? activeHikers(s) : null, lastHikerId: s.lastHiker, onSubmit: a.createActivity }));
 }
 
 export function historyView(s, a) {
@@ -348,7 +352,7 @@ function dispatchForm(s, a, existing) {
 function photoBoard(s, theme) {
   const roster = (s.hikers || []).filter((x) => x.active || x.wildlifeRuns);
   if (!s.member || !roster.length) return h("p", {}, "Join the expedition to pin photos to the board at Camp.");
-  const total = s.totals.wildlifeScore;
+  const total = expeditionTotals(s.hikers).wildlifeScore; // s.hikers is fresh after a save; s.totals isn't
   return [
     h("ul", { class: "week-hikers" }, roster.map((x) => h("li", {}, h("span", {}, x.name),
       h("span", {}, x.wildlifeRuns ? `${x.wildlifeScore} ${theme.unit} · ${x.wildlifeRuns} outing${x.wildlifeRuns === 1 ? "" : "s"}` : "No photos yet")))),

@@ -30,7 +30,7 @@ Friends-based Appalachian Trail fitness game for a hiking group. Static site on 
 `npm test` runs everything (Node test runner). The RLS suite needs PostgreSQL binaries and is skipped with a notice otherwise; CI installs them. Add tests with every feature. For visual checks, serve with `python3 -m http.server 8000` and use a 375px viewport. Supabase may be unreachable in sandboxes, in which case render views with synthetic state.
 
 ## Fail-soft
-The app must keep working if a migration hasn't been applied yet: `loadCamp()` swallows dispatch errors, and if the roster RPCs fail with a non-network error `state.expeditionUnavailable` hides the join card and the hiker field (activities are then saved without a hiker).
+The app must keep working if a migration hasn't been applied yet: `loadCamp()` swallows dispatch errors, and only a *missing RPC* (`isMissingFunction`: PGRST202/42883) sets `state.expeditionUnavailable`, which hides the join card and hiker field and takes progress from this device's `at_my_summary`. Other errors (timeouts, expired session, network) set `expeditionError` and keep the previous roster state, so a joined device is never dropped to the hiker-less form. Background redraws wait while focus is on a control in the page (`busy()`), so keyboard and screen-reader users keep their place.
 
 ## Roadmap
 See `docs/review-and-roadmap.md` §6–9. Next: landmark celebration screens and postcards, a per-hiker field guide (species photographed), weekly expedition challenges, and an opt-in recent activity feed at Camp (needs a privacy decision: devices currently see aggregates only).

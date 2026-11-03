@@ -28,6 +28,14 @@ export function toDataError(error) {
   return new DataError("Something went wrong. Please try again.", "unknown", error);
 }
 
+// True only when the database doesn't have the RPC yet (migration not applied), not for
+// timeouts, expired sessions or permission errors.
+export function isMissingFunction(error) {
+  const raw = error && (error.cause || error);
+  const code = String((raw && raw.code) || "");
+  return code === "PGRST202" || code === "42883" || /could not find the function/i.test(String((raw && raw.message) || ""));
+}
+
 export function activityFromRow(row) {
   return {
     id: row.id,

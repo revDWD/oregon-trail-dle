@@ -130,3 +130,13 @@ test("starting a round from the keyboard does not also take a photo", () => {
   assert.match(start.slice(0, start.indexOf("});")), /event\.stopPropagation\(\);\s*(\/\/[^\n]*\n\s*)?begin\(\);/);
   assert.match(view, /on \? "addEventListener" : "removeEventListener"/);
 });
+
+test("background refreshes keep the page usable (focus, fail-soft, fresh photo total)", () => {
+  const app = readFileSync("assets/js/at/ui/app.js", "utf8");
+  const views = readFileSync("assets/js/at/ui/views.js", "utf8");
+  assert.match(app, /function redrawInBackground\(\)[\s\S]*?if \(busy\(\)\)/, "background redraws wait while focus is in the page");
+  assert.match(app, /isMissingFunction\(e\)/, "only a missing RPC switches to the pre-migration mode");
+  assert.match(app, /layer\.activities\.summary\(/, "pre-migration progress comes from this device's summary");
+  assert.doesNotMatch(app, /e\.code === "network"\) \{ announce\(friendly\(e\)\); return; \}/);
+  assert.match(views, /expeditionTotals\(s\.hikers\)\.wildlifeScore/, "photo board total uses the freshly loaded hikers");
+});

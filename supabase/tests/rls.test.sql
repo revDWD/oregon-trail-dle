@@ -331,5 +331,94 @@ select t.ok(t.rows($$update public.at_dispatches set pinned = false where title 
 select t.ok(t.rows($$delete from public.at_dispatches where title = 'Tomorrow'$$) = 1, 'organizer can delete');
 reset role;
 
+-- Expedition roster (20261104000000_at_hikers.sql) ------------------------------------------------------------
+reset role;
+select set_config('request.jwt.claim.sub', '', false) \gset
+select t.ok(not exists (
+  select 1 from information_schema.role_table_grants
+   where table_schema = 'public' and table_name in ('at_hikers', 'at_expedition_settings', 'at_expedition_members')
+     and grantee in ('anon', 'authenticated')
+), 'roster, settings and members are not readable or writable through the API');
+select t.ok(not has_function_privilege('anon', 'public.at_expedition_hikers(date)', 'execute'), 'anon cannot read hiker totals');
+select t.ok(not has_function_privilege('anon', 'public.at_join_expedition(text)', 'execute'), 'anon cannot join');
+select t.ok(not has_function_privilege('authenticated', 'public.at_check_hiker()', 'execute'), 'the trigger function is not callable');
+select t.ok((select string_agg(name, ',' order by sort_order) from public.at_hikers) = 'David,Kevin', 'David and Kevin are seeded');
+select id as david from public.at_hikers where name = 'David' \gset
+select id as kevin from public.at_hikers where name = 'Kevin' \gset
+select invite_code as exp_code from public.at_expedition_settings \gset
+insert into public.at_hikers (name, sort_order, active) values ('Retired', 9, false);
+select id as retired from public.at_hikers where name = 'Retired' \gset
+
+-- Carol: not on the expedition yet
+select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003', false) \gset
+set role authenticated;
+select t.ok(not public.at_is_expedition_member(), 'carol is not a member yet');
+select t.fails('select * from public.at_hikers', '42501', 'roster table is not directly readable');
+select t.fails('select * from public.at_expedition_settings', '42501', 'invite code table is not readable');
+select t.fails('select * from public.at_expedition_hikers()', '42501', 'outsiders cannot read hiker totals');
+select t.fails($$select * from public.at_expedition_marks('{10}', '{10}')$$, '42501', 'outsiders cannot read marks');
+select t.fails($$select public.at_expedition_invite_code()$$, '42501', 'only organizers see the invite code');
+select t.fails($$insert into public.at_activities (activity_date, activity_type, actual_miles, hiker_id) values (current_date, 'walking', 1, '$$ || :'david' || $$')$$, '42501', 'outsiders cannot log miles for a hiker');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id) values ('wildlife', 10, 1, 1, '$$ || :'david' || $$')$$, '42501', 'outsiders cannot pin photos for a hiker');
+select t.fails($$select public.at_join_expedition('WRONGCODE000')$$, 'P0002', 'wrong invite code');
+select t.fails($$select public.at_join_expedition('')$$, 'P0002', 'empty invite code');
+select t.ok(public.at_join_expedition(lower(substr(:'exp_code', 1, 6)) || '-' || lower(substr(:'exp_code', 7))), 'join tolerates lower case and dashes');
+select t.ok(public.at_is_expedition_member(), 'carol is a member now');
+select t.ok(public.at_join_expedition(:'exp_code'), 'joining twice is harmless');
+insert into public.at_activities (activity_date, activity_type, actual_miles, notes, hiker_id) values (current_date, 'walking', 5, 'carol for david', :'david');
+insert into public.at_activities (activity_date, activity_type, actual_miles, notes, hiker_id) values (current_date - 1, 'hiking', 3, 'carol for kevin', :'kevin');
+insert into public.at_activities (activity_date, activity_type, actual_miles, notes) values (current_date, 'walking', 50, 'carol no hiker');
+select t.fails($$insert into public.at_activities (activity_date, activity_type, actual_miles, hiker_id) values (current_date, 'walking', 1, '$$ || :'retired' || $$')$$, '23503', 'retired hikers cannot get new miles');
+select t.fails($$insert into public.at_activities (activity_date, activity_type, actual_miles, hiker_id) values (current_date, 'walking', 1, gen_random_uuid())$$, '23503', 'unknown hikers are rejected');
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id) values ('wildlife', 24, 2, 3, '$$ || :'david' || $$')$$) = 1, 'members pin photos for a hiker');
+reset role;
+
+-- Bob joins and logs for Kevin; he cannot touch Carol's rows
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
+set role authenticated;
+select public.at_join_expedition(:'exp_code');
+insert into public.at_activities (activity_date, activity_type, actual_miles, notes, hiker_id) values (current_date, 'running', 10, 'bob for kevin', :'kevin');
+select t.ok(t.rows($$update public.at_activities set hiker_id = '$$ || :'kevin' || $$' where notes = 'carol for david'$$) = 0, 'cannot reassign another device''s activity');
+select t.ok(t.rows($$update public.at_activities set actual_miles = 40 where notes = 'carol for david'$$) = 0, 'cannot edit another device''s activity');
+select t.ok(t.rows($$delete from public.at_activities where notes = 'carol for david'$$) = 0, 'cannot delete another device''s activity');
+select t.ok(t.count('select 1 from public.at_activities where hiker_id is not null') = 1, 'devices still only see their own activity rows');
+
+select t.ok((select total_credited_miles from public.at_expedition_hikers() where name = 'David') = 5, 'david total from carol''s device');
+select t.ok((select total_credited_miles from public.at_expedition_hikers() where name = 'Kevin') = 13, 'kevin total from two devices');
+select t.ok((select activity_count from public.at_expedition_hikers() where name = 'Kevin') = 2, 'kevin activity count');
+select t.ok((select wildlife_score from public.at_expedition_hikers() where name = 'David') = 24, 'david photo points');
+select t.ok((select first_spotted_on from public.at_expedition_hikers() where name = 'David') = current_date, 'first wildlife discovery date');
+select t.ok((select sum(total_credited_miles) from public.at_expedition_hikers()) = 18, 'activities without a hiker never count for the expedition');
+select t.ok(not exists (select 1 from public.at_expedition_hikers() where name = 'Retired'), 'retired hikers with no history are hidden');
+select t.ok(not exists (select 1 from public.at_expedition_hikers() h where to_jsonb(h) ?| array['user_id', 'notes', 'activity_type']), 'hiker totals are aggregates only');
+select t.ok((select hiker_id from public.at_expedition_marks('{4,6,100}', '{}') where mark = 4) = :'david', 'david''s miles carried the expedition past 4');
+select t.ok((select hiker_id from public.at_expedition_marks('{4,6,100}', '{}') where mark = 6) = :'kevin', 'kevin''s miles carried it past 6');
+select t.ok(not exists (select 1 from public.at_expedition_marks('{4,6,100}', '{}') where mark = 100), 'unreached marks are not returned');
+select t.ok((select count(*) from public.at_expedition_marks('{}', '{5,10}') where kind = 'personal') = 3, 'personal marks: david 5, kevin 5 and 10');
+select t.fails($$select * from public.at_expedition_marks(array_fill(1::numeric, array[101]), '{}')$$, '54000', 'mark lists are capped');
+reset role;
+
+-- The organizer reads the invite code; an admin (SQL editor) can assign a hiker to old rows
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', false) \gset
+set role authenticated;
+select t.ok(public.at_expedition_invite_code() = :'exp_code', 'organizers can read the invite code');
+select t.fails('select * from public.at_expedition_hikers()', '42501', 'organizers still need to join to read totals');
+reset role;
+select set_config('request.jwt.claim.sub', '', false) \gset
+update public.at_activities set hiker_id = :'david' where notes = 'carol no hiker';
+select t.ok((select hiker_id from public.at_activities where notes = 'carol no hiker') = :'david', 'admins can back-fill a hiker on old rows');
+
+-- A device can choose the hiker for its own activity from long ago (the History "Edit" flow)
+insert into public.at_activities (user_id, activity_date, activity_type, actual_miles, notes) values ('cccccccc-0000-4000-8000-000000000003', current_date, 'walking', 2, 'carol long ago');
+set session_replication_role = replica; -- test setup only: age the row past the 60-day logging window
+update public.at_activities set activity_date = current_date - 120 where notes = 'carol long ago';
+set session_replication_role = origin;
+select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003', false) \gset
+set role authenticated;
+select t.ok(t.rows($$update public.at_activities set hiker_id = '$$ || :'kevin' || $$', notes = 'carol long ago' where notes = 'carol long ago'$$) = 1, 'a device can assign a hiker to its own old activity');
+select t.ok((select credited_miles from public.at_activities where notes = 'carol long ago') = 2, 'assigning a hiker keeps the stored credit');
+select t.fails($$update public.at_activities set activity_date = current_date - 119 where notes = 'carol long ago'$$, '22008', 'moving it to another old date is still refused');
+reset role;
+
 \o
 \echo RLS TESTS PASSED

@@ -1,8 +1,10 @@
-// Camp diorama: a pixel-art SVG of the crew's camp on the Appalachian Trail. Backdrop follows the
-// crew's trail section; tents, fire and lanterns grow with crew miles; the bear bag line holds one bag
-// per hiker; the photo board fills with Wildlife Spotting points; every crew member sits at camp. Motion is CSS-only and disabled by
-// prefers-reduced-motion. Interactive parts are focusable buttons that report what was chosen.
+// Camp diorama: a pixel-art SVG of the expedition's camp on the Appalachian Trail. Backdrop follows the
+// expedition's trail section and the device clock; tents, fire and lanterns grow with the miles; the bear
+// bag line holds one bag per hiker; the photo board fills with Wildlife Spotting points; every hiker on
+// the roster sits at camp. Motion is CSS-only and disabled by prefers-reduced-motion. Interactive parts
+// are focusable buttons that report what was chosen.
 import { svg } from "./dom.js";
+import { CAMP_TIME_LABELS } from "../engine/camp.js";
 
 const W = 320;
 const H = 180;
@@ -121,10 +123,10 @@ function board(root, photos, onSelect, label) {
 function hiker(parent, person, x, y, onSelect) {
   const shirt = SHIRTS[person.seed % SHIRTS.length];
   const hat = HATS[(person.seed >> 3) % HATS.length];
-  const g = hotspot(parent, `person:${person.id}`, `${person.name}${person.me ? " (you)" : ""}: ${Math.round(person.totalMiles)} miles${person.recent ? ", just arrived at camp" : ""}`,
-    onSelect, { class: `camp-person pose-${person.pose}${person.me ? " me" : ""}` });
+  const g = hotspot(parent, `person:${person.id}`, `${person.name}: ${Math.round(person.totalMiles)} miles${person.recent ? ", just arrived at camp" : ""}${person.selected ? ", selected" : ""}`,
+    onSelect, { class: `camp-person pose-${person.pose}${person.selected ? " selected" : ""}` });
   const body = group(g, { class: "camp-body" });
-  if (person.me) px(body, x + 2, y - 16, 4, 3, "#e0a43a", "me-mark");
+  px(body, x + 2, y - 16, 4, 3, "#e0a43a", "me-mark"); // shown only for the selected hiker (at.css)
   px(body, x + 1, y - 12, 6, 2, hat);
   px(body, x + 2, y - 10, 4, 4, "#e6b98f");
   px(body, x + 1, y - 6, 6, 6, shirt);
@@ -176,7 +178,7 @@ const TENT_SPOTS = [[200, 124], [232, 136], [86, 128], [262, 150], [52, 150], [2
  */
 export function renderCampScene(ctx, onSelect) {
   const root = svg("svg", { class: `camp-svg time-${ctx.time}`, viewBox: `0 0 ${W} ${H}`, role: "group",
-    "aria-label": `Camp scene: ${ctx.time} near ${ctx.region ? ctx.region.name : "the trail"}. ${ctx.weather.label}. Choose an item for details.`, "shape-rendering": "crispEdges" });
+    "aria-label": `Camp scene: ${(CAMP_TIME_LABELS[ctx.time] || ctx.time).toLowerCase()} near ${ctx.region ? ctx.region.name : "the trail"}. ${ctx.weather.label}. Choose an item for details.`, "shape-rendering": "crispEdges" });
   backdrop(root, ctx.scene, ctx.time, ctx.people.length * 7 + 3);
   critters(root, ctx.time);
   shelter(root, onSelect, ctx.dispatchTitle ? `Shelter register: latest dispatch "${ctx.dispatchTitle}"` : "Shelter register");
@@ -191,4 +193,14 @@ export function renderCampScene(ctx, onSelect) {
   weatherLayer(root, ctx.weather.id);
   if (ctx.time === "night") px(root, 0, 0, W, H, "rgba(10,20,50,.28)", "camp-night-tint").setAttribute("pointer-events", "none");
   return root;
+}
+
+// Moves the "selected" marker to another hiker without redrawing the scene.
+export function markSelectedHiker(scene, id) {
+  scene.querySelectorAll(".camp-person").forEach((g) => {
+    const on = g.getAttribute("data-camp-hotspot") === `person:${id}`;
+    g.classList.toggle("selected", on);
+    const label = (g.getAttribute("aria-label") || "").replace(/, selected$/, "");
+    g.setAttribute("aria-label", on ? `${label}, selected` : label);
+  });
 }

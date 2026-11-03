@@ -73,6 +73,16 @@ test("date validation: real dates only, not future, bounded back-dating", () => 
   assert.equal(daysBetween("2026-06-01", "2026-06-15"), 14);
 });
 
+test("an old activity stays editable (e.g. to choose its hiker) while its date is unchanged", () => {
+  const old = { id: "a1", type: "walking", date: "2026-01-02", actualMiles: 3, durationMinutes: null, notes: "", conversionFactor: 1, creditedMiles: 3, hikerId: null };
+  const assigned = applyEdit(old, { hikerId: "h-david" }, { today: "2026-06-15", hikers: ["h-david"] });
+  assert.equal(assigned.ok, true);
+  assert.equal(assigned.value.hikerId, "h-david");
+  assert.equal(assigned.value.creditedMiles, 3);
+  assert.match(applyEdit(old, { date: "2026-01-03" }, { today: "2026-06-15" }).errors.date, /60 days/, "moving it to another old date is still refused");
+  assert.match(validateActivity({ type: "walking", date: "2026-01-02", miles: 3 }, { today: "2026-06-15" }).errors.date, /60 days/, "new activities keep the window");
+});
+
 test("duration and notes validation", () => {
   assert.equal(ok({ durationMinutes: 45 }).value.durationMinutes, 45);
   assert.equal(ok({ durationMinutes: "" }).value.durationMinutes, null);
@@ -89,4 +99,23 @@ test("totalCredited sums persisted credited miles, ignoring bad values", () => {
 
 test("localDateString uses the local calendar date", () => {
   assert.equal(localDateString(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
+});
+
+test("a hiker is required when the roster is known, and must be on it", () => {
+  const roster = { today, hikers: ["h-david", "h-kevin"] };
+  const missing = validateActivity({ type: "walking", date: today, miles: 2 }, roster);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.errors.hikerId, "Choose who hiked these miles.");
+  assert.equal(validateActivity({ type: "walking", date: today, miles: 2, hikerId: "h-sarah" }, roster).ok, false);
+  const good = validateActivity({ type: "walking", date: today, miles: 2, hikerId: "h-kevin" }, roster);
+  assert.equal(good.ok, true);
+  assert.equal(good.value.hikerId, "h-kevin");
+  assert.equal(ok({}).value.hikerId, null, "without a roster the hiker stays optional");
+});
+
+test("editing keeps the hiker unless it is changed", () => {
+  const existing = { type: "walking", date: today, actualMiles: 3, durationMinutes: null, notes: "", conversionFactor: 1, creditedMiles: 3, hikerId: "h-david" };
+  assert.equal(applyEdit(existing, { miles: 4 }, { today }).value.hikerId, "h-david");
+  assert.equal(applyEdit(existing, { hikerId: "h-kevin" }, { today, hikers: ["h-david", "h-kevin"] }).value.hikerId, "h-kevin");
+  assert.equal(applyEdit({ ...existing, hikerId: null }, {}, { today, hikers: ["h-david"] }).ok, false, "old rows must pick a hiker when edited");
 });

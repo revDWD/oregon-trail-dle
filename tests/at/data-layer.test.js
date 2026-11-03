@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createDataLayer, createClientFromGlobal } from "../../assets/js/at/data/layer.js";
-import { toDataError, DataError, activityFromRow, activityToInsert } from "../../assets/js/at/data/mappers.js";
+import { toDataError, DataError, activityFromRow, activityToInsert, activityToUpdate } from "../../assets/js/at/data/mappers.js";
 import { validateActivity } from "../../assets/js/at/engine/activities.js";
 import { createFakeClient } from "./helpers/fake-supabase.js";
 
@@ -234,4 +234,63 @@ test("expedition results send only theme and score fields; supplies map per them
   assert.deepEqual(client.calls.at(-1).args, { p_challenge: "crew-a" });
   await data.expeditions.supplies();
   assert.deepEqual(client.calls.at(-1).args, {});
+});
+
+test("expedition calls are refused when signed out", async () => {
+  const client = createFakeClient({ session: null });
+  const data = createDataLayer(client);
+  for (const attempt of [() => data.expedition.isMember(), () => data.expedition.join("ABC"), () => data.expedition.inviteCode(),
+    () => data.expedition.hikers(), () => data.expedition.marks()]) {
+    await assert.rejects(attempt, (error) => error instanceof DataError && error.code === "auth");
+  }
+  assert.equal(client.calls.length, 0);
+});
+
+test("expedition roster: join normalizes the code, hikers and marks map from the aggregate RPCs", async () => {
+  const client = createFakeClient({
+    session: signedIn,
+    respond: (call) => {
+      if (call.name === "at_is_expedition_member") return { data: true, error: null };
+      if (call.name === "at_join_expedition") return { data: true, error: null };
+      if (call.name === "at_expedition_hikers") return { data: [{ hiker_id: "h1", name: "David", sort_order: 1, active: true, total_credited_miles: "12.50", week_credited_miles: "2", activity_count: "3", first_activity_date: "2026-11-01", last_activity_date: "2026-11-04", active_dates: ["2026-11-01", "2026-11-04"], wildlife_runs: "1", wildlife_score: "24", first_spotted_on: "2026-11-02" }], error: null };
+      if (call.name === "at_expedition_marks") return { data: [{ kind: "group", mark: "31.00", hiker_id: "h1", reached_on: "2026-11-03" }], error: null };
+      return { data: null, error: null };
+    }
+  });
+  const data = createDataLayer(client);
+  assert.equal(await data.expedition.isMember(), true);
+  assert.equal(await data.expedition.join(" d5313e-793b35 "), true);
+  assert.deepEqual(client.calls.at(-1).args, { p_code: "D5313E793B35" });
+  await assert.rejects(() => data.expedition.join("--"), (e) => e.code === "validation");
+  const [david] = await data.expedition.hikers("2026-11-02");
+  assert.deepEqual(client.calls.at(-1).args, { p_week_start: "2026-11-02" });
+  assert.deepEqual(david, { id: "h1", name: "David", sortOrder: 1, active: true, totalMiles: 12.5, weekMiles: 2, activityCount: 3,
+    firstActivityDate: "2026-11-01", lastActivityDate: "2026-11-04", activeDates: ["2026-11-01", "2026-11-04"], wildlifeRuns: 1, wildlifeScore: 24, firstSpottedOn: "2026-11-02" });
+  const marks = await data.expedition.marks({ group: [31, 31, -1, "x", 100], personal: [10] });
+  assert.deepEqual(client.calls.at(-1).args, { p_group: [31, 100], p_personal: [10] });
+  assert.deepEqual(marks, [{ kind: "group", mark: 31, hikerId: "h1", reachedOn: "2026-11-03" }]);
+  await data.expedition.marks({ group: Array.from({ length: 150 }, (_, i) => i + 1) });
+  assert.equal(client.calls.at(-1).args.p_group.length, 100, "never asks for more than the RPC cap");
+});
+
+test("activities carry their hiker; a hiker is never cleared by an edit", () => {
+  const value = { date: "2026-11-02", type: "walking", actualMiles: 2, durationMinutes: null, notes: "", hikerId: "h1" };
+  assert.equal(activityToInsert(value, "c1").hiker_id, "h1");
+  assert.equal(activityToUpdate(value).hiker_id, "h1");
+  assert.ok(!("hiker_id" in activityToUpdate({ ...value, hikerId: null })));
+  assert.ok(!("hiker_id" in activityToInsert({ ...value, hikerId: null })));
+  assert.equal(activityFromRow({ ...row, hiker_id: "h2" }).hikerId, "h2");
+  assert.equal(activityFromRow(row).hikerId, null);
+});
+
+test("wildlife outings can be pinned for a hiker", async () => {
+  const client = createFakeClient({ session: signedIn, respond: () => ({ data: [{ id: "r1" }], error: null }) });
+  await createDataLayer(client).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 2, hikerId: "h2" });
+  assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 1, shots: 2, hiker_id: "h2" });
+});
+
+test("roster errors are friendly", () => {
+  assert.equal(toDataError({ code: "23503", message: "That hiker is not on the expedition roster" }).message, "That hiker is not on the expedition roster. Please choose another.");
+  assert.equal(toDataError({ code: "23503", message: "insert violates foreign key constraint at_x_fkey" }).message, "That item no longer exists. Please reload and try again.");
+  assert.equal(toDataError({ code: "P0002", message: "That invite code was not found" }).message, "That invite code was not found");
 });

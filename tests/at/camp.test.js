@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { computeProgress } from "../../assets/js/at/engine/progress.js";
-import { timeOfDay, weatherFor, campScale, celebrationAt, campPeople, campContext, hashString } from "../../assets/js/at/engine/camp.js";
+import { CAMP_TIMES, CAMP_TIME_LABELS, timeOfDay, weatherFor, campScale, celebrationAt, campPeople, campContext, hashString } from "../../assets/js/at/engine/camp.js";
 
 test("time of day buckets", () => {
-  assert.deepEqual([0, 5, 7, 8, 12, 17, 18, 20, 21, 23, 24, -1].map(timeOfDay),
-    ["night", "dawn", "dawn", "day", "day", "day", "dusk", "dusk", "night", "night", "night", "night"]);
+  assert.deepEqual([0, 4, 5, 8, 9, 12, 16, 17, 20, 21, 23, 24, -1].map(timeOfDay),
+    ["night", "night", "dawn", "dawn", "day", "day", "day", "dusk", "dusk", "night", "night", "night", "night"]);
+  assert.deepEqual(CAMP_TIMES.map((t) => CAMP_TIME_LABELS[t]), ["Morning", "Day", "Evening", "Night"]);
 });
 
 test("weather is deterministic and seasonal", () => {
@@ -40,15 +41,15 @@ test("celebrations follow a recently passed landmark, not the start", () => {
   assert.equal(celebrationAt(computeProgress(TRAIL, 75)), null);
 });
 
-test("camp people come from leaderboard rows with stable seeds and recent arrivals", () => {
+test("camp people come from hiker rows with stable seeds, recent arrivals and the selected hiker", () => {
   const board = [
     { userId: "b", displayName: "Bo", totalCreditedMiles: 5, weekCreditedMiles: 1, lastActivityDate: "2026-05-01" },
     { userId: "a", displayName: "Al", totalCreditedMiles: 20, weekCreditedMiles: 3, lastActivityDate: "2026-05-09" }
   ];
-  const people = campPeople(board, { meId: "b", today: "2026-05-10" });
+  const people = campPeople(board, { selectedId: "b", today: "2026-05-10" });
   assert.deepEqual(people.map((p) => p.name), ["Al", "Bo"]);
   assert.equal(people[0].pose, "arrive");
-  assert.ok(people[1].me && !people[1].recent);
+  assert.ok(people[1].selected && !people[1].recent && !people[0].selected);
   assert.equal(people[0].seed, campPeople(board)[0].seed);
   assert.equal(campPeople(Array.from({ length: 30 }, (_, i) => ({ userId: String(i), displayName: `H${i}`, totalCreditedMiles: i }))).length, 10);
 });

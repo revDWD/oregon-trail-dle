@@ -22,6 +22,7 @@ export function toDataError(error) {
   if (state === "28000" || /jwt|not authenticated/i.test(message)) return new DataError("Your trail session expired. Please reload the page.", "auth", error);
   if (state === "42501") return new DataError("You do not have permission to do that.", "forbidden", error);
   if (state === "23505") return new DataError("That already exists.", "duplicate", error);
+  if (state === "23503") return new DataError(/hiker/i.test(message) ? "That hiker is not on the expedition roster. Please choose another." : "That item no longer exists. Please reload and try again.", "validation", error);
   if (state === "23514") return new DataError("Some of those values are not allowed. Please check them and try again.", "validation", error);
   if (/failed to fetch|network|load failed/i.test(message)) return new DataError("Could not reach the server. Check your connection and try again.", "network", error);
   return new DataError("Something went wrong. Please try again.", "unknown", error);
@@ -37,6 +38,7 @@ export function activityFromRow(row) {
     conversionFactor: Number(row.conversion_factor),
     creditedMiles: Number(row.credited_miles),
     notes: row.notes || "",
+    hikerId: row.hiker_id || null,
     createdAt: row.created_at
   };
 }
@@ -51,18 +53,45 @@ export function activityToInsert(value, clientId) {
     duration_minutes: value.durationMinutes,
     notes: value.notes
   };
+  if (value.hikerId) row.hiker_id = value.hikerId;
   if (clientId) row.client_id = clientId;
   return row;
 }
 
+// A hiker can be chosen or changed, never cleared (activities without a hiker don't count).
 export function activityToUpdate(value) {
-  return {
+  const row = {
     activity_date: value.date,
     activity_type: value.type,
     actual_miles: value.actualMiles,
     duration_minutes: value.durationMinutes,
     notes: value.notes
   };
+  if (value.hikerId) row.hiker_id = value.hikerId;
+  return row;
+}
+
+// at_expedition_hikers row -> hiker (aggregates only; no device ids or notes ever arrive here).
+export function hikerFromRow(row) {
+  return {
+    id: row.hiker_id,
+    name: row.name,
+    sortOrder: Number(row.sort_order) || 0,
+    active: row.active !== false,
+    totalMiles: Number(row.total_credited_miles) || 0,
+    weekMiles: Number(row.week_credited_miles) || 0,
+    activityCount: Number(row.activity_count) || 0,
+    firstActivityDate: row.first_activity_date || null,
+    lastActivityDate: row.last_activity_date || null,
+    activeDates: row.active_dates || [],
+    wildlifeRuns: Number(row.wildlife_runs) || 0,
+    wildlifeScore: Number(row.wildlife_score) || 0,
+    firstSpottedOn: row.first_spotted_on || null
+  };
+}
+
+export function markFromRow(row) {
+  return { kind: row.kind, mark: Number(row.mark), hikerId: row.hiker_id || null, reachedOn: row.reached_on || null };
 }
 
 export function profileFromRow(row) {

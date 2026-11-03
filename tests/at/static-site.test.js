@@ -49,9 +49,10 @@ test("Supabase tables and RPCs are only called from the data layer", () => {
   });
 });
 
-test("localStorage is only used for the selected-challenge preference", () => {
+test("localStorage only holds harmless preferences (selected crew, last hiker), never data", () => {
   const uses = appJs.flatMap((file) => [...read(file).matchAll(/localStorage\.\w+\(([^)]*)\)/g)].map((m) => m[1]));
-  uses.forEach((arg) => assert.match(arg, /CHALLENGE_KEY/));
+  assert.ok(uses.length > 0);
+  uses.forEach((arg) => assert.match(arg, /^(CHALLENGE_KEY|HIKER_KEY)\b/));
 });
 
 test("no secrets are committed", () => {
@@ -95,25 +96,27 @@ test("every page-level view has an h1 that receives focus on navigation", () => 
   const h1s = [...views.matchAll(/h\("h1"/g)].length;
   const focus = [...views.matchAll(/"data-focus": ""/g)].length;
   assert.equal(h1s, focus);
-  assert.ok(h1s >= 6);
+  assert.ok(h1s >= 5);
 });
 
-test("navigation: no Profile or Crew tab, Wildlife Spotting replaces Hunt, every link has a route", () => {
+test("navigation: Trail, Log Activity, Camp, Wildlife Spotting, History; old tabs redirect; every link has a route", () => {
   const html = read("index.html");
   const app = read("assets/js/at/ui/app.js");
   const links = [...html.matchAll(/<a href="#\/([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(links, ["trail", "log", "history", "camp", "wildlife", "badges"]);
+  assert.deepEqual(links, ["trail", "log", "camp", "wildlife", "history"]);
+  assert.match(html, /<a href="#\/log">Log Activity<\/a>/);
   assert.match(html, /<a href="#\/wildlife">Wildlife Spotting<\/a>/);
   assert.ok(!/#\/profile/.test(html + read("assets/js/at/ui/views.js")), "no links to the removed profile page");
   const routes = app.match(/const ROUTES = \{([^}]*)\}/)[1];
   links.forEach((l) => assert.match(routes, new RegExp(`\\b${l}:`)));
-  assert.ok(!/\b(profile|crew|hunt):/.test(routes), "removed tabs have no routes of their own");
-  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "camp" \}/, "old bookmarks redirect");
+  assert.ok(!/\b(profile|crew|hunt|badges):/.test(routes), "removed tabs have no routes of their own");
+  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "camp", badges: "camp", hikers: "camp" \}/, "old bookmarks redirect");
+  const aliases = app.match(/const ALIASES = \{([^}]*)\}/)[1];
   // Every in-app #/ link points at a route or an alias.
   const views = read("assets/js/at/ui/views.js");
   const targets = new Set([...views.matchAll(/href: "#\/([a-z]+)"/g)].map((m) => m[1]));
-  targets.forEach((t) => assert.ok(new RegExp(`\\b${t}:`).test(routes) || t === "crew" || t === "hunt", `#/${t} has a route`));
-  assert.ok(!/huntView|crewView|setHuntTheme|theme-switch/.test(app + views), "no leftover hunt/crew tab code");
+  targets.forEach((t) => assert.ok(new RegExp(`\\b${t}:`).test(routes + aliases), `#/${t} has a route`));
+  assert.ok(!/huntView|crewView|badgesView|setHuntTheme|theme-switch|setCampTime|camp-times/.test(app + views), "no leftover hunt/crew/badges tab code or day/night buttons");
 });
 
 test("the expedition loop is stopped whenever the page re-renders", () => {

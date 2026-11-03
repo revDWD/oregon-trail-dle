@@ -1,16 +1,17 @@
-// Pure game mechanics: forgiving rhythm, weekly goal, badges, cooperative milestones, trivia.
+// Pure game mechanics: forgiving rhythm, weekly goal, cooperative milestones, trivia. Per-hiker badges
+// live in hikers.js.
 // Everything here is encouraging by design: nothing is ever lost or reset, and rest days are built in.
 
 import { daysBetween, parseDate } from "./activities.js";
-import { milestonesReached, round2 } from "./progress.js";
+import { round2 } from "./progress.js";
 
 export const GROUP_MILESTONES = Object.freeze([
   { id: "group-100", title: "First hundred together", miles: 100 },
   { id: "group-250", title: "Quarter-thousand", miles: 250 },
-  { id: "group-500", title: "Five hundred as a crew", miles: 500 },
+  { id: "group-500", title: "Five hundred as an expedition", miles: 500 },
   { id: "group-1000", title: "One thousand miles together", miles: 1000 },
   { id: "group-1500", title: "Fifteen hundred", miles: 1500 },
-  { id: "group-finish", title: "The crew finished the trail", fractionOfTrail: 1 }
+  { id: "group-finish", title: "The expedition finished the trail", fractionOfTrail: 1 }
 ]);
 
 export const RHYTHM_BADGES = Object.freeze([
@@ -68,21 +69,6 @@ export function weeklyGoalStatus(goalMiles, weekMiles) {
     met: miles >= goalMiles,
     remaining: round2(Math.max(goalMiles - miles, 0))
   };
-}
-
-export function computeBadges(trail, progress, rhythm) {
-  const badges = [];
-  progress.landmarks.forEach((landmark) => {
-    if (landmark.distance === 0) return;
-    badges.push({ id: `landmark-${landmark.id}`, kind: "landmark", title: landmark.name, description: `Reach ${landmark.name} (${landmark.distance} trail miles from your start).`, earned: landmark.passed });
-  });
-  milestonesReached(trail, progress.creditedMiles).forEach((milestone) => {
-    badges.push({ id: `milestone-${milestone.id}`, kind: "milestone", title: milestone.title, description: milestone.description, earned: milestone.reached });
-  });
-  RHYTHM_BADGES.forEach((badge) => {
-    badges.push({ id: badge.id, kind: "rhythm", title: badge.title, description: `${badge.days} active days with no more than one rest day between them.`, earned: rhythm.longest >= badge.days });
-  });
-  return badges;
 }
 
 export function groupMilestoneStatus(trail, groupMiles, board = []) {

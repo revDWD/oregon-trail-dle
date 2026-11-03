@@ -7,7 +7,7 @@
 import {
   DataError, toDataError, activityFromRow, activityToInsert, activityToUpdate,
   profileFromRow, challengeFromRow, leaderboardFromRows, ruleFromRow,
-  dispatchFromRow, dispatchToRow, suppliesFromRows
+  dispatchFromRow, dispatchToRow, suppliesFromRows, hikerFromRow, markFromRow
 } from "./mappers.js";
 import { DEFAULT_RULES } from "../engine/activities.js";
 
@@ -234,9 +234,10 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
 
   // Camp minigame results. They stock the camp; they never add trail miles.
   const expeditions = {
-    async record({ theme, score, hits, shots }) {
+    async record({ theme, score, hits, shots, hikerId = null }) {
       await requireUser();
       const payload = { theme, score: Math.round(score), hits: Math.round(hits), shots: Math.round(shots) };
+      if (hikerId) payload.hiker_id = hikerId;
       return run(client.from("at_expedition_runs").insert(payload).select("id, theme, score, played_on").single());
     },
     async supplies(challengeId = null) {
@@ -245,5 +246,35 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
     }
   };
 
-  return { auth, profile, rules, activities, challenges, dispatches, expeditions };
+  // The expedition: one shared journey with an official roster of hikers (David, Kevin, ...).
+  // A device joins once with the invite code; members log miles for any hiker and see per-hiker
+  // aggregates. Totals are computed in Postgres, never from other devices' raw activity rows.
+  const expedition = {
+    async isMember() {
+      await requireUser();
+      return (await run(client.rpc("at_is_expedition_member"))) === true;
+    },
+    async join(code) {
+      await requireUser();
+      const cleaned = String(code || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      if (!cleaned) throw new DataError("Enter the expedition invite code.", "validation");
+      return (await run(client.rpc("at_join_expedition", { p_code: cleaned }))) === true;
+    },
+    // Organizers only (the database refuses everyone else).
+    async inviteCode() {
+      await requireUser();
+      return run(client.rpc("at_expedition_invite_code"));
+    },
+    async hikers(weekStart) {
+      await requireUser();
+      return (await run(client.rpc("at_expedition_hikers", weekStart ? { p_week_start: weekStart } : {}))).map(hikerFromRow);
+    },
+    async marks({ group = [], personal = [] } = {}) {
+      await requireUser();
+      const clean = (list) => [...new Set(list.map(Number).filter((n) => Number.isFinite(n) && n > 0))].slice(0, 100);
+      return (await run(client.rpc("at_expedition_marks", { p_group: clean(group), p_personal: clean(personal) }))).map(markFromRow);
+    }
+  };
+
+  return { auth, profile, rules, activities, challenges, dispatches, expeditions, expedition };
 }

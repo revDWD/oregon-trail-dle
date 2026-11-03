@@ -21,13 +21,19 @@ The site is static (no build step). GitHub Pages serves the repository root from
 
 4. **Phase 2 (Camp, Expeditions, Trail Dispatches):** in a new query, paste the whole of `supabase/migrations/20261103000000_at_camp_dispatches.sql` and run it. It is also idempotent. Until it is applied, the app still works but Camp shows no dispatches or supplies, and saving an expedition fails with a friendly message.
 
+5. **Phase 8 (hikers, per-hiker badges):** paste the whole of `supabase/migrations/20261104000000_at_hikers.sql` and run it. It seeds David and Kevin and creates the expedition invite code. The last statement prints the **invite link** (`https://atfitnesstracker.abbydavid.com/#/join/XXXXXXXXXXXX`). Run it **before** merging the Phase 8 pull request. Until it is applied, the app still works without the hiker field.
+   - Open the invite link once on every phone/computer that logs miles (including Kevin's). That device can then log for any hiker. Organizers can show the link again at Camp > "Invite another device". Share it privately.
+   - Activities logged before Phase 8 have no hiker and don't count toward the expedition. On the device that logged them, open **History**, tap **Edit** on each, choose the hiker and save. (Or in the SQL Editor: `update public.at_activities set hiker_id = (select id from public.at_hikers where name = 'David') where hiker_id is null and user_id = '<device id>';`. The device ID is under History > "About this device".)
+   - Add a hiker: `insert into public.at_hikers (name, sort_order) values ('Sarah', 3);` Retire one (their miles and badges stay): `update public.at_hikers set active = false where name = 'Sarah';`
+   - New invite code (e.g. if the link leaked): `update public.at_expedition_settings set invite_code = upper(substr(md5(random()::text), 1, 12));` Devices that already joined stay joined.
+
 (Or with the Supabase CLI: `supabase link --project-ref eojzvyyhzdapwgsrtyne` then `supabase db push`.)
 
 ## 2b. Let the organizer (Kevin) post Trail Dispatches
 
 Organizers are listed in `public.at_organizers`, which the app cannot write to.
 
-1. Kevin opens the site **on the device and browser he'll post from**, goes to **Camp**, and expands **Your hiker ID** (at the bottom). He sends you that ID.
+1. Kevin opens the site **on the device and browser he'll post from**, goes to **History**, and expands **About this device** (at the bottom). He sends you the Device ID.
 2. In the SQL Editor, run (replace the ID):
 
    ```sql
@@ -36,14 +42,14 @@ Organizers are listed in `public.at_organizers`, which the app cannot write to.
    on conflict (user_id) do nothing;
    ```
 
-3. Kevin reloads the site. A **Write a dispatch** button appears at Camp. He can choose "Everyone" or "Only <crew>", and can pin a dispatch to the top of the Trail page. Formatting: `**bold**`, `*italics*`, `[text](https://link)`, `- ` lists, `# ` heading, `> ` quote.
+3. Kevin reloads the site. A **Write a dispatch** button appears at Camp. He can pin a dispatch to the top of the Trail page. Formatting: `**bold**`, `*italics*`, `[text](https://link)`, `- ` lists, `# ` heading, `> ` quote.
 
 Alternatives and notes:
 
 - Dispatches can also be added in **Table Editor > at_dispatches** (fill `title`, `body`, `author_name`; set `published_at` in the future to schedule one).
 - "Everyone" dispatches can be read by any visitor of the site, because every visitor is an anonymous signed-in user. Don't post private details there.
 - Remove an organizer: `delete from public.at_organizers where user_id = '...';`
-- If Kevin clears his browser data he gets a new hiker ID; repeat step 1–2.
+- If Kevin clears his browser data he gets a new device ID; repeat steps 1–2 and open the invite link again.
 
 ## 3. Supabase Auth settings: anonymous sign-ins (there is no login screen)
 
@@ -86,10 +92,11 @@ For a separate staging database, create a second Supabase project, run the migra
 
 ## 7. Verification checklist after go-live
 
-- [ ] First visit starts automatically (no login) and Camp > "Your spot at camp" lets you set a trail name.
+- [ ] First visit starts automatically (no login). Opening the invite link shows "Welcome to the expedition!" at Camp.
+- [ ] Log Activity requires a hiker; after saving, that hiker's miles and badges update at Camp.
 - [ ] After the Phase 2 migration and organizer setup, a dispatch posted at Camp appears at the top of the Trail page for everyone.
 - [ ] A Wildlife Spotting round that scores saves to the photo board (the photo total on Camp goes up); the 11th round in a day is politely refused.
 - [ ] Log an activity; trail percent and map marker update.
-- [ ] Create a challenge, copy the invite code, join from a second account; both appear on the leaderboard.
+- [ ] Log for Kevin from a second device; Camp shows both hikers' totals on both devices.
 - [ ] In a second browser (a second anonymous hiker), the first hiker's activities are not visible or editable.
 - [ ] `https://` loads with a valid certificate.

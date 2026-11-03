@@ -4,14 +4,14 @@
 import { regionAtMarker } from "./progress.js";
 
 export const CAMP_TIMES = Object.freeze(["dawn", "day", "dusk", "night"]);
-export const CAMP_TIME_LABELS = Object.freeze({ dawn: "Dawn", day: "Daytime", dusk: "Sunset", night: "Night" });
+export const CAMP_TIME_LABELS = Object.freeze({ dawn: "Morning", day: "Day", dusk: "Evening", night: "Night" });
 
 export const WEATHER = Object.freeze({
   clear: { label: "Clear skies", text: "Clear skies over the shelter." },
   breezy: { label: "Breezy", text: "A cool breeze moves through the trees." },
   fog: { label: "Fog", text: "Fog drifts low through the ridges." },
   rain: { label: "Rain", text: "Rain patters on the shelter roof. A good day for dry socks." },
-  storm: { label: "Thunderstorms nearby", text: "Thunder rumbles far off. The crew waits it out under the roof." },
+  storm: { label: "Thunderstorms nearby", text: "Thunder rumbles far off. The hikers wait it out under the roof." },
   snow: { label: "Snow flurries", text: "Snowflakes drift down over the high ridges." }
 });
 
@@ -24,11 +24,12 @@ export function hashString(text) {
   return h >>> 0;
 }
 
+// Camp follows the device clock: morning 5-9, day 9-17, evening 17-21, night 21-5.
 export function timeOfDay(hour) {
   const h = ((Math.trunc(Number(hour)) % 24) + 24) % 24;
   if (h >= 21 || h < 5) return "night";
-  if (h >= 18) return "dusk";
-  if (h < 8) return "dawn";
+  if (h >= 17) return "dusk";
+  if (h < 9) return "dawn";
   return "day";
 }
 
@@ -66,9 +67,9 @@ export function celebrationAt(progress, withinMiles = 40) {
 
 const POSES = ["sit", "stretch", "cook", "read", "wave"];
 
-// Campers from the leaderboard: everyone in the crew, with a stable look and a pose.
-// `recent` = moved in the last two days (they get to arrive at camp).
-export function campPeople(board, { meId = null, today = null, limit = 10 } = {}) {
+// Campers: the expedition's hikers, each with a stable look and a pose. `selected` marks the hiker
+// whose page is open. `recent` = moved in the last two days (they get to arrive at camp).
+export function campPeople(board, { selectedId = null, today = null, limit = 10 } = {}) {
   return [...(board || [])]
     .sort((a, b) => b.totalCreditedMiles - a.totalCreditedMiles || String(a.displayName).localeCompare(String(b.displayName)))
     .slice(0, limit)
@@ -76,7 +77,7 @@ export function campPeople(board, { meId = null, today = null, limit = 10 } = {}
       const seed = hashString(row.userId || row.displayName);
       const recent = Boolean(today && row.lastActivityDate && daysApart(row.lastActivityDate, today) <= 2);
       return {
-        id: row.userId, name: row.displayName, me: row.userId === meId, rank: index + 1, seed,
+        id: row.userId, name: row.displayName, selected: row.userId === selectedId, rank: index + 1, seed,
         pose: recent ? "arrive" : POSES[seed % POSES.length], recent,
         totalMiles: row.totalCreditedMiles, weekMiles: row.weekCreditedMiles, lastActivityDate: row.lastActivityDate || null
       };
@@ -88,10 +89,10 @@ function daysApart(a, b) {
   return Math.abs(Math.round((t(b) - t(a)) / 86400000));
 }
 
-// Everything the scene and the camp page need, derived from crew (or solo) progress.
-export function campContext({ trail, progress, board = [], supplies = { photos: 0 }, today, hour, meId }) {
+// Everything the scene and the camp page need, derived from the expedition's progress.
+export function campContext({ trail, progress, board = [], supplies = { photos: 0 }, today, hour, selectedId }) {
   const region = regionAtMarker(trail, progress.position.marker);
-  const people = campPeople(board, { meId, today });
+  const people = campPeople(board, { selectedId, today });
   const scene = region ? region.scene : "southern-ridges";
   return {
     region, scene, people,

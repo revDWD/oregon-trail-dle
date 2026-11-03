@@ -2,15 +2,15 @@
 
 A friends-based fitness game: log walks, hikes, runs and rides, and turn them into progress along the Appalachian Trail. Live site: https://atfitnesstracker.abbydavid.com
 
-- **Interactive trail map**: zoom/pan/pinch, regional sections, mile posts, landmark detail cards with original illustrations, crew-mates and the crew camp
-- **Trail Dispatches**: the organizer's announcements ("Message from Camp" on the home page, full archive at Camp), with simple formatting
-- **Camp**: a pixel-art camp that grows with the crew's miles, with crew stats, the crew standings (start or join a crew here) and your settings
-- **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos go on the crew's photo board at Camp and never add trail miles
-- Individual progress, landmarks, trivia and badges
-- Friends challenges with a leaderboard computed in Postgres (not in the browser)
-- Forgiving weekly goals and activity rhythm: encouraging, never punitive
+- **The expedition**: one shared journey from Springer Mountain to Katahdin. Every activity is logged for an official hiker (David, Kevin, ...), and everyone's miles move the group together
+- **Interactive trail map**: zoom/pan/pinch, regional sections, mile posts, landmark detail cards with original illustrations
+- **Trail Dispatches**: the organizer's announcements ("Message from Camp" on the Trail page, full archive at Camp), with simple formatting
+- **Camp, the hub**: a pixel-art camp that follows the device clock (morning, day, evening, night) and grows with the expedition's miles. Pick a hiker to see their miles contributed, badges, milestones and journey; the trail register shows who carried the group past each landmark
+- **Per-hiker badges** with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
+- **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles
+- Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
 - Static frontend (GitHub Pages) + Supabase Auth/Postgres with Row Level Security
-- No login: each browser gets a Supabase anonymous user automatically (enable anonymous sign-ins in Supabase)
+- No login: each browser gets a Supabase anonymous user automatically, and joins the expedition once with an invite link
 - Unofficial and unaffiliated with the Appalachian Trail Conservancy. Mileage is approximate (see `docs/trail-data-sources.md`).
 
 ## Run locally
@@ -40,16 +40,27 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 
 | Tab | What it is |
 |---|---|
-| Trail | "Message from Camp", progress, the interactive map, this week, landmarks |
-| Log / History | Add, edit and delete activities |
-| Camp | Camp scene, crew stats, "Your crew" (start/join a crew, standings, group milestones, invite), the Trail Dispatches archive (organizers can post), trail name and weekly goal |
-| Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; the habitat follows your section of the trail |
-| Badges | Earned and upcoming badges |
+| Trail | "Message from Camp", expedition progress, the interactive map, this week by hiker, landmarks |
+| Log Activity | Log an activity for a hiker (the dropdown remembers the last hiker on this device) |
+| Camp | Camp scene (automatic time of day), **the hikers** (pick one: miles, badges, milestones, journey), the trail register, Trail Dispatches (organizers can post), the organizer's invite link |
+| Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; choose who's spotting; the habitat follows the expedition's section |
+| History | Activities logged on this device: edit, delete, or assign a hiker to older entries |
+
+### Hikers
+
+The roster lives in the `at_hikers` table. In the Supabase SQL Editor:
+
+```sql
+insert into public.at_hikers (name, sort_order) values ('Sarah', 3);              -- add a hiker
+update public.at_hikers set active = false where name = 'Sarah';               -- retire (their miles stay)
+```
+
+Each phone or computer joins the expedition once by opening the invite link (the organizer sees it at Camp > "Invite another device").
 
 ## Setup and deployment
 
-See `docs/deployment.md` for the Supabase values, the SQL migrations (run **both**, in order), how to make the organizer (Kevin) able to post dispatches, Auth URLs, DNS and Pages. See `docs/architecture.md` for the design and `docs/review-and-roadmap.md` for the Phase 2 and 3 reviews and what's next.
+See `docs/deployment.md` for the Supabase values, the SQL migrations (run them all, in order), how to make the organizer (Kevin) able to post dispatches, Auth URLs, DNS and Pages. See `docs/architecture.md` for the design and `docs/review-and-roadmap.md` for the Phase 2, 3 and 8 reviews and what's next.
 
 Updating the site: merge to `main` and GitHub Pages redeploys in a minute or two. Database changes are new files in `supabase/migrations/` that are pasted into the Supabase SQL Editor.
 
-Old bookmarks to `#/crew` and `#/hunt` still work (they open Camp's crew section and Wildlife Spotting). The previous Oregon Trail version is preserved at the git tag `oregon-trail-final`.
+Old bookmarks still work: `#/hunt` opens Wildlife Spotting; `#/crew`, `#/badges` and `#/hikers` open Camp at "The hikers". The previous Oregon Trail version is preserved at the git tag `oregon-trail-final`.

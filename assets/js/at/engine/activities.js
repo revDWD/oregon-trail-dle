@@ -54,15 +54,21 @@ export function creditedMiles(actualMiles, factor) {
 }
 
 // Returns { ok, errors: {field: message}, value }. `today` is a local YYYY-MM-DD string.
-export function validateActivity(input, { rules = DEFAULT_RULES, today = localDateString() } = {}) {
+// `hikers` (ids of the active roster) makes choosing a hiker required; without it hikerId is optional.
+// `originalDate` (when editing) keeps an old activity editable as long as its date is unchanged,
+// matching the database, which only applies the back-dating window to new or re-dated rows.
+export function validateActivity(input, { rules = DEFAULT_RULES, today = localDateString(), hikers, originalDate = null } = {}) {
   const errors = {};
+  const hikerId = typeof input.hikerId === "string" && input.hikerId ? input.hikerId : null;
+  if (hikers && !hikers.includes(hikerId)) errors.hikerId = "Choose who hiked these miles.";
+
   const type = typeof input.type === "string" ? input.type : "";
   if (!ACTIVITY_TYPES.includes(type)) errors.type = "Choose an activity type.";
 
   const date = typeof input.date === "string" ? input.date : "";
   if (!parseDate(date)) errors.date = "Enter a valid date.";
   else if (date > today) errors.date = "Activities cannot be dated in the future.";
-  else if (daysBetween(date, today) > MAX_BACKDATE_DAYS) errors.date = `Activities can be added up to ${MAX_BACKDATE_DAYS} days back.`;
+  else if (date !== originalDate && daysBetween(date, today) > MAX_BACKDATE_DAYS) errors.date = `Activities can be added up to ${MAX_BACKDATE_DAYS} days back.`;
 
   const rawMiles = input.miles;
   const miles = typeof rawMiles === "number" ? rawMiles : (typeof rawMiles === "string" && rawMiles.trim() !== "" ? Number(rawMiles) : NaN);
@@ -88,7 +94,7 @@ export function validateActivity(input, { rules = DEFAULT_RULES, today = localDa
     ok: true,
     errors: {},
     value: {
-      type, date, actualMiles, durationMinutes: duration, notes,
+      type, date, actualMiles, durationMinutes: duration, notes, hikerId,
       conversionFactor: rule.factor,
       creditedMiles: creditedMiles(actualMiles, rule.factor)
     }
@@ -102,9 +108,10 @@ export function applyEdit(existing, changes, options) {
     date: changes.date ?? existing.date,
     miles: changes.miles ?? existing.actualMiles,
     durationMinutes: changes.durationMinutes === undefined ? existing.durationMinutes : changes.durationMinutes,
-    notes: changes.notes ?? existing.notes
+    notes: changes.notes ?? existing.notes,
+    hikerId: changes.hikerId === undefined ? existing.hikerId : changes.hikerId
   };
-  const result = validateActivity(merged, options);
+  const result = validateActivity(merged, { ...options, originalDate: existing.date });
   if (!result.ok) return result;
   const unchanged = merged.type === existing.type && merged.date === existing.date && result.value.actualMiles === existing.actualMiles;
   if (unchanged) {

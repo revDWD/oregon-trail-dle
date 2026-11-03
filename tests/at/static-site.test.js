@@ -49,9 +49,10 @@ test("Supabase tables and RPCs are only called from the data layer", () => {
   });
 });
 
-test("localStorage is only used for the selected-challenge preference", () => {
+test("localStorage only holds harmless preferences (selected crew, last hiker), never data", () => {
   const uses = appJs.flatMap((file) => [...read(file).matchAll(/localStorage\.\w+\(([^)]*)\)/g)].map((m) => m[1]));
-  uses.forEach((arg) => assert.match(arg, /CHALLENGE_KEY/));
+  assert.ok(uses.length > 0);
+  uses.forEach((arg) => assert.match(arg, /^(CHALLENGE_KEY|HIKER_KEY)\b/));
 });
 
 test("no secrets are committed", () => {
@@ -95,25 +96,27 @@ test("every page-level view has an h1 that receives focus on navigation", () => 
   const h1s = [...views.matchAll(/h\("h1"/g)].length;
   const focus = [...views.matchAll(/"data-focus": ""/g)].length;
   assert.equal(h1s, focus);
-  assert.ok(h1s >= 6);
+  assert.ok(h1s >= 5);
 });
 
-test("navigation: no Profile or Crew tab, Wildlife Spotting replaces Hunt, every link has a route", () => {
+test("navigation: Trail, Log Activity, Camp, Wildlife Spotting, History; old tabs redirect; every link has a route", () => {
   const html = read("index.html");
   const app = read("assets/js/at/ui/app.js");
   const links = [...html.matchAll(/<a href="#\/([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(links, ["trail", "log", "history", "camp", "wildlife", "badges"]);
+  assert.deepEqual(links, ["trail", "log", "camp", "wildlife", "history"]);
+  assert.match(html, /<a href="#\/log">Log Activity<\/a>/);
   assert.match(html, /<a href="#\/wildlife">Wildlife Spotting<\/a>/);
   assert.ok(!/#\/profile/.test(html + read("assets/js/at/ui/views.js")), "no links to the removed profile page");
   const routes = app.match(/const ROUTES = \{([^}]*)\}/)[1];
   links.forEach((l) => assert.match(routes, new RegExp(`\\b${l}:`)));
-  assert.ok(!/\b(profile|crew|hunt):/.test(routes), "removed tabs have no routes of their own");
-  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "camp" \}/, "old bookmarks redirect");
+  assert.ok(!/\b(profile|crew|hunt|badges):/.test(routes), "removed tabs have no routes of their own");
+  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "camp", badges: "camp", hikers: "camp" \}/, "old bookmarks redirect");
+  const aliases = app.match(/const ALIASES = \{([^}]*)\}/)[1];
   // Every in-app #/ link points at a route or an alias.
   const views = read("assets/js/at/ui/views.js");
   const targets = new Set([...views.matchAll(/href: "#\/([a-z]+)"/g)].map((m) => m[1]));
-  targets.forEach((t) => assert.ok(new RegExp(`\\b${t}:`).test(routes) || t === "crew" || t === "hunt", `#/${t} has a route`));
-  assert.ok(!/huntView|crewView|setHuntTheme|theme-switch/.test(app + views), "no leftover hunt/crew tab code");
+  targets.forEach((t) => assert.ok(new RegExp(`\\b${t}:`).test(routes + aliases), `#/${t} has a route`));
+  assert.ok(!/huntView|crewView|badgesView|setHuntTheme|theme-switch|setCampTime|camp-times/.test(app + views), "no leftover hunt/crew/badges tab code or day/night buttons");
 });
 
 test("the expedition loop is stopped whenever the page re-renders", () => {
@@ -126,4 +129,14 @@ test("starting a round from the keyboard does not also take a photo", () => {
   const start = view.slice(view.indexOf('canvas.addEventListener("keydown"'));
   assert.match(start.slice(0, start.indexOf("});")), /event\.stopPropagation\(\);\s*(\/\/[^\n]*\n\s*)?begin\(\);/);
   assert.match(view, /on \? "addEventListener" : "removeEventListener"/);
+});
+
+test("background refreshes keep the page usable (focus, fail-soft, fresh photo total)", () => {
+  const app = readFileSync("assets/js/at/ui/app.js", "utf8");
+  const views = readFileSync("assets/js/at/ui/views.js", "utf8");
+  assert.match(app, /function redrawInBackground\(\)[\s\S]*?if \(busy\(\)\)/, "background redraws wait while focus is in the page");
+  assert.match(app, /isMissingFunction\(e\)/, "only a missing RPC switches to the pre-migration mode");
+  assert.match(app, /layer\.activities\.summary\(/, "pre-migration progress comes from this device's summary");
+  assert.doesNotMatch(app, /e\.code === "network"\) \{ announce\(friendly\(e\)\); return; \}/);
+  assert.match(views, /expeditionTotals\(s\.hikers\)\.wildlifeScore/, "photo board total uses the freshly loaded hikers");
 });

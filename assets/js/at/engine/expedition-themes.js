@@ -92,7 +92,7 @@ export const THEMES = Object.freeze({
   wildlife: Object.freeze({
     id: "wildlife",
     title: "Wildlife Spotting",
-    intro: "You have 30 seconds and 12 frames of film. Every good photo adds points to the crew's photo board at Camp.",
+    intro: "You have 30 seconds and 12 frames of film. Every good photo adds points to the photo board at Camp.",
     start: "Start spotting",
     again: "Spot again",
     action: "snap",

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { computeProgress } from "../../assets/js/at/engine/progress.js";
 import {
-  weekStart, computeRhythm, weeklyGoalStatus, computeBadges, groupMilestoneStatus, triviaFor, pickTip, SAFETY_TIPS
+  weekStart, computeRhythm, weeklyGoalStatus, groupMilestoneStatus, triviaFor, pickTip, SAFETY_TIPS
 } from "../../assets/js/at/engine/game.js";
 
 test("weeks start on Monday", () => {
@@ -43,19 +43,6 @@ test("weekly goal status is encouraging and capped at 100%", () => {
   assert.deepEqual([part.percent, part.met, part.remaining], [45, false, 5.5]);
   const done = weeklyGoalStatus(10, 25);
   assert.deepEqual([done.percent, done.met, done.remaining], [100, true, 0]);
-});
-
-test("badges: landmark, milestone and rhythm badges are earned from progress", () => {
-  const badges = computeBadges(TRAIL, computeProgress(TRAIL, 110), { longest: 7 });
-  const earned = (id) => badges.find((b) => b.id === id).earned;
-  assert.equal(badges.find((b) => b.id === "landmark-springer-mountain"), undefined); // the start is not a badge
-  assert.equal(earned("landmark-neel-gap"), true);
-  assert.equal(earned("landmark-nantahala"), false);
-  assert.equal(earned("milestone-hundred-miles"), true);
-  assert.equal(earned("milestone-halfway"), false);
-  assert.equal(earned("rhythm-7"), true);
-  assert.equal(earned("rhythm-14"), false);
-  assert.equal(new Set(badges.map((b) => b.id)).size, badges.length);
 });
 
 test("group milestones track the combined miles and the cooperative weekly goal", () => {

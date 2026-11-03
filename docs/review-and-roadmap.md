@@ -192,3 +192,41 @@ Each proposal is scored by motivation value against complexity. **Next** items a
 5. **Camp photo board details** (S): tap the board to see the crew's top outing this week (aggregate only).
 6. **Landmark celebration + postcards** (S): still the highest-value next step from §6.
 
+
+## 9. Phase 8: UX refinement and personalization (2026-11-04)
+
+"Less clutter, more personality." Design notes: `docs/architecture.md` §10.
+
+### 9.1 What changed
+
+| Area | Change |
+|---|---|
+| Trail | Removed "Welcome to the Trail" and "Hiking is better with friends". The page is now expedition progress (miles together, miles to go), the map, this week by hiker, the next group milestone and landmarks. |
+| Log Activity | A required **Hiker** dropdown (David, Kevin; roster in `at_hikers`). It preselects the last hiker chosen on this device. |
+| Navigation | Trail · Log Activity · Camp · Wildlife Spotting · History. History is last, as the archive. Badges is no longer a tab. |
+| Camp | Removed join-a-crew, start-a-crew, "Your spot at camp" and "About your progress". The time of day follows the device clock (morning/day/evening/night), with no buttons. New **The hikers** section: pick a hiker (or tap them in the scene) to see miles contributed, share of the expedition, this week, badges earned, progress to the next badge, milestones reached, and their journey timeline. New **Trail register**: every landmark and group milestone, with the date and whose miles carried the expedition there. |
+| Badges | Per hiker. Mileage badges First Steps (10), Trail Walker (50), Pathfinder (100), Wagon Scout (200), Frontier Traveler (500) and Katahdin Bound (1,000, renamed from "Oregon Bound" to fit the AT). Also First Activity Logged, First Wildlife Discovery, Landmark Reached, Milestone Participation, and three forgiving rhythm badges. Each has original pixel art: boots, trail-marker post, compass, covered wagon, ox, mountain, campfire, bear, flag, wagon wheel, sapling, pine and forest. |
+| Wildlife Spotting | "Who's spotting?" pins each outing to a hiker. Photo points show per hiker. |
+| History | Shows the hiker on each entry, flags entries with no hiker (they don't count yet), and lets you assign one by editing, even for old entries. The device ID moved here ("About this device"). |
+
+Interpretations to confirm: "Memorials" became the **Trail register** (a record of landmarks reached, not anything somber). There are no Donner Party comparisons anywhere. Weekly goals (a per-device setting) were dropped along with "Your spot at camp".
+
+### 9.2 Holistic review
+
+**Clutter we could still remove**
+1. The **Landmarks** list at the bottom of Trail repeats the map's landmark buttons. Collapse it into a `<details>` ("All 26 landmarks") or drop it.
+2. The **"Coming up"** card on Trail repeats the map's selected-landmark card. Merge them.
+3. The hero's four stats could become two (miles together, next landmark), with the rest on the map card.
+4. Crew-only dispatch targeting is the last crew UI. Remove it if crews stay retired.
+
+**Personalization**
+1. **Hiker colours/avatars**: let each hiker pick a shirt and hat colour for the camp sprite (stored on `at_hikers`). They are seeded from the name today.
+2. **Personal notes in the register**: let the hiker who carried the group past a landmark add a one-line journal entry (organizer-moderated, new table).
+3. **Field guide per hiker**: species photographed in Wildlife Spotting (needs a `species` array on runs).
+4. **Hiker of the week** card at Camp: whoever logged on the most days (rewards consistency, not volume).
+
+**Camp as the hub**
+1. Add a **"Log miles"** button in each hiker panel, prefilled with that hiker. Camp then becomes a starting point, not only a destination.
+2. A **landmark celebration** overlay at Camp the first time a device opens it after a new register entry, with a postcard illustration (reuse `ui/illustrations.js`).
+3. Make Camp the default route once the celebration and log shortcut exist, and keep Trail as the map page.
+4. **Weekly expedition challenge** on the camp banner ("30 miles together this week"), computed from `week_credited_miles`.

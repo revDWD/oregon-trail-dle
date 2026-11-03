@@ -146,7 +146,6 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .camp-frame { border-radius: 10px; overflow: hidden; border: 3px solid var(--bark); background: var(--sky); }
 .camp-svg { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .camp-caption { min-height: 3em; margin: .6rem .2rem; }
-.camp-times { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0; }
 .camp-hot { cursor: pointer; outline: none; }
 .camp-hot:focus-visible > *:first-child, .camp-hot:hover > *:first-child { outline: 2px solid #fff; }
 .camp-hot:focus-visible { filter: drop-shadow(0 0 2px #0b57d0) drop-shadow(0 0 1px #fff); }
@@ -163,7 +162,8 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .camp-weather .flake { animation: fall 4s linear infinite; }
 .camp-weather .fogbank { animation: drift 20s ease-in-out infinite alternate; }
 .camp-banner .flag { animation: flicker 1.2s steps(2) infinite; }
-.camp-person.me .me-mark { animation: flicker 1s steps(2) infinite; }
+.camp-person:not(.selected) .me-mark { display: none; }
+.camp-person.selected .me-mark { animation: flicker 1s steps(2) infinite; }
 .time-dawn .camp-people, .time-dusk .camp-people { filter: saturate(.85); }
 .celebrate { font-weight: 700; color: var(--forest-dark); }
 .hiker-id { font-size: .85rem; }
@@ -190,16 +190,47 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
   .expedition-hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
-.crew .invite { margin-top: .75rem; }
 
-.landmarks, .history, .badges { list-style: none; padding: 0; margin: 0; }
+.landmarks, .history { list-style: none; padding: 0; margin: 0; }
 .landmarks li { padding: .35rem 0; border-bottom: 1px dashed var(--line); }
 .landmarks li.passed { color: var(--forest-dark); font-weight: 600; }
 .mark { display: inline-block; width: 1.5rem; }
-.badges { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
-.badge { background: var(--paper); border: 2px dashed var(--line); border-radius: var(--radius); padding: .75rem; opacity: .85; }
-.badge.earned { border: 2px solid var(--forest); background: #eef5e4; opacity: 1; }
-.badge p { margin: .25rem 0 0; font-size: .9rem; }
+
+/* ---- The hikers (Camp) ---- */
+.hiker-picker { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 .75rem; }
+.hiker-chip { display: inline-flex; flex-direction: column; align-items: flex-start; min-height: var(--tap); min-width: 7rem; padding: .45rem .9rem; border: 2px solid var(--forest); border-radius: 999px; background: var(--paper); color: var(--forest-dark); font: inherit; cursor: pointer; line-height: 1.2; }
+.hiker-chip .chip-name { font-weight: 700; font-family: Georgia, serif; }
+.hiker-chip .chip-miles { font-size: .8rem; color: var(--muted); }
+.hiker-chip[aria-pressed="true"] { background: var(--forest); color: #fff; }
+.hiker-chip[aria-pressed="true"] .chip-miles { color: #e6f0dc; }
+.hiker-chip:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
+.hiker-card h3 { font-family: Georgia, serif; font-size: 1.4rem; margin: 0 0 .5rem; color: var(--forest-dark); }
+.hiker-card h3:focus { outline: none; }
+.hiker-card h4 { margin: 1rem 0 .5rem; color: var(--forest-dark); }
+.badge-grid { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
+.badge { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .25rem; background: var(--paper); border: 2px dashed var(--line); border-radius: var(--radius); padding: .6rem .5rem; }
+.badge.earned { border: 2px solid var(--forest); background: #eef5e4; }
+.badge strong { font-size: .95rem; line-height: 1.2; }
+.badge .hint { margin: 0; font-size: .8rem; }
+.badge-art { display: block; image-rendering: pixelated; }
+.badge-art.locked { filter: grayscale(1); opacity: .45; }
+.badge.earned .badge-art { animation: pop .5s steps(3) 1; }
+.milestones, .timeline { padding-left: 1.2rem; margin: 0; }
+.milestones li, .timeline li { padding: .2rem 0; }
+.timeline .when { display: inline-block; min-width: 6.5rem; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.week-hikers { list-style: none; padding: 0; margin: 0 0 .5rem; }
+.week-hikers li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; min-height: var(--tap); border-bottom: 1px dashed var(--line); }
+.week-hikers a { font-weight: 700; color: var(--forest-dark); padding: .5rem 0; }
+.register-list { padding-left: 2.2rem; }
+.register-list li { padding: .3rem 0; border-bottom: 1px dashed var(--line); }
+.register-list li:last-child { border-bottom: 0; }
+.unassigned { background: #fff3da; border-left: 4px solid var(--amber); padding: .4rem .6rem; border-radius: 6px; font-size: .9rem; }
+details.card > summary { cursor: pointer; font-weight: 700; color: var(--forest-dark); min-height: var(--tap); display: flex; align-items: center; }
+details.card > summary:focus-visible, .timeline-wrap > summary:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
+.timeline-wrap { margin-top: 1rem; }
+.timeline-wrap > summary { cursor: pointer; font-weight: 700; color: var(--forest-dark); min-height: var(--tap); display: flex; align-items: center; }
+.join { border: 2px solid var(--amber); background: linear-gradient(180deg, #fff3da, var(--paper)); }
+@keyframes pop { 0% { transform: scale(.6); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: .6rem .4rem; border-bottom: 1px solid var(--line); }

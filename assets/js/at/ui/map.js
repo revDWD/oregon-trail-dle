@@ -297,21 +297,21 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     btn("Zoom in", "+", () => setView(zoomView(view, 1.5, null, base), "Zoomed in.")),
     btn("Zoom out", "−", () => setView(zoomView(view, 1 / 1.5, null, base), "Zoomed out.")),
     zoomLabel,
-    btn("Show where I am and the next landmark", "Find me", () => setView(focusHere(), "Showing your position and the next landmark.")),
+    btn("Show where the expedition is and the next landmark", "Find us", () => setView(focusHere(), "Showing the expedition and the next landmark.")),
     btn("Show the whole trail", "Whole trail", () => setView(defaultView(base), "Showing the whole trail.")));
 
   // Sections: progress per region; choosing one frames it on the map.
   const sections = h("ol", { class: "sections" }, regionsInOrder(trail, progress).map((r) => h("li", { class: r.current ? "current" : r.percent >= 100 ? "done" : "" },
     h("button", { type: "button", class: "section-btn", style: `--region:${r.color}`,
-      "aria-label": `${r.name} (${r.states}), ${formatMiles(r.lengthMiles)}, ${r.percent}% walked${r.current ? ", you are here" : ""}. Show on map.`,
+      "aria-label": `${r.name} (${r.states}), ${formatMiles(r.lengthMiles)}, ${r.percent}% walked${r.current ? ", the expedition is here" : ""}. Show on map.`,
       onClick: () => { setView(fitView(routeSlice(trail, r.start, r.end), base, 24), `Showing ${r.name}.`); root.scrollIntoView?.({ block: "nearest" }); } },
       h("span", { class: "swatch", "aria-hidden": "true" }),
-      h("span", { class: "section-name" }, r.name, r.current ? h("span", { class: "you" }, " · you are here") : null),
+      h("span", { class: "section-name" }, r.name, r.current ? h("span", { class: "you" }, " · we are here") : null),
       h("span", { class: "section-bar", "aria-hidden": "true" }, h("span", { style: `width:${r.percent}%` })),
       h("span", { class: "hint" }, `${r.states} · ${formatMiles(r.lengthMiles)} · ${r.percent}%`)))));
 
   const legend = h("ul", { class: "map-legend", "aria-label": "Map key" },
-    h("li", {}, h("span", { class: "key you", "aria-hidden": "true" }), "You"),
+    h("li", {}, h("span", { class: "key you", "aria-hidden": "true" }), "The expedition"),
     h("li", {}, h("span", { class: "key walked", "aria-hidden": "true" }), "Walked"),
     h("li", {}, h("span", { class: "key next", "aria-hidden": "true" }), "Next landmark"),
     crew.some((c) => !c.me) ? h("li", {}, h("span", { class: "key mate", "aria-hidden": "true" }), "Crew-mates") : null,

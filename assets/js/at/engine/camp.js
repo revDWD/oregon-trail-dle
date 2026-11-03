@@ -43,15 +43,15 @@ export function weatherFor(dateString, scene) {
   return { id, ...WEATHER[id] };
 }
 
-// How busy the camp looks. Grows with the crew's miles and pantry, always capped.
-export function campScale(groupMiles, supplies = 0, people = 1) {
+// How busy the camp looks. Grows with the crew's miles and size, always capped.
+export function campScale(groupMiles, people = 1) {
   const miles = Math.max(Number(groupMiles) || 0, 0);
-  const food = Math.max(Number(supplies) || 0, 0);
+  const hikers = Math.min(Math.max(Number(people) || 0, 1), 10);
   return {
     tents: Math.min(1 + Math.floor(miles / 200), 8),
-    hikers: Math.min(Math.max(people, 1), 10),
+    hikers,
     fire: miles < 250 ? 1 : miles < 1000 ? 2 : 3,
-    foodBags: Math.min(Math.floor(food / 100), 6),
+    bearBags: Math.min(hikers, 6), // one bear bag hung per hiker at camp
     lanterns: Math.min(Math.floor(miles / 500), 4),
     stage: miles < 700 ? "early" : miles < 1500 ? "middle" : "late"
   };
@@ -89,7 +89,7 @@ function daysApart(a, b) {
 }
 
 // Everything the scene and the camp page need, derived from crew (or solo) progress.
-export function campContext({ trail, progress, board = [], supplies = { food: 0, photos: 0 }, today, hour, meId }) {
+export function campContext({ trail, progress, board = [], supplies = { photos: 0 }, today, hour, meId }) {
   const region = regionAtMarker(trail, progress.position.marker);
   const people = campPeople(board, { meId, today });
   const scene = region ? region.scene : "southern-ridges";
@@ -97,7 +97,7 @@ export function campContext({ trail, progress, board = [], supplies = { food: 0,
     region, scene, people,
     time: timeOfDay(hour),
     weather: weatherFor(today, scene),
-    scale: campScale(progress.creditedMiles, supplies.food, people.length),
+    scale: campScale(progress.creditedMiles, people.length),
     celebration: celebrationAt(progress),
     next: progress.nextLandmark ? { name: progress.nextLandmark.name, miles: progress.distanceToNext } : null,
     supplies

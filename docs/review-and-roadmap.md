@@ -274,3 +274,49 @@ None of these needs new infrastructure. The static-data approach keeps the site 
 4. Weekly expedition goal on the Camp banner
 5. Curated NPS landmark facts/photos as static data (one-time, with credits)
 6. Optional: AT centerline geometry import
+
+## 11. Historical content and Trail Dispatches (refinement sprint)
+
+### 11.1 Changes (implemented)
+- **Trail:** removed the "Coming up" card. It duplicated the hero's "Next" stat and the map's next-landmark panel.
+- **Previous / Current / Next** strip directly under the map, built from `journeyWindow()` in `engine/progress.js`:
+  - It shows where we've been, the most recent landmark reached (and how far past it we are), and where we're heading.
+  - Each stop opens that landmark's details on the map.
+- **Landmark stories:**
+  - Every landmark's map panel now has **Why it matters** (history), **Nature notes** and **Did you know?**, and optional **Kevin's Trail Notes**, a photo and a "Learn more" official link.
+  - The data lives in `trail/landmark-stories.js`, which is plain data and tested.
+- **Camp:** Trail Dispatches are now the first section, above the camp scene. The shelter in the scene points to them.
+
+### 11.2 Landmark content proposal
+Each landmark is a small destination with up to five short layers: history, nature, a fun fact, Kevin's personal note, and an official link.
+- Keep each layer to one or two sentences, so the panel stays readable on a phone.
+- Prefer accuracy over volume, and hedge uncertain claims.
+- Oregon Trail facts don't apply to Appalachian Trail landmarks, so the history layer covers AT history instead: MacKaye, the CCC, the TVA, John Brown's raid, Baxter's "forever wild" gift. Donner Party content stays out, at the owner's request.
+
+### 11.3 Historical photo integration proposal
+- **Do:** curate one image per major landmark, once, as a local file with credit and licence (see `docs/trail-data-sources.md`). Use public-domain NPS or Library of Congress images, or the hikers' own photos. Lazy-load them. A test checks for alt text and credit.
+- **Don't:** hot-link or call the NPS API at runtime. It needs an API key (which would be exposed in a static site), it adds rate limits and outages, and the image rights vary per item.
+- Start with the 6–8 best-known landmarks: Springer, Clingmans Dome, McAfee Knob, Harpers Ferry, Bear Mountain, Mount Washington and Katahdin. If no suitable image exists, the original pixel illustrations remain the fallback.
+
+### 11.4 Trail Dispatch architecture assessment
+- **Data-driven, not hardcoded.** Dispatches are rows in Supabase (`at_dispatches`).
+- **Who can write them:** organizers (`at_organizers`). This is enforced by RLS.
+- **What a dispatch has:** a title, a Markdown body (safe renderer, no HTML), pinning, "Everyone" or crew visibility, and scheduling (a future `published_at`).
+- **How to add one:** Kevin taps **Write a dispatch** at Camp and posts from his phone, with no deploy. The Supabase Table Editor is a backup route.
+- **Why not a JSON file:** a JSON/JS file would need a GitHub commit for every update. That is fine for evergreen landmark notes, but worse for news. So we keep two channels:
+  - **Dispatches (Supabase):** news, milestones, encouragement and stories. Timely, posted from the phone.
+  - **Landmark notes (`landmark-stories.js` → `kevin`):** evergreen commentary tied to a place. Edited on GitHub (pencil icon), live in about a minute.
+
+### 11.5 Dispatch authoring recommendations
+- Open with a short, specific title ("We crossed into Virginia!"). The first dispatch is also the Trail page's "Message from Camp".
+- Use **pinning** for the one message everyone should see this week, and unpin it afterwards.
+- Schedule celebrations ahead of time by setting `published_at` in the Table Editor.
+- Keep personal details out: "Everyone" dispatches are readable by any visitor.
+- Possible later addition (needs a small migration): an optional `landmark_id` on a dispatch, so a dispatch can also show inside that landmark's panel. Only build it if Kevin asks for it.
+
+### 11.6 Additional high-value recommendations
+1. **Landmark postcard at Camp** when the group passes a landmark. It reuses the new story text ("Why it matters"), with no new data.
+2. **Wildlife field guide**: species silhouettes until spotted, each with one nature fact. This matches the landmark "Nature notes" voice.
+3. **Region welcome card** when entering a new state or region, using the region blurb plus that region's best "Did you know?".
+4. **Curated photos** for 6–8 landmarks (see 11.3).
+5. **"Trail quiz" from stories**: one optional multiple-choice question per passed landmark at Camp, built from existing facts. Build it only if the hikers want it.

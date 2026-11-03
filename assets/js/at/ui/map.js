@@ -4,7 +4,8 @@
 // or pinch. Everything shown on the map is also available as text (detail panel + lists).
 import { h, svg, formatMiles } from "./dom.js";
 import { landmarkArt } from "./illustrations.js";
-import { mileMarkers, journeyProgress, positionFor } from "../engine/progress.js";
+import { mileMarkers, journeyProgress, journeyWindow, positionFor } from "../engine/progress.js";
+import { landmarkStory } from "../trail/landmark-stories.js";
 
 // Same simplified Albers projection that generated us-states.js (viewBox 0 0 1000 570).
 const P = {
@@ -125,7 +126,24 @@ function detailPanel(trail, progress, landmark) {
         landmark.elevationFt ? [h("dt", {}, "Elevation"), h("dd", {}, `about ${landmark.elevationFt.toLocaleString("en-US")} ft`)] : null,
         region ? [h("dt", {}, "Section"), h("dd", {}, region.name)] : null,
         landmark.access ? [h("dt", {}, "Trailhead"), h("dd", {}, landmark.access)] : null),
-      h("p", {}, landmark.trivia)));
+      h("p", {}, landmark.trivia),
+      storyBlock(landmark)));
+}
+
+// The educational layer: history, nature, a fun fact, Kevin's notes, an optional credited photo.
+function storyBlock(landmark) {
+  const story = landmarkStory(landmark.id);
+  if (!story) return null;
+  const part = (cls, title, text) => text ? h("div", { class: `story-part ${cls}` }, h("h4", {}, title), h("p", {}, text)) : null;
+  return h("div", { class: "landmark-story" },
+    story.photo ? h("figure", { class: "story-photo" },
+      h("img", { src: story.photo.src, alt: story.photo.alt || "", loading: "lazy", decoding: "async" }),
+      h("figcaption", { class: "hint" }, `Photo: ${story.photo.credit}${story.photo.license ? ` (${story.photo.license})` : ""}`)) : null,
+    part("history", "Why it matters", story.history),
+    part("nature", "Nature notes", story.nature),
+    part("dyk", "Did you know?", story.didYouKnow),
+    part("kevin", "Kevin's Trail Notes", story.kevin),
+    story.learnMore ? h("p", { class: "hint" }, h("a", { href: story.learnMore.url, target: "_blank", rel: "noopener" }, `Learn more: ${story.learnMore.label}`)) : null);
 }
 
 /**
@@ -326,9 +344,21 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     crewMiles !== null ? h("li", {}, h("span", { class: "key camp", "aria-hidden": "true" }), "Crew camp (combined miles)") : null,
     h("li", {}, h("span", { class: "key post", "aria-hidden": "true" }), "Mile posts every 250 mi"));
 
+  // Previous / Current / Next: where we've been, where we are, where we're heading.
+  const win = journeyWindow(progress);
+  const stop = (label, lm, note, cls) => h("li", { class: `jw ${cls}` }, lm
+    ? h("button", { type: "button", class: "jw-btn", "aria-label": `${label}: ${lm.name}, ${note}. Show details.`, onClick: () => select(lm.id) },
+      h("span", { class: "jw-label" }, label), h("strong", {}, lm.name), h("span", { class: "hint" }, note))
+    : h("div", { class: "jw-btn empty" }, h("span", { class: "jw-label" }, label), h("strong", {}, cls === "next" ? "Katahdin reached!" : "—"),
+      h("span", { class: "hint" }, cls === "next" ? "Trail complete" : "Still ahead")));
+  const journeyStrip = h("ol", { class: "journey-window", "aria-label": "The journey so far" },
+    stop("Previous", win.previous, win.previous ? `${formatMiles(Math.round((progress.distanceMiles - win.previous.distance) * 100) / 100)} behind us` : "", "previous"),
+    stop("Current", win.current, win.current ? (win.milesPastCurrent ? `${formatMiles(win.milesPastCurrent)} behind us` : "we are here") : "", "current"),
+    stop("Next", win.next, win.next ? `${formatMiles(win.milesToNext)} to go` : "", "next"));
+
   apply();
   select(memory.selectedId, { announce: false });
-  return h("div", { class: "map-wrap" }, toolbar, h("div", { class: "map-frame" }, root), legend, live, panel,
+  return h("div", { class: "map-wrap" }, toolbar, h("div", { class: "map-frame" }, root), legend, live, journeyStrip, panel,
     h("h3", { class: "sections-title" }, "Journey progress"), sections);
 }
 

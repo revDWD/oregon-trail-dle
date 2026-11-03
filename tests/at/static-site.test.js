@@ -151,3 +151,11 @@ test("no invite codes or join flow: select a name, log, everything updates", () 
   }
   assert.match(app, /\/\^join\\\/\/\.test\(r\) \? "camp"/, "old invite links open Camp");
 });
+
+test("Trail has no Coming Up card; Camp opens with Trail Dispatches", async () => {
+  const { readFileSync } = await import("node:fs");
+  const views = readFileSync("assets/js/at/ui/views.js", "utf8");
+  assert.doesNotMatch(views, /Coming up:/);
+  const camp = views.slice(views.indexOf("export function campView"));
+  assert.ok(camp.indexOf("dispatches-title") < camp.indexOf("camp-card"), "dispatches come before the camp scene");
+});

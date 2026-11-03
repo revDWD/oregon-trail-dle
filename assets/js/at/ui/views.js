@@ -10,7 +10,7 @@ import { DEFAULT_THEME, themeFor } from "../engine/expedition-themes.js";
 import { regionAtMarker } from "../engine/progress.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { ACTIVITY_TYPES, ACTIVITY_LABELS, MAX_NOTES_LENGTH, validateActivity, ruleFor, localDateString } from "../engine/activities.js";
-import { groupMilestoneStatus, triviaFor, pickTip } from "../engine/game.js";
+import { groupMilestoneStatus, pickTip } from "../engine/game.js";
 import { expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
 
 const field = (id, label, control, hint, error) => h("div", { class: "field" },
@@ -52,7 +52,6 @@ function dispatchCard(d, { featured = false, actions = null } = {}) {
 export function trailView(s, a) {
   const p = s.progress;
   const featured = (s.dispatches || [])[0];
-  const trivia = triviaFor(p);
   const roster = activeHikers(s);
   const group = groupMilestoneStatus(TRAIL, p.creditedMiles, roster.map((x) => ({ weekCreditedMiles: x.weekMiles })));
   return h("section", { "aria-labelledby": "page-title" },
@@ -77,7 +76,6 @@ export function trailView(s, a) {
       group.everyoneMovedThisWeek ? h("p", {}, "Everyone moved this week. Great teamwork!") : null,
       h("p", { class: "hint" }, pickTip(Number(s.today.replaceAll("-", "")))),
       h("p", { class: "row" }, h("a", { class: "btn primary", href: "#/log" }, "Log an activity"))),
-    trivia ? h("div", { class: "card" }, h("h2", {}, trivia.upcoming ? `Coming up: ${trivia.title}` : `Remember: ${trivia.title}`), h("p", {}, trivia.text)) : null,
     null);
 }
 
@@ -265,7 +263,7 @@ export function campView(s, a) {
   const select = { current: null };
   const describe = (id) => {
     if (id === "fire") return `Campfire: ${ctx.crewLabel}.`;
-    if (id === "shelter") return latest ? `Shelter register: “${latest.title}” from ${latest.authorName}. Read it below.` : "Shelter register: no dispatches yet.";
+    if (id === "shelter") return latest ? `Shelter register: “${latest.title}” from ${latest.authorName}. Read it at the top of Camp.` : "Shelter register: no dispatches yet.";
     if (id === "bags") return `Bear bag line: ${ctx.bagLabel}. Food is hung away from bears every night.`;
     if (id === "board") return `Photo board: ${ctx.photoLabel}. Go Wildlife Spotting to add more.`;
     const person = ctx.people.find((p) => `person:${p.id}` === id);
@@ -285,6 +283,12 @@ export function campView(s, a) {
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "Camp"),
     h("p", {}, `${timeLabel} in ${where}. The expedition is camped ${formatMiles(prog.creditedMiles)} from Springer Mountain.`),
     flashNote(s, "camp"),
+    h("section", { class: "dispatches", "aria-labelledby": "dispatches-title" },
+      h("h2", { id: "dispatches-title" }, "Trail Dispatches"),
+      h("p", { class: "hint" }, "Updates, stories and encouragement from the trip organizer."),
+      s.isOrganizer && editing === "new" ? dispatchForm(s, a, null) : null,
+      s.isOrganizer && editing !== "new" ? h("button", { class: "btn primary", type: "button", onClick: () => a.editDispatch("new") }, "Write a dispatch") : null,
+      archive.length ? archive : h("p", { class: "card" }, s.dispatchesUnavailable ? "Dispatches will appear here once camp is set up." : "No dispatches yet. Check back soon!")),
     h("div", { class: "card camp-card" },
       h("div", { class: "camp-frame" }, scene),
       caption,
@@ -296,12 +300,7 @@ export function campView(s, a) {
       ctx.celebration ? h("p", { class: "celebrate" }, `🎉 Camp is celebrating passing ${ctx.celebration.name}!`) : null),
     hikersSection(s, a, select),
     hasRoster(s) ? registerSection(s) : null,
-    h("section", { class: "dispatches", "aria-labelledby": "dispatches-title" },
-      h("h2", { id: "dispatches-title" }, "Trail Dispatches"),
-      h("p", { class: "hint" }, "Updates, stories and encouragement from the trip organizer."),
-      s.isOrganizer && editing === "new" ? dispatchForm(s, a, null) : null,
-      s.isOrganizer && editing !== "new" ? h("button", { class: "btn primary", type: "button", onClick: () => a.editDispatch("new") }, "Write a dispatch") : null,
-      archive.length ? archive : h("p", { class: "card" }, s.dispatchesUnavailable ? "Dispatches will appear here once camp is set up." : "No dispatches yet. Check back soon!")));
+    null);
 }
 
 function dispatchForm(s, a, existing) {

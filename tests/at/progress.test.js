@@ -167,3 +167,21 @@ test("mile markers and crew positions are placed along the route", async () => {
   assert.equal(positionFor(TRAIL, -5, "nobo").distance, 0);
   assert.equal(positionFor(TRAIL, 99999, "nobo").distance, TRAIL.totalMiles);
 });
+
+test("journeyProgress: regions are parents, every landmark sits in exactly one region, one is next", async () => {
+  const { journeyProgress } = await import("../../assets/js/at/engine/progress.js");
+  const p = computeProgress(TRAIL, 100, "nobo");
+  const j = journeyProgress(TRAIL, p);
+  assert.equal(j.length, TRAIL.regions.length);
+  const all = j.flatMap((r) => r.landmarks);
+  assert.equal(all.length, TRAIL.landmarks.length, "no landmark lost or duplicated");
+  assert.deepEqual(all.map((l) => l.id), p.landmarks.map((l) => l.id), "travel order preserved");
+  assert.equal(all.filter((l) => l.status === "next").length, 1);
+  assert.equal(all.find((l) => l.status === "next").id, p.nextLandmark.id);
+  assert.equal(all.find((l) => l.status === "next").milesToGo, p.distanceToNext);
+  j.forEach((r) => r.landmarks.forEach((l) => assert.ok(l.miles >= r.start && (l.miles < r.end || r.end === TRAIL.totalMiles), `${l.id} in ${r.id}`)));
+  assert.equal(j[0].id, "georgia");
+  assert.equal(j[0].passedCount, j[0].landmarks.filter((l) => l.passed).length);
+  const done = journeyProgress(TRAIL, computeProgress(TRAIL, 99999, "nobo"));
+  assert.ok(done.every((r) => r.passedCount === r.landmarks.length), "finished: all passed, none next");
+});

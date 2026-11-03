@@ -234,3 +234,43 @@ Interpretations to confirm: "Memorials" became the **Trail register** (a record 
 ### 9.3 Follow-up: open participation (2026-11-05)
 
 The invite link and join step were removed at the owner's request: "Select Name → Log Activity → Everything Updates". Migration `20261105000000_at_open_expedition.sql` makes every signed-in (anonymous) device a participant and drops `at_expedition_settings`, `at_expedition_members`, `at_join_expedition` and `at_expedition_invite_code`. Trade-off (accepted): anyone who finds the site can log miles for a hiker. Mitigations still in place: hikers must be active roster entries, logging limits and date windows still apply, each device can only edit or delete its own rows, and other devices see aggregates only. If abuse ever happens, the fix is to retire the device's rows in SQL (by `user_id`, shown in History > "About this device").
+
+## 10. Journey Progress and badge polish (refinement sprint)
+
+### 10.1 Journey Progress consolidation (implemented)
+The Trail tab had two overlapping lists: "Trail sections" (regions, inside the map card) and a separate "Landmarks" card. They are now one **Journey progress** list in the map card:
+- **Regions are parents** (Georgia → Katahdin). The region button still frames the map on that section and shows its progress bar, plus "X of Y landmarks".
+- **Landmarks are children**: ✓ passed, ➜ next (with miles to go), ○ ahead. Tapping a landmark selects it on the map and opens its detail panel.
+- The data comes from a pure engine function, `journeyProgress(trail, progress)` in `engine/progress.js`. It is tested so that every landmark appears in exactly one region, in travel order, with exactly one "next".
+- Nothing was lost. Landmark distances, the next landmark and region progress are all still visible, but there is one fewer card on the page.
+
+### 10.2 Badge visibility (implemented)
+- **Locked badges** show only a one-colour silhouette and the word "Locked". Screen readers hear "Not yet earned. Keep hiking to discover it." The title and description stay hidden.
+- **Earned badges** show the full-colour art, title, description and earned date.
+- The "next badge" hint gives the miles to go but no longer names the badge. The celebration after logging is now the reveal.
+
+### 10.3 High-value enhancement recommendations (not yet built)
+1. **Landmark postcard at Camp.** When the expedition passes a landmark, Camp shows a one-time postcard card with an original illustration, two lines of trail lore and who carried the group there. It reuses the trail register data, and no schema change is needed.
+2. **Wildlife field guide per hiker.** Show the species each hiker has spotted, with silhouettes for unseen ones (the same mystery pattern as badges). Each species gets one short, accurate natural-history fact. This makes Wildlife Spotting feel collectible and educational.
+3. **Weekly expedition goal on the Camp banner.** A shared, forgiving target (for example "60 group miles this week"), shown as a campfire that grows. It is computed from existing activity data.
+4. **Region arrival moments.** When the expedition crosses into a new state or region, the next Camp visit shows that region's blurb as a short welcome. It is cheap because the region data already exists.
+
+Not recommended: **Donner Party storytelling**, because the owner earlier asked for "no Donner Party comparisons". The Donner Party is also unrelated to the Appalachian Trail. **Oregon Trail education** likewise doesn't fit the AT setting. The Oregon flavour stays in the playful badge art only. Revisit either only on explicit request.
+
+### 10.4 External data / API assessment
+| Source | Fit | Recommendation |
+|---|---|---|
+| NPS Data API (park code `appa`: places, articles, multimedia) | Good for landmark facts and photos | **Curate once, offline.** Copy a few facts or public-domain photos per landmark into static data in `trail/`, with credits. Do **not** call it from the browser: it needs an API key (which would be exposed), and it adds a runtime dependency and rate limits. Check each image's credit and rights. |
+| NPS / ATC published AT centerline GIS | Could make the map route more accurate | Optional one-time import, simplified to a few hundred points. Document the source in `docs/`. It is low priority, because the current route already reads well. |
+| Oregon National Historic Trail maps/GIS | Not applicable | Skip. That is a different trail. |
+| Historical photographs (general) | High charm, but rights vary | Only use public-domain sources, with attribution. Prefer the original pixel illustrations. |
+
+None of these needs new infrastructure. The static-data approach keeps the site free, fast and offline-tolerant.
+
+### 10.5 Prioritized plan
+1. ✅ Journey progress consolidation and locked-badge mystery (this sprint)
+2. Landmark postcard at Camp (small, high delight)
+3. Wildlife field guide with silhouettes
+4. Weekly expedition goal on the Camp banner
+5. Curated NPS landmark facts/photos as static data (one-time, with credits)
+6. Optional: AT centerline geometry import

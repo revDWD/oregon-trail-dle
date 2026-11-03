@@ -146,6 +146,22 @@ export function regionsInOrder(trail, progress) {
   }).sort((x, y) => x.fromDistance - y.fromDistance);
 }
 
+// Journey progress: regions (parents) in travel order, each with its landmarks (children).
+// Each landmark is "passed", "next" (the single next landmark) or "ahead". Every landmark
+// belongs to exactly one region (by its northbound mile marker).
+export function journeyProgress(trail, progress) {
+  const regions = regionsInOrder(trail, progress).map((r) => ({ ...r, landmarks: [] }));
+  const nextId = progress.nextLandmark ? progress.nextLandmark.id : null;
+  progress.landmarks.forEach((l) => {
+    const home = regionAtMarker(trail, l.miles);
+    const region = regions.find((r) => r.id === (home && home.id)) || regions[regions.length - 1];
+    if (!region) return;
+    region.landmarks.push({ ...l, status: l.passed ? "passed" : l.id === nextId ? "next" : "ahead",
+      milesToGo: l.passed ? 0 : round2(l.distance - progress.distanceMiles) });
+  });
+  return regions.map((r) => ({ ...r, passedCount: r.landmarks.filter((l) => l.passed).length }));
+}
+
 // Mile posts every `step` travel miles, positioned along the route, for the map.
 export function mileMarkers(trail, direction, step = 250) {
   const dir = normalizeDirection(trail, direction);

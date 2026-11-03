@@ -40,7 +40,7 @@ export const SPRITES = Object.freeze({
 });
 
 // Runs of same-coloured pixels on a row become one rect (fewer nodes, same picture).
-function pixels(rows) {
+function pixels(rows, silhouette = null) {
   const rects = [];
   rows.forEach((row, y) => {
     let x = 0;
@@ -48,7 +48,7 @@ function pixels(rows) {
       const ch = row[x];
       let end = x + 1;
       while (end < row.length && row[end] === ch) end += 1;
-      if (PALETTE[ch]) rects.push(svg("rect", { x: x + 2, y: y + 2, width: end - x, height: 1, fill: PALETTE[ch] }));
+      if (PALETTE[ch]) rects.push(svg("rect", { x: x + 2, y: y + 2, width: end - x, height: 1, fill: silhouette || PALETTE[ch] }));
       x = end;
     }
   });
@@ -61,5 +61,5 @@ export function badgeArt(name, { earned = true, size = 56 } = {}) {
   return svg("svg", { class: `badge-art${earned ? "" : " locked"}`, viewBox: "0 0 16 16", width: size, height: size,
     "aria-hidden": "true", focusable: "false", "shape-rendering": "crispEdges" },
   svg("circle", { cx: 8, cy: 8, r: 7.6, fill: earned ? "#f4e3b5" : "#e7e2d8", stroke: earned ? "#7a5a3c" : "#a69c8c", "stroke-width": 0.6 }),
-  ...pixels(rows));
+  ...pixels(rows, earned ? null : "#8a8072"));
 }

@@ -247,3 +247,18 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
   .btn, input, select, textarea { border: 2px solid ButtonText; }
   nav a[aria-current="page"] { text-decoration: underline; }
 }
+
+/* Journey progress: regions with their landmarks */
+.journey > li { display: grid; gap: .25rem; }
+.journey-landmarks { list-style: none; margin: 0 0 .3rem 1.1rem; padding: 0 0 0 .6rem; border-left: 3px dotted var(--line); display: grid; gap: .1rem; }
+.jl-btn { display: grid; grid-template-columns: 1.4rem 1fr auto; align-items: center; gap: .4rem; width: 100%; min-height: var(--tap); padding: .3rem .4rem; background: none; border: 0; border-radius: 8px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.jl-btn:hover { background: #f6efdf; }
+.jl-btn .hint { margin: 0; font-size: .85rem; }
+.jl.passed .jl-btn { color: var(--forest-dark); font-weight: 600; }
+.jl.passed .mark { color: var(--forest); }
+.jl.next .jl-btn { background: #fff7e3; outline: 2px solid var(--amber); outline-offset: -2px; }
+.jl.ahead .jl-btn { color: var(--muted); }
+
+/* Locked badges: a silhouette until earned */
+.badge.locked strong { color: #6b6256; letter-spacing: .04em; }
+.badge .badge-desc { font-size: .82rem; line-height: 1.3; }

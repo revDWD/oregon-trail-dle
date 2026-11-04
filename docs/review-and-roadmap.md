@@ -434,3 +434,31 @@ The game loop was strong, but scoring rewarded photographing the same deer again
 2. A "species of the week" that scores a small bonus.
 3. A one-question field-guide quiz on a newly found species.
 4. Seasonal events (12.4).
+
+## 14. Historical landmarks and project context
+
+### 14.1 Findings
+
+- The landmark detail panel already had an unused `photo` slot, so real photos needed no redesign.
+- The agent sandbox cannot reach Wikimedia, NPS or web search, so no licence could be verified here. Rather than ship unverified images, photos are fetched by a reviewed GitHub Action (`landmark-photos.yml`, see `docs/trail-data-sources.md`). Until that runs, the pixel art stays.
+- The hiker roster is database-driven, so adding hikers took one migration. Camp seated at most 10 campers, so it now seats 12.
+
+### 14.2 Implemented
+
+- Real, credited, self-hosted landmark photos:
+  - `LANDMARK_PHOTOS` data, plus a story-level override;
+  - the caption carries the credit, licence link and source link;
+  - the pixel art is the fallback;
+  - a licence filter with tests;
+  - a manual workflow that opens a PR.
+- Roster migration `20261107000000_at_roster_expansion.sql` with eleven hikers in the owner's order. David and Kevin keep their ids and history.
+- A quiet footer credit: "Created by David · project design & direction".
+- AGENTS.md rewritten as the onboarding document.
+
+### 14.3 Recommendations (small, high value)
+
+1. **Landmark arrival postcard.** When the expedition passes a landmark, show a one-time card at Camp with its photo, credit and Kevin's note.
+2. **Kevin's notes for every landmark.** Many landmarks still have none. A short note per landmark adds the most personality for the least effort.
+3. **Historical "then and now".** Where Commons has a public-domain historical photo (Fontana Dam, Harpers Ferry, Clingmans Dome tower), add it as a second photo.
+4. **Hiker spotlight.** A weekly line at Camp naming one hiker's recent contribution, rotating so everyone gets a turn. Encouraging, not ranked.
+5. **Maintainability.** Keep content in data files the owner can edit on GitHub. Prefer workflows that open reviewable PRs over runtime APIs.

@@ -69,7 +69,7 @@ const POSES = ["sit", "stretch", "cook", "read", "wave"];
 
 // Campers: the expedition's hikers, each with a stable look and a pose. `selected` marks the hiker
 // whose page is open. `recent` = moved in the last two days (they get to arrive at camp).
-export function campPeople(board, { selectedId = null, today = null, limit = 10 } = {}) {
+export function campPeople(board, { selectedId = null, today = null, limit = 12 } = {}) {
   return [...(board || [])]
     .sort((a, b) => b.totalCreditedMiles - a.totalCreditedMiles || String(a.displayName).localeCompare(String(b.displayName)))
     .slice(0, limit)

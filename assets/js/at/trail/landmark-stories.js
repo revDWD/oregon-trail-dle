@@ -5,8 +5,9 @@
 //   nature      geology, ecology, plants or wildlife
 //   didYouKnow  one fun fact
 //   kevin       "Kevin's Trail Notes": the organizer's own commentary. Add it in plain text.
-//   photo       { src, alt, credit, license, sourceUrl }. Only use images you have the right to show
-//               (public domain or your own). Put files in assets/img/landmarks/ and keep the credit.
+//   photo       { src, alt, credit, license, licenseUrl, sourceUrl, year }: a hand-picked photo that
+//               overrides the generated one in landmark-photos.js. Only images you may show (public
+//               domain, CC0, CC BY / BY-SA, or your own); files in assets/img/landmarks/, keep the credit.
 //   learnMore   { label, url } for an official page (National Park Service, state park, etc.)
 //
 // Text is original, written for this game from general public knowledge (see

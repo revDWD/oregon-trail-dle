@@ -51,7 +51,7 @@ test("camp people come from hiker rows with stable seeds, recent arrivals and th
   assert.equal(people[0].pose, "arrive");
   assert.ok(people[1].selected && !people[1].recent && !people[0].selected);
   assert.equal(people[0].seed, campPeople(board)[0].seed);
-  assert.equal(campPeople(Array.from({ length: 30 }, (_, i) => ({ userId: String(i), displayName: `H${i}`, totalCreditedMiles: i }))).length, 10);
+  assert.equal(campPeople(Array.from({ length: 30 }, (_, i) => ({ userId: String(i), displayName: `H${i}`, totalCreditedMiles: i }))).length, 12);
 });
 
 test("camp context picks the region scene from crew progress", () => {

@@ -28,9 +28,14 @@ No ATC logos, photographs, trail blazes or artwork are used. Landmark facts are 
 
 `assets/js/at/trail/landmark-stories.js` holds the educational text shown in each landmark's detail panel: **Why it matters**, **Nature notes**, **Did you know?** and the optional **Kevin's Trail Notes**. The text is original. It was written for this game from widely published general knowledge (National Park Service park pages, state park information and common trail references), and uncertain claims are hedged ("said to be", "usually translated"). It is not copied from any source. `learnMore` links point to official pages (nps.gov/appa, /grsm, /shen, /hafe, /dewa, and baxterstatepark.org).
 
-**Photos** are supported but none are included yet. Add `photo: { src, alt, credit, license, sourceUrl }` to a landmark only when you have the right to use the image:
-- your own photo;
-- a public-domain US government image, such as many NPS photos; check that the credit doesn't name a third party;
-- or a Library of Congress item marked "No known restrictions".
+## Landmark photos
 
-Save the file, resized to about 800 px wide, in `assets/img/landmarks/`, and always keep the credit. A test checks that every photo has alt text and a credit.
+The landmark detail panel shows a real photo when one is available, and falls back to the original pixel art if there is none or it fails to load.
+
+- **Source.** Photos come from [Wikimedia Commons](https://commons.wikimedia.org/), chosen by `scripts/landmark-photos.mjs` through the Commons API. The licence is read from each file's metadata, and only **public domain** (including US government works such as NPS, USFS and USGS), **CC0**, **CC BY** and **CC BY-SA** files are accepted. NC, ND, GFDL-only, unclear and fair-use files are rejected (`scripts/lib/commons.mjs`, unit-tested). The script prefers landscape JPEGs at least 1,200 px wide and skips maps and signs.
+- **Self-hosted.** Each photo is downloaded once, about 1,024 px wide, to `assets/img/landmarks/<id>.jpg`, so visitors' browsers never contact a third party and links can't rot. Credits live in the generated `assets/js/at/trail/landmark-photos.js`.
+- **Attribution.** The caption shows the author, the year if known, a linked licence and a link to the Commons source page. This meets the CC BY and CC BY-SA attribution terms. Resizing is the only change made.
+- **Maintenance.** Run Actions › "Landmark photos". The workflow needs internet access and a reviewer, so the result is always a pull request. Hand-picked photos can override a generated one: add `photo: { src, alt, credit, license, licenseUrl, sourceUrl, year }` to the landmark in `landmark-stories.js`. Your own photos and Library of Congress "No known restrictions" items also qualify.
+- **Why not the NPS API?** It needs an API key, and NPS media often carries mixed or third-party rights. Commons exposes machine-readable licences, and its search already includes many NPS public-domain photos.
+
+A test checks that every photo has alt text, a credit, an allowed licence and a source link, and that the file exists.

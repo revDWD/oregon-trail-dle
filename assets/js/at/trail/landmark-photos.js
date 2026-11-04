@@ -5,7 +5,7 @@
 export const LANDMARK_PHOTOS = Object.freeze({
   "bear-mountain": {
     "src": "assets/img/landmarks/bear-mountain.jpg",
-    "alt": "Bear Mountain: Bear Mountain Bridge",
+    "alt": "Bear Mountain Bridge spanning the Hudson River below forested hills",
     "credit": "Fran Trudeau from Wappingers Falls, NY, USA",
     "license": "CC BY 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
@@ -14,25 +14,16 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "big-meadows": {
     "src": "assets/img/landmarks/big-meadows.jpg",
-    "alt": "Big Meadows: Big Meadows in the fall 0f 2003",
+    "alt": "Big Meadows in autumn: open grassland with scattered trees in Shenandoah National Park",
     "credit": "Cbaile19",
     "license": "CC0",
     "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
     "sourceUrl": "https://commons.wikimedia.org/wiki/File:Big_Meadows,_Shenandoah_National_Park,_2003-10-10,_01.jpg",
     "year": "2003"
   },
-  "bly-gap": {
-    "src": "assets/img/landmarks/bly-gap.jpg",
-    "alt": "Bly Gap: Uvularia sessilifolia L. - sessileleaf bellwort - Flowers - Wayah Gap, North Carolina, United States",
-    "credit": "Harlan B. Herbert, Bugwood.org",
-    "license": "CC BY 3.0 us",
-    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/us/deed.en",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Uvularia_sessilifolia_5504131.jpg",
-    "year": "1966"
-  },
   "clingmans-dome": {
     "src": "assets/img/landmarks/clingmans-dome.jpg",
-    "alt": "Clingmans Dome: View to the east from Clingmans Dome, Great Smoky Mountains National Park, North Carolina, USA",
+    "alt": "View east from Clingmans Dome over ridge after ridge of the Great Smoky Mountains",
     "credit": "Acroterion",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
@@ -41,7 +32,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "damascus": {
     "src": "assets/img/landmarks/damascus.jpg",
-    "alt": "Damascus: Hikers walking along a bridge on the Virginia Creeper Trail in Damascus, Virginia",
+    "alt": "Hikers crossing a steel bridge on the Virginia Creeper Trail in Damascus, Virginia",
     "credit": "Waldo Jaquith",
     "license": "CC BY-SA 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
@@ -50,7 +41,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "delaware-water-gap": {
     "src": "assets/img/landmarks/delaware-water-gap.jpg",
-    "alt": "Delaware Water Gap: Knowlton Township's rural character is evident in this view of the Delaware Water Gap from Linaberr…",
+    "alt": "The Delaware Water Gap notch in the Kittatinny Ridge seen across New Jersey farmland",
     "credit": "ChuckWalsh ( talk ) ( Uploads )",
     "license": "Public domain",
     "licenseUrl": null,
@@ -59,7 +50,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "dragons-tooth": {
     "src": "assets/img/landmarks/dragons-tooth.jpg",
-    "alt": "Dragon's Tooth: Rocks at the top; Dragon Tooth, Virginia",
+    "alt": "The tall rock spire of Dragon’s Tooth on Cove Mountain, Virginia",
     "credit": "Caballero1967",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
@@ -68,7 +59,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "fontana-dam": {
     "src": "assets/img/landmarks/fontana-dam.jpg",
-    "alt": "Fontana Dam: Fontana Dam, North Carolina",
+    "alt": "Forested mountains above the Little Tennessee River near Fontana Dam, North Carolina",
     "credit": "w_lemay",
     "license": "CC BY-SA 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
@@ -77,7 +68,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "grayson-highlands": {
     "src": "assets/img/landmarks/grayson-highlands.jpg",
-    "alt": "Grayson Highlands: Grayson Highlands State Park",
+    "alt": "A shaggy wild pony grazing in Grayson Highlands State Park, Virginia",
     "credit": "bobistraveling",
     "license": "CC BY 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
@@ -86,7 +77,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "hanover": {
     "src": "assets/img/landmarks/hanover.jpg",
-    "alt": "Hanover: Photograph of Dartmouth Hall at the campus of Dartmouth College in Hanover, New Hampshire .",
+    "alt": "Dartmouth Hall, a white colonial building on the Dartmouth College campus in Hanover, New Hampshire",
     "credit": "Kane5187",
     "license": "Public domain",
     "licenseUrl": null,
@@ -95,7 +86,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "harpers-ferry": {
     "src": "assets/img/landmarks/harpers-ferry.jpg",
-    "alt": "Harpers Ferry: 30 High Street, Harpers Ferry, West Virginia.",
+    "alt": "A historic brick building on High Street in Harpers Ferry, West Virginia",
     "credit": "Acroterion",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
@@ -104,7 +95,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "hot-springs": {
     "src": "assets/img/landmarks/hot-springs.jpg",
-    "alt": "Hot Springs: File name: 06_10_016059 Title: T-28. Looking North from French Broad lookout, French Broad River an…",
+    "alt": "Vintage postcard looking north over the French Broad River near Hot Springs, North Carolina",
     "credit": "Boston Public Library",
     "license": "CC BY 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
@@ -113,7 +104,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "katahdin": {
     "src": "assets/img/landmarks/katahdin.jpg",
-    "alt": "Mount Katahdin: Picture taken near Compass Pond along the Golden Road",
+    "alt": "Snow-capped Mount Katahdin rising beyond a half-frozen river in Maine",
     "credit": "Michael Sipos",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
@@ -122,7 +113,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "mahoosuc-notch": {
     "src": "assets/img/landmarks/mahoosuc-notch.jpg",
-    "alt": "Mahoosuc Notch: I am the author of this work.",
+    "alt": "A backpacker scrambling between huge boulders in Mahoosuc Notch",
     "credit": "Gm206 at English Wikipedia",
     "license": "Public domain",
     "licenseUrl": null,
@@ -131,7 +122,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "max-patch": {
     "src": "assets/img/landmarks/max-patch.jpg",
-    "alt": "Max Patch: The Appalachian Trail crosses the grassy bald area atop Max Patch Mountain, a 4,616-ft (1,407m) sum…",
+    "alt": "The Appalachian Trail crossing the grassy bald summit of Max Patch",
     "credit": "User:Washedwithblood7",
     "license": "Public domain",
     "licenseUrl": null,
@@ -140,7 +131,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "mcafee-knob": {
     "src": "assets/img/landmarks/mcafee-knob.jpg",
-    "alt": "McAfee Knob: McAfee's Knob",
+    "alt": "View from the rocky ledge of McAfee Knob over the Catawba Valley, Virginia",
     "credit": "computingdoc",
     "license": "CC BY 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
@@ -149,7 +140,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "monson": {
     "src": "assets/img/landmarks/monson.jpg",
-    "alt": "Monson: Zoom into this map at maps.bpl.org . Author: Norris, George E. Publisher: Geo. E. Norris Date: 1889…",
+    "alt": "1889 bird’s-eye view map of the village of Monson, Maine, on Lake Hebron",
     "credit": "http://maps.bpl.org",
     "license": "CC BY 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
@@ -158,7 +149,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "mount-greylock": {
     "src": "assets/img/landmarks/mount-greylock.jpg",
-    "alt": "Mount Greylock: This photo shows the very summit of Mount Greylock with a clear sky.",
+    "alt": "The stone Veterans War Memorial Tower on the summit of Mount Greylock",
     "credit": "Vvburen",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
@@ -167,7 +158,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "mount-washington": {
     "src": "assets/img/landmarks/mount-washington.jpg",
-    "alt": "Presidential Range: Title: The Mount Washington and the Presidential Range, Bretton Woods, White Mts., N.H. Subjects: H…",
+    "alt": "Vintage postcard of Mount Washington and the snowy Presidential Range above Bretton Woods",
     "credit": "Tichnor Brothers, Publisher",
     "license": "Public domain",
     "licenseUrl": null,
@@ -176,25 +167,16 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "nantahala": {
     "src": "assets/img/landmarks/nantahala.jpg",
-    "alt": "Nantahala Gorge: A raft on Nantahala River (original flickr title: \"Excited rafters\")",
+    "alt": "Rafters paddling whitewater on the Nantahala River",
     "credit": "anoldent",
     "license": "CC BY-SA 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
     "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nantahala_River_raft_2009.jpg",
     "year": "2009"
   },
-  "pearisburg": {
-    "src": "assets/img/landmarks/pearisburg.jpg",
-    "alt": "Pearisburg: View east along U.S. Route 460 Business (Wenonah Avenue) between Hartley Way and Birchlawn Circle i…",
-    "credit": "Famartin",
-    "license": "CC BY-SA 4.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:2017-06-11_14_53_26_View_east_along_U.S._Route_460_Business_(Wenonah_Avenue)_between_Hartley_Way_and_Birchlawn_Circle_in_Pearisburg,_Giles_County,_Virginia.jpg",
-    "year": "2017"
-  },
   "pen-mar": {
     "src": "assets/img/landmarks/pen-mar.jpg",
-    "alt": "Pen Mar: Vista from the Appalachian Trail in Pen Mar Park in Pen Mar, Maryland .",
+    "alt": "A pavilion and Appalachian Trail sign at the Pen Mar Park overlook, Maryland",
     "credit": "Zeete",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
@@ -203,7 +185,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "roan-highlands": {
     "src": "assets/img/landmarks/roan-highlands.jpg",
-    "alt": "Roan Highlands: Sunset over the Blue Ridge Mountains, looking south from Grassy Ridge (between Jane Bald and Round…",
+    "alt": "Sunset over the Blue Ridge seen from Grassy Ridge in the Roan Highlands",
     "credit": "Brian Stansberry",
     "license": "CC BY 2.5",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.5",
@@ -212,7 +194,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "rockfish-gap": {
     "src": "assets/img/landmarks/rockfish-gap.jpg",
-    "alt": "Rockfish Gap: Rockfish Gap is a wind gap located in the Blue Ridge Mountains between Charlottesville and Waynesbo…",
+    "alt": "Historical marker at Rockfish Gap describing the 1818 meeting that chose the University of Virginia site",
     "credit": "Ken Lund from Reno, Nevada, USA",
     "license": "CC BY-SA 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
@@ -221,7 +203,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "springer-mountain": {
     "src": "assets/img/landmarks/springer-mountain.jpg",
-    "alt": "Springer Mountain: Appalachian Trail plaque at the top of Springer Mountain",
+    "alt": "Bronze Appalachian Trail plaque with a hiker set in rock on the summit of Springer Mountain",
     "credit": "Thomson200",
     "license": "CC0",
     "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",

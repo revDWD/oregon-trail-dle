@@ -11,11 +11,11 @@ import { choosePhoto, photoEntry, renderPhotosModule } from "./lib/commons.mjs";
 
 // Search terms that find the landmark itself (not the town hall or a trail sign).
 const SEARCH = {
-  "springer-mountain": "Springer Mountain plaque Appalachian Trail", "neel-gap": "Mountain Crossings Walasi-Yi Neel Gap",
+  "springer-mountain": "Springer Mountain plaque Appalachian Trail", "neel-gap": "Walasi-Yi Interpretive Center",
   "bly-gap": "Bly Gap North Carolina Georgia", "nantahala": "Nantahala River rafting", "fontana-dam": "Fontana Dam Little Tennessee River",
   "clingmans-dome": "Clingmans Dome", "hot-springs": "Hot Springs North Carolina French Broad River",
   "max-patch": "Max Patch bald", "roan-highlands": "Roan Mountain grassy bald", "damascus": "Virginia Creeper Trail Damascus",
-  "grayson-highlands": "Grayson Highlands ponies", "pearisburg": "Pearisburg Virginia",
+  "grayson-highlands": "Grayson Highlands ponies", "pearisburg": "New River Giles County Virginia",
   "dragons-tooth": "Dragons Tooth Virginia", "mcafee-knob": "McAfee Knob", "rockfish-gap": "Rockfish Gap Afton Mountain",
   "big-meadows": "Big Meadows Shenandoah meadow", "harpers-ferry": "Harpers Ferry", "pen-mar": "Pen Mar Park",
   "delaware-water-gap": "Delaware Water Gap", "bear-mountain": "Bear Mountain Bridge Hudson",
@@ -28,7 +28,8 @@ const REJECTED = new Set([
   "File:21-07-024-dowdell.jpg", "File:South Mountain, Maryland (7235278532).jpg",
   "File:Jason Mays searches for snails uphill from the Nantahala River (47967213478).jpg",
   "File:Fontana Village Resort in Fontana Dam, North Carolina, and Graham County 01.jpg",
-  "File:Hurricane Helene Damage (Damascus, VA).jpg", "File:Bathroom at Big Meadows Campground Shenandoah 2022-06-19 12-20-55 1.jpg"
+  "File:Hurricane Helene Damage (Damascus, VA).jpg", "File:Uvularia sessilifolia 5504131.jpg",
+  "File:2017-06-11 14 53 26 View east along U.S. Route 460 Business (Wenonah Avenue) between Hartley Way and Birchlawn Circle in Pearisburg, Giles County, Virginia.jpg", "File:Bathroom at Big Meadows Campground Shenandoah 2022-06-19 12-20-55 1.jpg"
 ]);
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, "").split("=")).map(([k, v]) => [k, v ?? true]));

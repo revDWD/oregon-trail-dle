@@ -12,14 +12,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Live roster check
-        continue-on-error: true
-        run: echo skip
-      - name: Fetch landmark photos
-        run: node scripts/landmark-photos.mjs --only=springer-mountain,neel-gap,bly-gap,nantahala,fontana-dam,roan-highlands,damascus,pearisburg,big-meadows --refresh
-      - name: Commit photos to this branch
-        run: |
+      - run: node scripts/landmark-photos.mjs --only=pearisburg,neel-gap
+      - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           git add assets/img/landmarks assets/js/at/trail/landmark-photos.js
-          git diff --cached --quiet || { git commit -m "Add landmark photos from Wikimedia Commons"; git push; }
+          git diff --cached --quiet || { git commit -m "Add Pearisburg/Neel Gap photos"; git push; }

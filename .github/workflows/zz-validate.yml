@@ -1,0 +1,25 @@
+name: zz validate (temporary)
+on:
+  push:
+    branches: [fix/validation]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Live roster check
+        continue-on-error: true
+        run: node scripts/roster-check.mjs
+      - name: Fetch landmark photos
+        run: node scripts/landmark-photos.mjs
+      - name: Commit photos to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add assets/img/landmarks assets/js/at/trail/landmark-photos.js
+          git diff --cached --quiet || { git commit -m "Add landmark photos from Wikimedia Commons"; git push; }

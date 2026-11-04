@@ -462,3 +462,26 @@ The game loop was strong, but scoring rewarded photographing the same deer again
 3. **Historical "then and now".** Where Commons has a public-domain historical photo (Fontana Dam, Harpers Ferry, Clingmans Dome tower), add it as a second photo.
 4. **Hiker spotlight.** A weekly line at Camp naming one hiker's recent contribution, rotating so everyone gets a turn. Encouraging, not ranked.
 5. **Maintainability.** Keep content in data files the owner can edit on GitHub. Prefer workflows that open reviewable PRs over runtime APIs.
+
+## 15. UX polish and wildlife behaviour
+
+### 15.1 Findings
+
+- Heading capitalization was mixed ("The expedition", "Field guide", "Journey progress" next to "Wildlife Spotting", "Trail Dispatches").
+- On iPad/iOS Safari, native date inputs keep an intrinsic width and their own chrome, so Date looked wider than the other fields.
+- History listed only this device's activities, and the "About this device" card was clutter for most people.
+- Wildlife moved with one shared model; per-species tuning only changed speed and pauses. Everything reacted to the camera the same way.
+
+### 15.2 Implemented
+
+- **Title Case** for every page title, card and section heading, `<summary>` title and field-guide group; buttons, labels and body text stay sentence case. A static test enforces it.
+- **Log Activity form:** every `.field` control fills its column with one shared height; the date input's WebKit chrome is removed. Measured equal at 390px, 820px (iPad) and desktop in Chromium.
+- **History:** the device card is gone (organizer setup now finds the `user_id` on an activity row; see `docs/deployment.md` §2b). A new **Expedition Journal** (`engine/journal.js`) records landmarks, group milestones, first photo of each species (rare and legendary flagged), field-guide milestones, completed trail sections and every badge unlock, newest first, from data already loaded. "Your Activities" follows.
+- **Behaviour classes:** 14 classes (grazer, skittish, predator, large mammal, ground bird, songbird, soaring bird, owl, swimmer, fluttering insect, darting insect, hovering insect, slow crawler, trail legend). Deer freeze head-up and then bound away fast; bears and moose carry on along their path; rabbits zigzag; ground birds and songbirds flush and fly off; butterflies wander on bobbing paths; dragonflies hover and dart; bees hover in place. The field guide explains each as "How it moves". No scoring, density or schema changes.
+
+### 15.3 Recommendations (small, high value)
+
+1. **Behaviour hints in "where to look".** Locked guide entries could add the class habit ("Look for something that freezes, head up…"). This is educational and costs no new data.
+2. **Journal filter by hiker.** Reuse the field guide's "Show" select on the Expedition Journal.
+3. **Auto-dispatch for rare and legendary finds.** The journal already records them; a Camp highlight could reuse the same entry.
+4. **Species-specific habit overrides.** A few iconic species (wild turkey's strut, loon's dive) could override the class `habit` text without new movement code.

@@ -157,9 +157,9 @@ function storyBlock(landmark) {
   if (!story) return null;
   const part = (cls, title, text) => text ? h("div", { class: `story-part ${cls}` }, h("h4", {}, title), h("p", {}, text)) : null;
   return h("div", { class: "landmark-story" },
-    part("history", "Why it matters", story.history),
-    part("nature", "Nature notes", story.nature),
-    part("dyk", "Did you know?", story.didYouKnow),
+    part("history", "Why It Matters", story.history),
+    part("nature", "Nature Notes", story.nature),
+    part("dyk", "Did You Know?", story.didYouKnow),
     part("kevin", "Kevin's Trail Notes", story.kevin),
     story.learnMore ? h("p", { class: "hint" }, h("a", { href: story.learnMore.url, target: "_blank", rel: "noopener" }, `Learn more: ${story.learnMore.label}`)) : null);
 }
@@ -377,7 +377,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
   apply();
   select(memory.selectedId, { announce: false });
   return h("div", { class: "map-wrap" }, toolbar, h("div", { class: "map-frame" }, root), legend, live, journeyStrip, panel,
-    h("h3", { class: "sections-title" }, "Journey progress"), sections);
+    h("h3", { class: "sections-title" }, "Journey Progress"), sections);
 }
 
 // Testing hook: forget remembered zoom/selection.

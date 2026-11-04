@@ -134,8 +134,9 @@ async function loadExpedition(draw = true) {
 }
 
 function redrawInBackground() {
-  if (!["trail", "camp", "log"].includes(route())) return;
-  if (busy()) { pendingDraw = true; return; }
+  if (!["trail", "camp", "log", "history"].includes(route())) return;
+  // On History, never redraw over an open edit form (its unsaved values would be lost).
+  if (busy() || (route() === "history" && state.editingId)) { pendingDraw = true; return; }
   pendingDraw = false;
   render();
 }
@@ -288,7 +289,7 @@ function start() {
     if (state.flash && state.flash.route !== route()) state.flash = null; // shown once, on its own page
     render({ focus: true });
     pendingDraw = false; // the navigation itself just redrew the page
-    if (["trail", "camp"].includes(route()) || state.expeditionError) loadExpedition(true);
+    if (["trail", "camp", "history"].includes(route()) || state.expeditionError) loadExpedition(true);
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) loadExpedition(true); });
 }

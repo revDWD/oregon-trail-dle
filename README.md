@@ -46,7 +46,7 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 | Log Activity | Log an activity for a hiker (the dropdown remembers the last hiker on this device) |
 | Camp | **Trail Dispatches** first, then the camp scene (automatic time of day), **the hikers** (pick one: miles, badges, milestones, journey), the trail register |
 | Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; choose who's spotting; the habitat follows the expedition's section; the Field guide below the game collects species (silhouettes until found) |
-| History | Activities logged on this device: edit, delete, or assign a hiker to older entries |
+| History | The Expedition Journal (landmarks, wildlife discoveries, field-guide milestones and badge unlocks, newest first), then activities logged on this device: edit, delete, or assign a hiker to older entries |
 
 ### Hikers
 

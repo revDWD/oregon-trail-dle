@@ -169,9 +169,11 @@ function drawAnimal(ctx, state, animal) {
   const spec = speciesOf(state.theme, animal.kind);
   const ax = Math.round(animal.x);
   const ay = Math.round(animal.y);
-  const walk = animal.pause > 0 || animal.phase === undefined ? 0 : (Math.floor(animal.phase) % 2 ? 1 : -1);
-  const nod = animal.pause > 0 && spec.graze ? (Math.floor(state.clock * 2.5 + (animal.phase || 0)) % 2) * 2 : 0;
-  const bob = animal.pause > 0 ? nod : (walk > 0 ? 0 : 1);
+  const still = animal.pause > 0 && !spec.behavior.hover; // hovering insects keep beating their wings
+  const walk = still || animal.phase === undefined ? 0 : (Math.floor(animal.phase) % 2 ? 1 : -1);
+  // Grazers nod while feeding; an alarmed one (fleeing) holds its head up.
+  const nod = still && spec.graze && !animal.fleeing ? (Math.floor(state.clock * 2.5 + (animal.phase || 0)) % 2) * 2 : 0;
+  const bob = still ? nod : (walk > 0 ? 0 : 1);
   const legA = walk > 0 ? 0 : 1;
   const legB = walk > 0 ? 1 : 0;
   const stride = { 1: legA, 2: legB, "-1": -legA, "-2": -legB };

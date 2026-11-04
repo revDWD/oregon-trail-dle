@@ -8,8 +8,8 @@ export const GROUPS = Object.freeze([
   { id: "mammal", label: "Mammals" },
   { id: "bird", label: "Birds" },
   { id: "insect", label: "Insects" },
-  { id: "herp", label: "Reptiles & amphibians" },
-  { id: "legend", label: "Trail legends" }
+  { id: "herp", label: "Reptiles & Amphibians" },
+  { id: "legend", label: "Trail Legends" }
 ]);
 
 const earliest = (dates) => dates.filter(Boolean).sort()[0] || null;

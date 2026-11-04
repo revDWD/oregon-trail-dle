@@ -22,7 +22,7 @@ The site is static (no build step). GitHub Pages serves the repository root from
 4. **Phase 2 (Camp, Expeditions, Trail Dispatches):** in a new query, paste the whole of `supabase/migrations/20261103000000_at_camp_dispatches.sql` and run it. It is also idempotent. Until it is applied, the app still works but Camp shows no dispatches or supplies, and saving an expedition fails with a friendly message.
 
 5. **Phase 8 (hikers, per-hiker badges):** paste the whole of `supabase/migrations/20261104000000_at_hikers.sql` and run it. It seeds David and Kevin. Until it is applied, the app still works without the hiker field.
-   - Activities logged before Phase 8 have no hiker and don't count toward the expedition. On the device that logged them, open **History**, tap **Edit** on each, choose the hiker and save. (Or in the SQL Editor: `update public.at_activities set hiker_id = (select id from public.at_hikers where name = 'David') where hiker_id is null and user_id = '<device id>';`. The device ID is under History > "About this device".)
+   - Activities logged before Phase 8 have no hiker and don't count toward the expedition. On the device that logged them, open **History**, tap **Edit** on each, choose the hiker and save. (Or in the SQL Editor: `update public.at_activities set hiker_id = (select id from public.at_hikers where name = 'David') where hiker_id is null and user_id = '<device id>';`. Find the device ID as the `user_id` on one of that device's rows in **Table Editor > at_activities**.)
    - Add a hiker: `insert into public.at_hikers (name, sort_order) values ('Sarah', 3);` Retire one (their miles and badges stay): `update public.at_hikers set active = false where name = 'Sarah';`
 
 6. **Open participation (no invite codes):** paste the whole of `supabase/migrations/20261105000000_at_open_expedition.sql` and run it. Any visitor can now log for any hiker straight away (pick a name → log → everything updates). It removes the invite code, the join function and the membership table. Devices still own, and alone can edit or delete, the rows they logged.
@@ -35,14 +35,18 @@ The site is static (no build step). GitHub Pages serves the repository root from
 
 Organizers are listed in `public.at_organizers`, which the app cannot write to.
 
-1. Kevin opens the site **on the device and browser he'll post from**, goes to **History**, and expands **About this device** (at the bottom). He sends you the Device ID.
-2. In the SQL Editor, run (replace the ID):
+1. Kevin opens the site **on the device and browser he'll post from** and logs a real activity there with the note `organizer setup` (he can edit the note afterwards). That row's `user_id` is his device's ID. (The old "About this device" card on History was removed to reduce clutter.)
+2. In the SQL Editor, run:
 
    ```sql
    insert into public.at_organizers (user_id, note)
-   values ('00000000-0000-0000-0000-000000000000', 'Kevin')
+   select user_id, 'Kevin' from public.at_activities
+   where notes = 'organizer setup'
+   order by created_at desc limit 1
    on conflict (user_id) do nothing;
    ```
+
+   (Or look the row up in **Table Editor > at_activities**, copy its `user_id`, and insert that.)
 
 3. Kevin reloads the site. A **Write a dispatch** button appears at Camp. He can pin a dispatch to the top of the Trail page. Formatting: `**bold**`, `*italics*`, `[text](https://link)`, `- ` lists, `# ` heading, `> ` quote.
 
@@ -52,7 +56,7 @@ Alternatives and notes:
 - "Everyone" dispatches can be read by any visitor of the site, because every visitor is an anonymous signed-in user. Don't post private details there.
 - Remove an organizer: `delete from public.at_organizers where user_id = '...';`
 - **Landmark notes** ("Kevin's Trail Notes" in each landmark's map panel) are different from dispatches. They live in `assets/js/at/trail/landmark-stories.js`. To add one, open that file on GitHub, click the pencil, add a line like `kevin: "Watch for the wild ponies!",` inside the landmark's `{ }`, and commit. The site updates in about a minute. Use dispatches for news and updates, and landmark notes for evergreen commentary about a place.
-- If Kevin clears his browser data he gets a new device ID; repeat steps 1–2.
+- If Kevin clears his browser data (or switches browser) he gets a new device ID; repeat steps 1–2.
 
 ## 3. Supabase Auth settings: anonymous sign-ins (there is no login screen)
 

@@ -134,11 +134,78 @@ test("a missed frame startles nearby skittish wildlife and its herd, but not bea
   s.aim = { x: 140, y: 90 };
   const n = startle(s);
   assert.equal(n, 1);
-  assert.equal(deer.mult, 2);
-  assert.equal(mate.mult, 2, "herd-mates follow");
+  const flee = speciesOf(theme, "deer").behavior.flee;
+  assert.equal(deer.mult, flee);
+  assert.ok(deer.pause > 0 && deer.fleeing, "a cautious deer freezes, head up, before it bolts");
+  assert.equal(mate.mult, flee, "herd-mates follow");
   assert.equal(mate.dir, deer.dir);
-  assert.notEqual(bear.mult, 2);
+  assert.ok(!bear.fleeing);
   assert.equal(far.mult, undefined, "out of range animals are untouched");
+});
+
+test("every species inherits a behaviour class, and only unflappable species ignore the camera", () => {
+  theme.species.forEach((sp) => {
+    const b = sp.behavior;
+    assert.ok(b.name && b.label && b.habit, `${sp.id} has a named class with a field-guide habit`);
+    assert.ok(["flee", "flush", "ignore"].includes(b.react), sp.id);
+    assert.equal(b.react === "ignore", !sp.skittish, `${sp.id}: ignore ⇔ not skittish`);
+    if (b.react === "flush") assert.ok(b.climb > 0, sp.id);
+    if (b.wobble) assert.ok(b.wobble.length === 2 && b.wobble.every((v) => v > 0), sp.id);
+  });
+  const cls = (id) => speciesOf(theme, id).behavior.name;
+  assert.equal(cls("deer"), "grazer");
+  assert.equal(cls("bear"), "largeMammal");
+  assert.equal(cls("cottontail"), "skittish");
+  assert.equal(cls("monarch"), "butterfly");
+  assert.equal(cls("darner"), "darter");
+  assert.equal(cls("blue-jay"), "songbird");
+});
+
+test("behaviour classes react differently to a photo", () => {
+  const s = round();
+  const snap = (kind, x) => { const a = place(s, kind, x, 110); aimAt(s, a); s.fireCooldown = 0; assert.equal(fire(s).result, "hit"); return a; };
+  const deer = snap("deer", 20);
+  assert.ok(deer.fleeing && deer.mult > 3 && deer.pause === 0, "a photographed deer bolts at once, fast");
+  const bear = snap("bear", 200);
+  const before = { dir: bear.dir, mult: bear.mult };
+  assert.ok(bear.snapped && !bear.fleeing, "a bear carries on along its path");
+  assert.deepEqual({ dir: bear.dir, mult: bear.mult }, before);
+  const s2 = round();
+  const turkey = place(s2, "turkey", 150, 120); aimAt(s2, turkey); fire(s2);
+  const y0 = turkey.y;
+  s2.spawnIn = 99; tick(s2, 0.5);
+  assert.ok(turkey.climb < 0 && turkey.y < y0 - 15, "a ground bird flushes up into the air");
+  assert.ok(turkey.y < MIN_Y || turkey.y < y0, "flushed birds may leave the ground band");
+});
+
+test("wary grazers notice the shutter from further away than other animals", () => {
+  const s = round();
+  const deer = place(s, "deer", 100, 100);
+  const fox = place(s, "fox", 100, 100);
+  const dist = 46 * 1.2; // beyond the normal radius, inside the deer's wider one
+  s.aim = { x: 100 + speciesOf(theme, "deer").w / 2 + dist, y: 100 + speciesOf(theme, "deer").h / 2 };
+  startle(s);
+  assert.ok(deer.fleeing);
+  assert.ok(!fox.fleeing);
+});
+
+test("fluttering and hovering insects bob; skittish animals zigzag when they flee", () => {
+  const s = round({ random: seq(0.1, 0.9, 0.3, 0.7) });
+  s.spawnIn = 99;
+  const monarch = place(s, "monarch", 100, 100, { age: 0, phase: 0, seed: 0, mult: 1, drift: 0, pause: 0, timer: 99 });
+  const ys = [];
+  for (let i = 0; i < 20; i += 1) { step(s, 0.05, {}); ys.push(monarch.y); }
+  assert.ok(Math.max(...ys) - Math.min(...ys) > 2, "the butterfly's path bobs up and down");
+  const bee = place(s, "bumble-bee", 150, 100, { age: 0, phase: 0, seed: 0, mult: 1, drift: 0, pause: 5, timer: 99 });
+  const phase0 = bee.phase; step(s, 0.1, {});
+  assert.ok(bee.phase > phase0 && bee.x === 150, "a hovering bee stays put but keeps its wings going");
+  const r = round({ random: seq(0.1, 0.2, 0.9, 0.2) });
+  r.spawnIn = 99;
+  const rabbit = place(r, "cottontail", 160, 120, { age: 0, phase: 0, seed: 0, mult: 1, drift: 0, pause: 0, timer: 99 });
+  r.aim = { x: 150, y: 120 }; startle(r);
+  const drifts = new Set();
+  for (let i = 0; i < 20; i += 1) { step(r, 0.05, {}); drifts.add(Math.sign(rabbit.drift)); }
+  assert.ok(drifts.has(1) && drifts.has(-1), "a fleeing rabbit zigzags");
 });
 
 test("animals spawn over time and the viewfinder stays on screen", () => {

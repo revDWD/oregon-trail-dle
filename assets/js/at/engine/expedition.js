@@ -32,6 +32,7 @@ export const defaultRandom = () => {
 };
 
 const between = (random, range) => range[0] + random() * (range[1] - range[0]);
+const TAU = Math.PI * 2;
 const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
 
 export function speciesOf(theme, id) {
@@ -164,11 +165,13 @@ function prepare(state, animal) {
   animal.drift = 0;
   animal.pause = 0;
   animal.timer = 0.3 + state.random();
+  animal.seed = animal.phase; // fixed offset so a flock doesn't bob in step
 }
 
 function decide(state, animal, spec) {
   const rule = spec.behavior;
   const random = state.random;
+  animal.fleeing = false;
   const inside = animal.x > 16 && animal.x + spec.w < WIDTH - 16;
   const roll = random();
   animal.timer = between(random, rule.timer);
@@ -189,34 +192,55 @@ function decide(state, animal, spec) {
   animal.drift = (random() * 2 - 1) * rule.drift;
 }
 
+// Flushed birds may climb into the sky on their way out.
+const boundsOf = (spec, animal) => (animal.climb ? [8, yBounds(spec)[1]] : yBounds(spec));
+
 function move(state, animal, dt) {
   const spec = speciesOf(state.theme, animal.kind);
+  const rule = spec.behavior;
   prepare(state, animal);
   animal.age += dt;
+  const [low, high] = boundsOf(spec, animal);
+  // Bobbing, undulating or gliding flight: the derivative of amplitude × sin(2π·f·t).
+  const wobble = rule.wobble ? Math.cos(animal.age * rule.wobble[1] * TAU + animal.seed) * rule.wobble[0] * TAU * rule.wobble[1] * state.speedFactor : 0;
   if (animal.age >= LEAVE_AFTER && animal.pause > 0) animal.pause = 0;
   if (animal.pause > 0) {
     animal.pause -= dt;
+    // Hovering insects keep their wings going and bob in place.
+    if (rule.hover) { animal.phase += dt * 14; animal.y = clamp(animal.y + wobble * dt, low, high); }
     return;
   }
   animal.timer -= dt;
-  if (animal.timer <= 0 && !animal.snapped) decide(state, animal, spec);
+  // Photographed and flushed animals are on their way out and no longer wander.
+  if (animal.timer <= 0 && !animal.snapped && !animal.climb) decide(state, animal, spec);
+  if (animal.fleeing && rule.zigzag) {
+    animal.zig = (animal.zig || 0) - dt;
+    if (animal.zig <= 0) { animal.drift = (state.random() < 0.5 ? -1 : 1) * rule.zigzag; animal.zig = 0.15 + state.random() * 0.2; }
+  }
   animal.phase += dt * 9 * animal.mult;
   animal.x += animal.dir * spec.speed * animal.mult * state.speedFactor * dt;
-  const [low, high] = yBounds(spec);
-  animal.y = clamp(animal.y + animal.drift * dt, low, high);
+  animal.y = clamp(animal.y + (animal.drift + wobble + (animal.climb || 0) * state.speedFactor) * dt, low, high);
   if (animal.y === low || animal.y === high) animal.drift = -animal.drift;
 }
 
-function bolt(state, animal, dir) {
+// How an animal reacts to the camera, by its behaviour class: runs (cautious ones freeze first),
+// takes off and flies away, or (react: "ignore") simply carries on.
+function bolt(state, animal, dir, { photo = false } = {}) {
   prepare(state, animal);
+  const rule = speciesOf(state.theme, animal.kind).behavior;
+  if (rule.react === "ignore") return false;
   animal.dir = dir;
-  animal.pause = 0;
-  animal.mult = 2;
-  animal.timer = 1.2;
+  animal.pause = photo ? 0 : rule.alert || 0;
+  animal.mult = (rule.flee || 2) * (photo ? 1.2 : 1);
+  animal.timer = 1.2 + (animal.pause || 0);
+  animal.fleeing = true;
+  animal.zig = 0;
+  if (rule.react === "flush") { animal.climb = -(rule.climb || 50); animal.drift = 0; }
+  return true;
 }
 
-// A photo or a missed frame spooks nearby skittish animals so they bolt away from the viewfinder;
-// their herd-mates follow.
+// A photo or a missed frame spooks nearby skittish animals so they flee or take off away from the
+// viewfinder (wary grazers notice from further away); their herd-mates follow.
 export function startle(state) {
   const { x, y } = state.aim;
   const spooked = [];
@@ -225,9 +249,8 @@ export function startle(state) {
     if (!spec.skittish || animal.snapped) return;
     const dx = animal.x + spec.w / 2 - x;
     const dy = animal.y + spec.h / 2 - y;
-    if (Math.hypot(dx, dy) > STARTLE_RADIUS) return;
-    bolt(state, animal, dx >= 0 ? 1 : -1);
-    spooked.push(animal);
+    if (Math.hypot(dx, dy) > STARTLE_RADIUS * (spec.behavior.wary || 1)) return;
+    if (bolt(state, animal, dx >= 0 ? 1 : -1)) spooked.push(animal);
   });
   spooked.forEach((scared) => {
     if (!scared.herdId) return;
@@ -314,8 +337,7 @@ export function fire(state) {
   animal.snapped = true;
   state.hits += 1;
   startle(state);
-  bolt(state, animal, animal.x + spec.w / 2 >= x ? 1 : -1);
-  animal.mult = 2.4;
+  bolt(state, animal, animal.x + spec.w / 2 >= x ? 1 : -1, { photo: true });
   const repeat = state.spotted.includes(spec.id);
   const isNew = !repeat && Boolean(state.known) && !state.known.has(spec.id);
   const worth = repeat ? 0 : spec.value * (isNew ? DISCOVERY_MULTIPLIER : 1);

@@ -134,7 +134,8 @@ test("starting a round from the keyboard does not also take a photo", () => {
 test("background refreshes keep the page usable (focus, fail-soft, fresh photo total)", () => {
   const app = readFileSync("assets/js/at/ui/app.js", "utf8");
   const views = readFileSync("assets/js/at/ui/views.js", "utf8");
-  assert.match(app, /function redrawInBackground\(\)[\s\S]*?if \(busy\(\)\)/, "background redraws wait while focus is in the page");
+  assert.match(app, /function redrawInBackground\(\)[\s\S]*?if \(busy\(\)( \|\||\))/, "background redraws wait while focus is in the page");
+  assert.match(app, /route\(\) === "history" && state\.editingId/, "History never redraws over an open edit form");
   assert.match(app, /isMissingFunction\(e\)/, "only a missing RPC switches to the pre-migration mode");
   assert.match(app, /layer\.activities\.summary\(/, "pre-migration progress comes from this device's summary");
   assert.doesNotMatch(app, /e\.code === "network"\) \{ announce\(friendly\(e\)\); return; \}/);
@@ -158,4 +159,28 @@ test("Trail has no Coming Up card; Camp opens with Trail Dispatches", async () =
   assert.doesNotMatch(views, /Coming up:/);
   const camp = views.slice(views.indexOf("export function campView"));
   assert.ok(camp.indexOf("dispatches-title") < camp.indexOf("camp-card"), "dispatches come before the camp scene");
+});
+
+test("headings, card titles and section summaries use Title Case", () => {
+  const minor = new Set(["a", "an", "the", "and", "of", "to", "in", "on", "for", "at", "by", "or", "with", "so"]);
+  const titles = [];
+  for (const file of appJs.filter((f) => f.includes("/ui/"))) {
+    const src = read(file);
+    // String literals passed to h("h1"…"h4", …) and h("summary", …), plus story-part titles in map.js.
+    for (const m of src.matchAll(/h\("(?:h[1-4]|summary)",\s*\{[^}]*\},([^\n]*)/g)) {
+      const call = m[1].split(/\bh\("/)[0];
+      for (const lit of call.matchAll(/"([^"]{3,})"/g)) titles.push([file, lit[1]]);
+    }
+    for (const m of src.matchAll(/part\("\w+", "([^"]+)"/g)) titles.push([file, m[1]]);
+    for (const m of src.matchAll(/label: "([^"]+)" \}, `/g)) titles.push([file, m[1]]);
+  }
+  for (const m of read("assets/js/at/engine/field-guide.js").matchAll(/\{ id: "\w+", label: "([^"]+)" \}/g)) titles.push(["field-guide.js", m[1]]);
+  assert.ok(titles.length > 20, `found ${titles.length} titles`);
+  for (const [file, title] of titles) {
+    title.split(/\s+/).forEach((word, i) => {
+      const w = word.replace(/^[^A-Za-z]+/, "");
+      if (!w || /^[^a-z]/.test(w)) return;
+      assert.ok(i > 0 && minor.has(w.replace(/[^a-z]/g, "")), `${file}: "${title}" should be Title Case ("${word}")`);
+    });
+  }
 });

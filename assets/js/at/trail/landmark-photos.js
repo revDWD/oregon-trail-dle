@@ -14,21 +14,21 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "big-meadows": {
     "src": "assets/img/landmarks/big-meadows.jpg",
-    "alt": "Big Meadows: One of the bathrooms at the Big Meadows Campground in Shenandoah National Park in Virginia. This ba…",
-    "credit": "G. Edward Johnson",
-    "license": "CC BY 4.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bathroom_at_Big_Meadows_Campground_Shenandoah_2022-06-19_12-20-55_1.jpg",
-    "year": "2022"
+    "alt": "Big Meadows: Big Meadows in the fall 0f 2003",
+    "credit": "Cbaile19",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Big_Meadows,_Shenandoah_National_Park,_2003-10-10,_01.jpg",
+    "year": "2003"
   },
   "bly-gap": {
     "src": "assets/img/landmarks/bly-gap.jpg",
-    "alt": "Bly Gap: South Mountain is the northern extension of the Blue Ridge Mountain range in Maryland and Pennsylva…",
-    "credit": "Ken Lund from Las Vegas, Nevada, USA",
-    "license": "CC BY-SA 2.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:South_Mountain,_Maryland_(7235278532).jpg",
-    "year": "2012"
+    "alt": "Bly Gap: Uvularia sessilifolia L. - sessileleaf bellwort - Flowers - Wayah Gap, North Carolina, United States",
+    "credit": "Harlan B. Herbert, Bugwood.org",
+    "license": "CC BY 3.0 us",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/us/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Uvularia_sessilifolia_5504131.jpg",
+    "year": "1966"
   },
   "clingmans-dome": {
     "src": "assets/img/landmarks/clingmans-dome.jpg",
@@ -41,12 +41,12 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "damascus": {
     "src": "assets/img/landmarks/damascus.jpg",
-    "alt": "Damascus: Please note that these photos are for personal use only. If posting to social media or sharing the…",
-    "credit": "Virginia Office of the Governor",
-    "license": "CC BY 2.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hurricane_Helene_Damage_(Damascus,_VA).jpg",
-    "year": "2024"
+    "alt": "Damascus: Hikers walking along a bridge on the Virginia Creeper Trail in Damascus, Virginia",
+    "credit": "Waldo Jaquith",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Creeper_Trail_Bridge.jpg",
+    "year": "2006"
   },
   "delaware-water-gap": {
     "src": "assets/img/landmarks/delaware-water-gap.jpg",
@@ -68,12 +68,12 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "fontana-dam": {
     "src": "assets/img/landmarks/fontana-dam.jpg",
-    "alt": "Fontana Dam: Fontana Village Resort in Fontana Dam, North Carolina, and Graham County.",
-    "credit": "Harrison Keely",
-    "license": "CC BY 4.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fontana_Village_Resort_in_Fontana_Dam,_North_Carolina,_and_Graham_County_01.jpg",
-    "year": "2024"
+    "alt": "Fontana Dam: Fontana Dam, North Carolina",
+    "credit": "w_lemay",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Little_Tennessee_River,_Fontana_Dam,_NC.jpg",
+    "year": "2021"
   },
   "grayson-highlands": {
     "src": "assets/img/landmarks/grayson-highlands.jpg",
@@ -176,12 +176,12 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "nantahala": {
     "src": "assets/img/landmarks/nantahala.jpg",
-    "alt": "Nantahala Gorge: The threatened noonday globe snail only occurs on the north-facing side of the Nantahala River Gorg…",
-    "credit": "USFWS/Southeast",
-    "license": "Public domain",
-    "licenseUrl": null,
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Jason_Mays_searches_for_snails_uphill_from_the_Nantahala_River_(47967213478).jpg",
-    "year": "2019"
+    "alt": "Nantahala Gorge: A raft on Nantahala River (original flickr title: \"Excited rafters\")",
+    "credit": "anoldent",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nantahala_River_raft_2009.jpg",
+    "year": "2009"
   },
   "pearisburg": {
     "src": "assets/img/landmarks/pearisburg.jpg",
@@ -221,11 +221,11 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "springer-mountain": {
     "src": "assets/img/landmarks/springer-mountain.jpg",
-    "alt": "Springer Mountain: Dowdell's Knob The road extending one mile south traverses a spur which projects into Pine Mountain…",
-    "credit": "Dsdugan",
+    "alt": "Springer Mountain: Appalachian Trail plaque at the top of Springer Mountain",
+    "credit": "Thomson200",
     "license": "CC0",
     "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:21-07-024-dowdell.jpg",
-    "year": "2021"
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Appalachian_Trail_plaque_Springer_Mountain.JPG",
+    "year": "2014"
   }
 });

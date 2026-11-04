@@ -31,7 +31,7 @@ const REJECTED = new Set([
   "File:Hurricane Helene Damage (Damascus, VA).jpg", "File:Bathroom at Big Meadows Campground Shenandoah 2022-06-19 12-20-55 1.jpg"
 ]);
 
-const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, "").split("=")));
+const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, "").split("=")).map(([k, v]) => [k, v ?? true]));
 const only = args.only ? new Set(args.only.split(",")) : null;
 const headers = { "User-Agent": "ATFitnessTracker-landmark-photos/1.0 (https://atfitnesstracker.abbydavid.com)" };
 const photos = { ...LANDMARK_PHOTOS };

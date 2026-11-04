@@ -320,3 +320,89 @@ Each landmark is a small destination with up to five short layers: history, natu
 3. **Region welcome card** when entering a new state or region, using the region blurb plus that region's best "Did you know?".
 4. **Curated photos** for 6–8 landmarks (see 11.3).
 5. **"Trail quiz" from stories**: one optional multiple-choice question per passed landmark at Camp, built from existing facts. Build it only if the hikers want it.
+
+## 12. Wildlife Spotting enhancement sprint
+
+### 12.1 Assessment of the current game
+
+| Area | Before this sprint | Verdict |
+| --- | --- | --- |
+| Fun factor | Strong: the restored hunt pacing (30 s, 12 frames, 4-frame film wind, cooldown), startle and herd behaviour, weather and pop-ups feel good. | Keep as is |
+| Replayability | Weak: 9 species, so the same few animals every outing. | Main gap |
+| Progression | Score only (photo board). Nothing remembered which animals you had seen. | Main gap |
+| Difficulty | Well tuned: skittish vs calm species, speeds, film winding. Reduced motion slows wildlife. | Keep |
+| Educational value | Low: names only. | Add short facts |
+| Collection | None (runs stored score/hits only). | Needs a small schema addition |
+| Long-term engagement | One "first wildlife" badge. | Add collection badges and rare moments |
+
+### 12.2 Recommendation: enhance, don't overhaul
+
+The core loop is the strongest part of the game and the original Oregon Trail DLE feel is what people enjoy. Rebuilding would risk that for no gain. Everything missing (variety, collection, surprise, learning) can be layered on as **data plus one small table change**, without touching the controls, pacing or renderer.
+
+### 12.3 Implemented
+
+- **Variety: 9 → 37 species.**
+  - Mammals: + beaver, coyote, river otter.
+  - Birds: turkey, grouse and wood duck, plus bald eagle, red-tailed hawk, blue jay, eastern meadowlark, barred owl and common loon.
+  - Insects: monarch, green darner, firefly, bumble bee, Carolina mantis and six-spotted tiger beetle.
+  - Reptiles and amphibians: eastern box turtle, red eft and wood frog.
+  - New behaviours: soaring and flitting flyers, darting dragonflies, creeping turtles and efts.
+  - Each species has an original pixel sprite, a one-line fact and a range.
+- **Regional ecosystems.** Every habitat now has its own mix, plus a habitat fact:
+  - Fireflies and elk on the Smokies balds.
+  - Box turtles and mantises in the south and Mid-Atlantic.
+  - The hawk flyway on Pennsylvania's ridges.
+  - Beavers, otters and eagles at the lakes and rivers.
+  - Loons, moose and lynx in Maine.
+- **Seasons.** Insects, frogs, turtles and salamanders are four times scarcer from November to March. Snowy owls come only in winter.
+- **Rare finds** (150 pts, "RARE!" pop-up and an announcement):
+  - white (piebald) deer;
+  - eastern hellbender;
+  - golden-winged warbler;
+  - gray petaltail;
+  - snowy owl;
+  - Canada lynx.
+  
+  About 1 outing in 20 has one. Each habitat lists only its authentic rare species.
+- **Legends** (200 pts, about 1 outing in 250): Bigfoot, Jackalope, the Snallygaster (Maryland's South Mountain) and the Wampus cat (southern mountains). The White Buffalo was left out because it isn't part of AT lore.
+- **Field guide** on the Wildlife page:
+  - Collapsible sections by group, with "N of M" counts.
+  - Undiscovered species are silhouettes with a "Look in: …" hint built from habitat weights.
+  - Found species reveal colour art, fact, range, first photographed (date and hiker), habitats and photo count.
+  - Legends stay hidden behind a campfire rumour until found.
+  - The guide can be filtered to one hiker.
+  - A "New in the field guide!" message appears on a first sighting.
+- **Wildlife badges** (per hiker, pixel art, locked silhouettes):
+  - Trail Photographer: 10 species.
+  - Bird Watcher: 5 birds.
+  - Butterfly Collector: 4 insects.
+  - Trail Naturalist: 4 habitats.
+  - Wildlife Expert: 20 species.
+  - Rare Find.
+  - Complete Field Guide.
+  - Trail Legend.
+  
+  The existing "First Wildlife Discovery" remains the "first photograph" badge. Camp's hiker panel shows "Species photographed".
+- **Data.** Migration `20261106000000_at_field_guide.sql`:
+  - New columns: `species text[]` and `habitat` on runs.
+  - Check constraints, plus a trigger that dedupes and sorts species.
+  - Server-side aggregation through `at_field_guide()`, with RLS tests.
+  - The client never downloads raw runs. It also saves without species if the migration isn't applied yet.
+
+### 12.4 Regional wildlife roadmap (future, data-only)
+
+1. **Spring warblers** in the Mid-Atlantic in May. Example: a "warbler wave" weather variant that boosts songbirds.
+2. **Fall hawk watch.** Boost raptors on rocky-ridges in September and October (Hawk Mountain).
+3. **Salamander nights.** A rainy-night variant in the southern habitats with more efts and salamanders.
+4. **Northern bog species.** Spruce grouse and gray jay in north-woods. These need new sprites but fit under the 40-species cap.
+
+### 12.5 Prioritized plan (status)
+
+1. ✅ Species, regional and seasonal expansion (data only).
+2. ✅ Field guide persistence plus the aggregate RPC.
+3. ✅ Field guide UI.
+4. ✅ Rare and legendary encounters.
+5. ✅ Wildlife badges.
+6. ⏭ Optional: post a Trail Dispatch automatically when someone photographs a rare or legendary find.
+7. ⏭ Optional: seasonal events (12.4).
+

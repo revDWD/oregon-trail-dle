@@ -14,6 +14,11 @@ const HIT_PAD = 2;
 const STARTLE_RADIUS = 46;
 const LEAVE_AFTER = 14;
 const LOCAL_CHANCE = 0.65;
+// Special finds are rolled once per outing, so they stay genuinely rare: about 1 outing in 20 has a
+// rare species and about 1 in 250 a legend. At most one special appears per outing.
+export const RARE_CHANCE = 0.05;
+export const LEGEND_CHANCE = 0.004;
+const OFF_SEASON = 0.25;
 
 export const defaultRandom = () => {
   const buffer = new Uint32Array(1);
@@ -32,16 +37,46 @@ export function habitatOf(theme, id) {
   return theme.habitats[id] ? id : Object.keys(theme.habitats)[0];
 }
 
-export function pickSpecies(theme, habitat, random) {
-  const weights = theme.habitats[habitatOf(theme, habitat)].animals;
-  const ids = Object.keys(weights);
-  const total = ids.reduce((sum, id) => sum + weights[id], 0);
+// Warm-season species (insects, frogs, turtles) are much scarcer in winter; cold-season visitors
+// (snowy owls) only turn up in winter.
+export function inSeason(spec, winter) {
+  if (spec.season === "warm") return !winter;
+  if (spec.season === "cold") return Boolean(winter);
+  return true;
+}
+
+export function pickSpecies(theme, habitat, random, { winter = false } = {}) {
+  const raw = theme.habitats[habitatOf(theme, habitat)].animals;
+  const ids = Object.keys(raw);
+  const weight = (id) => raw[id] * (inSeason(speciesOf(theme, id), winter) ? 1 : OFF_SEASON);
+  const total = ids.reduce((sum, id) => sum + weight(id), 0);
   let roll = random() * total;
   for (const id of ids) {
-    roll -= weights[id];
+    roll -= weight(id);
     if (roll < 0) return speciesOf(theme, id);
   }
   return speciesOf(theme, ids[ids.length - 1]);
+}
+
+// Rolls for this outing's special find: null most of the time, otherwise { id, at } where `at` is the
+// round clock time (seconds) it appears.
+export function rollSpecial(theme, habitat, { random = defaultRandom, winter = false } = {}) {
+  const place = theme.habitats[habitatOf(theme, habitat)];
+  const roll = random();
+  let list = null;
+  if (roll < LEGEND_CHANCE) list = place.legends || [];
+  else if (roll < LEGEND_CHANCE + RARE_CHANCE) list = (place.rare || []).filter((id) => inSeason(speciesOf(theme, id), winter));
+  if (!list || !list.length) return null;
+  return { id: list[Math.floor(random() * list.length)], at: 4 + random() * (theme.rounds.seconds - 12) };
+}
+
+// Vertical band an animal moves in: soaring birds use the sky, flitting birds and insects can rise a
+// little above the horizon, everything else stays on the ground.
+export function yBounds(spec) {
+  const ground = HEIGHT - spec.h - 6;
+  if (spec.fly === "high") return [8, MIN_Y + 6];
+  if (spec.fly === "low") return [MIN_Y - 26, ground];
+  return [MIN_Y, ground];
 }
 
 // Where the outing happens: usually the section the hiker (or crew) is in, sometimes somewhere else
@@ -52,10 +87,11 @@ export function chooseOuting(theme, localHabitat, { random = defaultRandom, mont
   const winter = month <= 3 || month >= 11;
   const pool = theme.habitats[habitat].cold && winter ? theme.coldWeathers : theme.weathers;
   const autumn = month >= 9 && month <= 11;
-  return { habitat, weather: pool[Math.floor(random() * pool.length)], autumn };
+  return { habitat, weather: pool[Math.floor(random() * pool.length)], autumn, winter };
 }
 
-// options: { habitat, weather, autumn, speedFactor } (speedFactor < 1 for reduced motion).
+// options: { habitat, weather, autumn, winter, speedFactor, special } (speedFactor < 1 for reduced
+// motion; special is a rollSpecial() result, or null for none).
 export function newRound(theme, options = {}) {
   const r = theme.rounds;
   return {
@@ -64,6 +100,8 @@ export function newRound(theme, options = {}) {
     habitat: habitatOf(theme, options.habitat),
     weather: options.weather || "clear",
     autumn: Boolean(options.autumn),
+    winter: Boolean(options.winter),
+    special: options.special ? { ...options.special, shown: false } : null,
     speedFactor: options.speedFactor || 1,
     clock: 0,
     nextHerd: 1,
@@ -89,10 +127,11 @@ export function newRound(theme, options = {}) {
 const active = (state) => state.animals.filter((animal) => !animal.snapped);
 
 // Herd animals sometimes arrive as a small group that tends to move together.
-function spawn(state) {
-  const spec = pickSpecies(state.theme, state.habitat, state.random);
+function spawn(state, forced) {
+  const spec = forced || pickSpecies(state.theme, state.habitat, state.random, { winter: state.winter });
   const fromLeft = state.random() < 0.5;
-  const baseY = MIN_Y + 8 + state.random() * (HEIGHT - MIN_Y - 8 - spec.h - 8);
+  const [low, high] = yBounds(spec);
+  const baseY = spec.fly ? low + state.random() * (high - low) : MIN_Y + 8 + state.random() * (HEIGHT - MIN_Y - 8 - spec.h - 8);
   let count = 1;
   const groupSize = spec.herd || spec.flock;
   if (groupSize && state.random() < 0.5) count = Math.min(1 + Math.ceil(state.random() * (groupSize - 1)), MAX_ANIMALS + 1 - active(state).length);
@@ -102,7 +141,7 @@ function spawn(state) {
       kind: spec.id,
       herdId,
       x: fromLeft ? -spec.w - i * (spec.w + 6) : WIDTH + i * (spec.w + 6),
-      y: clamp(baseY + (i % 2 ? 10 : -4) * (i ? 1 : 0), MIN_Y, HEIGHT - spec.h - 6),
+      y: clamp(baseY + (i % 2 ? 10 : -4) * (i ? 1 : 0), low, high),
       dir: fromLeft ? 1 : -1
     });
   }
@@ -155,8 +194,7 @@ function move(state, animal, dt) {
   if (animal.timer <= 0 && !animal.snapped) decide(state, animal, spec);
   animal.phase += dt * 9 * animal.mult;
   animal.x += animal.dir * spec.speed * animal.mult * state.speedFactor * dt;
-  const low = MIN_Y;
-  const high = HEIGHT - spec.h - 6;
+  const [low, high] = yBounds(spec);
   animal.y = clamp(animal.y + animal.drift * dt, low, high);
   if (animal.y === low || animal.y === high) animal.drift = -animal.drift;
 }
@@ -219,7 +257,11 @@ export function step(state, dt, input) {
   state.puffs = ageEffects(state.puffs, d, 0.35);
 
   state.spawnIn -= d;
-  if (state.spawnIn <= 0 && active(state).length < MAX_ANIMALS) {
+  const special = state.special;
+  if (special && !special.shown && state.clock >= special.at && active(state).length < MAX_ANIMALS) {
+    special.shown = true;
+    spawn(state, speciesOf(state.theme, special.id));
+  } else if (state.spawnIn <= 0 && active(state).length < MAX_ANIMALS) {
     spawn(state);
     state.spawnIn = SPAWN_EVERY;
   }
@@ -270,8 +312,9 @@ export function fire(state) {
   state.score += value;
   state.spotted.push(spec.id);
   state.puffs.push({ x, y, age: 0, hit: true });
-  state.popups.push({ x: animal.x + spec.w / 2, y: animal.y, age: 0, text: value > 0 ? `+${value} ${state.theme.unitShort}` : state.theme.fullText });
-  return { result: "hit", species: spec, value };
+  const tag = spec.rarity === "legend" ? "LEGEND! " : spec.rarity === "rare" ? "RARE! " : "";
+  state.popups.push({ x: animal.x + spec.w / 2, y: animal.y, age: 0, special: Boolean(tag), text: value > 0 ? `${tag}+${value} ${state.theme.unitShort}` : `${tag}${state.theme.fullText}`.trim() });
+  return { result: "hit", species: spec, value, rarity: spec.rarity || "common" };
 }
 
 // "2 white-tailed deer, 1 wild turkey" in the order first spotted.
@@ -290,6 +333,8 @@ export function summary(state) {
     hits: state.hits,
     shots: state.shots,
     accuracy: state.shots ? Math.round((state.hits / state.shots) * 100) : 0,
-    caught
+    caught,
+    species: Object.keys(caught),
+    habitat: state.habitat
   };
 }

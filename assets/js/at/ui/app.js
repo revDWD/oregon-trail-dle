@@ -28,7 +28,7 @@ const PAGE = 50;
 
 const state = {
   user: null, rules: DEFAULT_RULES, activities: [], hasMore: false, editingId: null, today: localDateString(),
-  expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], selectedHiker: null, lastHiker: null, flash: null,
+  expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], fieldGuide: [], fieldGuideUnavailable: false, selectedHiker: null, lastHiker: null, flash: null,
   challenges: [], challenge: null, dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null
 };
 let game = null; // the running expedition, stopped whenever the page re-renders
@@ -104,12 +104,15 @@ async function loadAll() {
 // migration isn't applied yet the app keeps working the old way (no hiker field).
 async function loadExpedition(draw = true) {
   try {
-    const [hikers, marks] = await Promise.all([
+    const [hikers, marks, fieldGuide] = await Promise.all([
       layer.expedition.hikers(weekStart(localDateString())),
-      layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: PERSONAL_MARKS })
+      layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: PERSONAL_MARKS }),
+      // Optional: without the field guide migration (or on a hiccup) keep the last guide we had.
+      layer.expedition.fieldGuide().then((rows) => { state.fieldGuideUnavailable = false; return rows; })
+        .catch((e) => { if (isMissingFunction(e)) state.fieldGuideUnavailable = true; return state.fieldGuide; })
     ]);
-    const changed = state.expeditionError || JSON.stringify([hikers, marks]) !== JSON.stringify([state.hikers, state.marks]);
-    Object.assign(state, { hikers, marks, expeditionUnavailable: false, expeditionError: false, deviceSummary: null });
+    const changed = state.expeditionError || JSON.stringify([hikers, marks, fieldGuide]) !== JSON.stringify([state.hikers, state.marks, state.fieldGuide]);
+    Object.assign(state, { hikers, marks, fieldGuide, expeditionUnavailable: false, expeditionError: false, deviceSummary: null });
     if (!state.selectedHiker || !hikers.some((x) => x.id === state.selectedHiker)) state.selectedHiker = (hikers.find((x) => x.id === state.lastHiker) || hikers[0] || {}).id || null;
     if (draw && (changed || pendingDraw)) redrawInBackground();
   } catch (e) {
@@ -158,14 +161,14 @@ function newlyEarned(before) {
   state.hikers.forEach((hk) => {
     const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
     const had = new Set(before.get(hk.id) || []);
-    hikerBadges(hk, { marks: state.marks, register, today: state.today }).filter((b) => b.earned && !had.has(b.id)).forEach((b) => out.push(`${hk.name} earned ${b.title}!`));
+    hikerBadges(hk, { marks: state.marks, register, today: state.today, sightings: state.fieldGuide }).filter((b) => b.earned && !had.has(b.id)).forEach((b) => out.push(`${hk.name} earned ${b.title}!`));
   });
   return out;
 }
 
 function earnedSnapshot() {
   const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
-  return new Map(state.hikers.map((hk) => [hk.id, hikerBadges(hk, { marks: state.marks, register, today: state.today }).filter((b) => b.earned).map((b) => b.id)]));
+  return new Map(state.hikers.map((hk) => [hk.id, hikerBadges(hk, { marks: state.marks, register, today: state.today, sightings: state.fieldGuide }).filter((b) => b.earned).map((b) => b.id)]));
 }
 
 async function afterActivityChange() {
@@ -232,11 +235,13 @@ const actions = {
   // Returns a message for the expedition page; does not re-render (the finished round stays on screen).
   async recordExpedition(summary) {
     try {
+      const before = earnedSnapshot();
       await layer.expeditions.record(summary);
       actions.rememberHiker(summary.hikerId);
       await loadExpedition(false);
+      const unlocked = before.size ? newlyEarned(before) : [];
       const who = (state.hikers.find((x) => x.id === summary.hikerId) || {}).name;
-      if (who) return `Pinned to ${who}'s spot on the photo board at Camp: ${summary.score} photo points.`;
+      if (who) return `Pinned to ${who}'s spot on the photo board at Camp: ${summary.score} photo points.${unlocked.length ? ` 🎉 ${unlocked.join(" ")}` : ""}`;
       return state.hikers.length ? `Saved ${summary.score} photo points. Choose who's spotting to pin the next outing to a hiker.` : `Saved ${summary.score} photo points.`;
     } catch (e) { return friendly(e); }
   }

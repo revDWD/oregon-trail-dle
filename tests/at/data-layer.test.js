@@ -255,7 +255,7 @@ test("expedition roster: hikers and marks map from the aggregate RPCs (no joinin
     }
   });
   const data = createDataLayer(client);
-  assert.deepEqual(Object.keys(data.expedition).sort(), ["hikers", "marks"], "no join or invite calls");
+  assert.deepEqual(Object.keys(data.expedition).sort(), ["fieldGuide", "hikers", "marks"], "no join or invite calls");
   const [david] = await data.expedition.hikers("2026-11-02");
   assert.deepEqual(client.calls.at(-1).args, { p_week_start: "2026-11-02" });
   assert.deepEqual(david, { id: "h1", name: "David", sortOrder: 1, active: true, totalMiles: 12.5, weekMiles: 2, activityCount: 3,
@@ -281,6 +281,34 @@ test("wildlife outings can be pinned for a hiker", async () => {
   const client = createFakeClient({ session: signedIn, respond: () => ({ data: [{ id: "r1" }], error: null }) });
   await createDataLayer(client).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 2, hikerId: "h2" });
   assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 1, shots: 2, hiker_id: "h2" });
+});
+
+test("field guide: outings save the species seen; the guide maps from the aggregate RPC", async () => {
+  const client = createFakeClient({ session: signedIn, respond: (call) => call.name === "at_field_guide"
+    ? { data: [{ hiker_id: "h1", species: "deer", habitat: "blue-ridge", first_seen: "2026-11-02", sightings: "3" }], error: null }
+    : { data: [{ id: "r1" }], error: null } });
+  const data = createDataLayer(client);
+  await data.expeditions.record({ theme: "wildlife", score: 10, hits: 2, shots: 2, hikerId: "h1", species: ["deer", "Bad id", "deer", "turkey"], habitat: "blue-ridge" });
+  assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 2, shots: 2, hiker_id: "h1", species: ["deer", "turkey"], habitat: "blue-ridge" });
+  assert.deepEqual(await data.expedition.fieldGuide(), [{ hikerId: "h1", species: "deer", habitat: "blue-ridge", firstSeen: "2026-11-02", sightings: 3 }]);
+  assert.equal(client.calls.at(-1).name, "at_field_guide");
+});
+
+test("field guide: without the migration, outings still save (minus species)", async () => {
+  let inserts = 0;
+  const client = createFakeClient({ session: signedIn, respond: (call) => {
+    if (call.op !== "insert") return { data: null, error: null };
+    inserts += 1;
+    return inserts === 1 ? { data: null, error: { code: "PGRST204", message: "Could not find the 'species' column" } } : { data: { id: "r1" }, error: null };
+  } });
+  await createDataLayer(client).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 1, species: ["deer"], habitat: "lakes" });
+  const sent = client.calls.filter((c) => c.op === "insert").map((c) => c.payload);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[1], { theme: "wildlife", score: 10, hits: 1, shots: 1 });
+  // Other errors are not retried.
+  const strict = createFakeClient({ session: signedIn, respond: () => ({ data: null, error: { code: "23514", message: "check" } }) });
+  await assert.rejects(() => createDataLayer(strict).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 1, species: ["deer"] }), (e) => e.code === "validation");
+  assert.equal(strict.calls.filter((c) => c.op === "insert").length, 1);
 });
 
 test("roster errors are friendly", () => {

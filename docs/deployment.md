@@ -27,6 +27,8 @@ The site is static (no build step). GitHub Pages serves the repository root from
 
 6. **Open participation (no invite codes):** paste the whole of `supabase/migrations/20261105000000_at_open_expedition.sql` and run it. Any visitor can now log for any hiker straight away (pick a name → log → everything updates). It removes the invite code, the join function and the membership table. Devices still own, and alone can edit or delete, the rows they logged.
 
+7. **Wildlife field guide:** paste the whole of `supabase/migrations/20261106000000_at_field_guide.sql` and run it. Each Wildlife Spotting outing then records which species were photographed (and the habitat), and the field guide and wildlife badges fill in. Until it is applied, outings still save to the photo board and the guide shows a short "waiting for the update" note.
+
 (Or with the Supabase CLI: `supabase link --project-ref eojzvyyhzdapwgsrtyne` then `supabase db push`.)
 
 ## 2b. Let the organizer (Kevin) post Trail Dispatches
@@ -97,6 +99,7 @@ For a separate staging database, create a second Supabase project, run the migra
 - [ ] Log Activity requires a hiker; after saving, that hiker's miles and badges update at Camp.
 - [ ] After the Phase 2 migration and organizer setup, a dispatch posted at Camp appears at the top of the Trail page for everyone.
 - [ ] A Wildlife Spotting round that scores saves to the photo board (the photo total on Camp goes up); the 11th round in a day is politely refused.
+- [ ] After a scoring round, the photographed species appear in the Field guide (with first-seen date and who found them), and the hiker's Camp panel shows "Species photographed".
 - [ ] Log an activity; trail percent and map marker update.
 - [ ] Log for Kevin from a second device; Camp shows both hikers' totals on both devices.
 - [ ] In a second browser (a second anonymous hiker), the first hiker's activities are not visible or editable.

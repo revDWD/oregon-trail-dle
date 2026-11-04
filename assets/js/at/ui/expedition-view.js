@@ -3,7 +3,7 @@
 // habitats with a camera viewfinder. Rules live in engine/expedition.js and data in
 // engine/expedition-themes.js. Returns { element, stop } so the app can halt the loop when the route changes.
 import { h } from "./dom.js";
-import { WIDTH, HEIGHT, newRound, step, fire, animalAt, summary, chooseOuting, speciesOf, spottedList } from "../engine/expedition.js";
+import { WIDTH, HEIGHT, newRound, step, fire, animalAt, summary, chooseOuting, rollSpecial, speciesOf, spottedList } from "../engine/expedition.js";
 
 const OUTLINE = "#2a1d12";
 const AUTUMN = [["#c8642a", "#e08a4a"], ["#d9a13a", "#ecc060"], ["#a8432a", "#c8643a"], ["#4b7a3a", "#6a9a4c"]];
@@ -186,7 +186,7 @@ function drawAnimal(ctx, state, animal) {
   ctx.fillStyle = OUTLINE;
   spec.parts.forEach((part) => ctx.fillRect(...place(part, 1)));
   spec.parts.forEach((part) => {
-    ctx.fillStyle = part[4] === 2 ? spec.light : spec.colors[part[4]];
+    ctx.fillStyle = part[4] === 3 ? spec.accent || spec.light : part[4] === 2 ? spec.light : spec.colors[part[4]];
     ctx.fillRect(...place(part, 0));
   });
 }
@@ -240,7 +240,7 @@ function drawEffects(ctx, state) {
     const y = Math.round(popup.y - 4 - popup.age * 18);
     ctx.fillStyle = OUTLINE;
     [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([ox, oy]) => ctx.fillText(popup.text, Math.round(popup.x) + ox, y + oy));
-    ctx.fillStyle = "#ffe36a";
+    ctx.fillStyle = popup.special ? "#9ff0ff" : "#ffe36a";
     ctx.fillText(popup.text, Math.round(popup.x), y);
   });
   ctx.textAlign = "left";
@@ -321,12 +321,14 @@ const isField = (target) => Boolean(target && target.closest && target.closest("
 
 /**
  * @param theme    a theme from expedition-themes.js
- * @param options  { localHabitat (region scene), month (1-12), reducedMotion, random, onFinish(summary) -> Promise|void }
+ * @param options  { localHabitat (region scene), month (1-12), reducedMotion, random, known (species ids
+ *                  already in the field guide), onFinish(summary) -> Promise|void }
  */
-export function createExpedition(theme, { localHabitat, month = new Date().getMonth() + 1, reducedMotion = false, random, onFinish = () => {} } = {}) {
+export function createExpedition(theme, { localHabitat, month = new Date().getMonth() + 1, reducedMotion = false, random, known = [], onFinish = () => {} } = {}) {
   const rules = theme.rounds;
+  const seen = new Set(known);
   const pickOuting = () => chooseOuting(theme, localHabitat, { random, month });
-  const roundFor = (outing) => newRound(theme, { ...outing, random, speedFactor: reducedMotion ? 0.6 : 1 });
+  const roundFor = (outing) => newRound(theme, { ...outing, random, special: rollSpecial(theme, outing.habitat, { random, winter: outing.winter }), speedFactor: reducedMotion ? 0.6 : 1 });
   let state = roundFor(pickOuting());
   let running = false;
   let raf = 0;
@@ -392,7 +394,12 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
     if (!running) return;
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
+    const waiting = state.special && !state.special.shown;
     step(state, dt, input());
+    if (waiting && state.special.shown) {
+      const spec = speciesOf(theme, state.special.id);
+      message.textContent = spec.rarity === "legend" ? theme.text.legend(spec) : theme.text.rare(spec);
+    }
     paint();
     updateReadout();
     if (state.over) finish();
@@ -409,7 +416,12 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
       sound.shutter();
       if (out.result === "hit") sound.hit(); else sound.miss();
     }
-    message.textContent = out.result === "hit" ? theme.text.hit(out.species, out.value) : theme.text.miss(state.reload > 0 ? state.reload.toFixed(1) : null);
+    let text = out.result === "hit" ? theme.text.hit(out.species, out.value) : theme.text.miss(state.reload > 0 ? state.reload.toFixed(1) : null);
+    if (out.result === "hit" && !seen.has(out.species.id)) {
+      seen.add(out.species.id);
+      text += ` ${theme.text.discovery(out.species)}`;
+    }
+    message.textContent = text;
     paint();
     updateReadout();
   }
@@ -459,7 +471,9 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
   updateReadout();
   paint();
 
-  const help = theme.species.map((sp) => `${sp.name[0].toUpperCase()}${sp.name.slice(1)} ${sp.value}`).join(" · ");
+  const tier = (rarity) => theme.species.filter((sp) => (sp.rarity || "common") === rarity).map((sp) => sp.value);
+  const span = (values) => `${Math.min(...values)}–${Math.max(...values)}`;
+  const help = `Common wildlife ${span(tier("common"))} · uncommon ${span(tier("uncommon"))} · rare finds ${tier("rare")[0]} · and, once in a blue moon, something legendary`;
   const element = h("div", { class: "expedition" },
     h("div", { class: "expedition-hud", "aria-live": "off" }, time.box, ammo.box, reload.box, score.box),
     h("div", { class: "expedition-frame" }, canvas),

@@ -7,7 +7,8 @@
 import {
   DataError, toDataError, activityFromRow, activityToInsert, activityToUpdate,
   profileFromRow, challengeFromRow, leaderboardFromRows, ruleFromRow,
-  dispatchFromRow, dispatchToRow, suppliesFromRows, hikerFromRow, markFromRow
+  dispatchFromRow, dispatchToRow, suppliesFromRows, hikerFromRow, markFromRow,
+  sightingFromRow, isMissingColumn
 } from "./mappers.js";
 import { DEFAULT_RULES } from "../engine/activities.js";
 
@@ -234,11 +235,20 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
 
   // Camp minigame results. They stock the camp; they never add trail miles.
   const expeditions = {
-    async record({ theme, score, hits, shots, hikerId = null }) {
+    // species/habitat feed the field guide. If that migration isn't applied yet, the run is saved without them.
+    async record({ theme, score, hits, shots, hikerId = null, species = [], habitat = null }) {
       await requireUser();
       const payload = { theme, score: Math.round(score), hits: Math.round(hits), shots: Math.round(shots) };
       if (hikerId) payload.hiker_id = hikerId;
-      return run(client.from("at_expedition_runs").insert(payload).select("id, theme, score, played_on").single());
+      const insert = (row) => run(client.from("at_expedition_runs").insert(row).select("id, theme, score, played_on").single());
+      const ids = [...new Set(species)].filter((id) => /^[a-z][a-z0-9-]{1,30}$/.test(id)).slice(0, 40);
+      if (!ids.length && !habitat) return insert(payload);
+      try {
+        return await insert({ ...payload, species: ids, habitat: habitat || null });
+      } catch (error) {
+        if (!isMissingColumn(error)) throw error;
+        return insert(payload);
+      }
     },
     async supplies(challengeId = null) {
       await requireUser();
@@ -258,6 +268,11 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
       await requireUser();
       const clean = (list) => [...new Set(list.map(Number).filter((n) => Number.isFinite(n) && n > 0))].slice(0, 100);
       return (await run(client.rpc("at_expedition_marks", { p_group: clean(group), p_personal: clean(personal) }))).map(markFromRow);
+    },
+    // Species photographed, per hiker and habitat, aggregated in Postgres (never raw runs).
+    async fieldGuide() {
+      await requireUser();
+      return (await run(client.rpc("at_field_guide"))).map(sightingFromRow);
     }
   };
 

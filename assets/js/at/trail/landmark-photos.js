@@ -174,6 +174,24 @@ export const LANDMARK_PHOTOS = Object.freeze({
     "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nantahala_River_raft_2009.jpg",
     "year": "2009"
   },
+  "neel-gap": {
+    "src": "assets/img/landmarks/neel-gap.jpg",
+    "alt": "Neel Gap: Walasi-Yi Interpretive Center, Georgia",
+    "credit": "Thomsonmg2000",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Walasi-Yi_Interpretive_Center.JPG",
+    "year": "2012"
+  },
+  "pearisburg": {
+    "src": "assets/img/landmarks/pearisburg.jpg",
+    "alt": "Pearisburg: The New River rapids near the small town of Narrows, VA",
+    "credit": "Jllackey",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_New_River_in_Giles_County,_VA.jpg",
+    "year": "2018"
+  },
   "pen-mar": {
     "src": "assets/img/landmarks/pen-mar.jpg",
     "alt": "A pavilion and Appalachian Trail sign at the Pen Mar Park overlook, Maryland",

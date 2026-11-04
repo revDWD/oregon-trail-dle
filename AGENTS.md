@@ -86,6 +86,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Devices own, and alone can edit, the rows they logged. Credited miles and factors are set by triggers.
 - **Tooling**
   - `scripts/landmark-photos.mjs` (with `scripts/lib/commons.mjs`) fetches openly licensed landmark photos.
+  - `.github/workflows/roster-check.yml` (manual) runs `scripts/roster-check.mjs`, which lists the live roster exactly as a visitor sees it. Use it when hikers "don't show up": the roster lives in the database, so an unapplied migration is the usual cause.
   - `.github/workflows/test.yml` runs CI. `.github/workflows/landmark-photos.yml` is a manual photo refresh that opens a PR.
 
 ## 4. Key systems
@@ -145,7 +146,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 - **Add or retire a hiker:** write a new migration, e.g. `insert into public.at_hikers (name, sort_order) values ('Name', 12) on conflict (name) do nothing;`, and give the owner the SQL inline. Every dropdown, Camp and the boards pick it up automatically.
 - **Add Kevin's Trail Note or landmark facts:** edit `assets/js/at/trail/landmark-stories.js` (the owner can use the GitHub pencil icon).
 - **Add a dispatch:** post it from Camp as an organizer. No code change.
-- **Add landmark photos:** run the "Landmark photos" workflow, then review the PR and improve the alt text. For a hand-picked photo, add `photo` to the landmark's story.
+- **Add landmark photos:** run the "Landmark photos" workflow, then review the PR: look at every image (searches sometimes return the wrong place) and rewrite the alt text by hand. Add rejected Commons file titles to `REJECTED` in the script and re-run with those ids. For a hand-picked photo, add `photo` to the landmark's story.
 - **Add a species:** add one object in `NEW_SPECIES` plus habitat weights in `expedition-themes.js`. The guide, hints and badges pick it up.
 - **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art.
 - **Change the schema:** see Rules below.

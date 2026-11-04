@@ -176,7 +176,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "neel-gap": {
     "src": "assets/img/landmarks/neel-gap.jpg",
-    "alt": "Neel Gap: Walasi-Yi Interpretive Center, Georgia",
+    "alt": "The stone Walasi-Yi building at Neel Gap, where the Appalachian Trail passes through a breezeway",
     "credit": "Thomsonmg2000",
     "license": "CC0",
     "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
@@ -185,7 +185,7 @@ export const LANDMARK_PHOTOS = Object.freeze({
   },
   "pearisburg": {
     "src": "assets/img/landmarks/pearisburg.jpg",
-    "alt": "Pearisburg: The New River rapids near the small town of Narrows, VA",
+    "alt": "The wide New River flowing over rocky riffles in Giles County, Virginia, near Pearisburg",
     "credit": "Jllackey",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",

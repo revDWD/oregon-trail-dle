@@ -72,7 +72,7 @@ Old bookmarks still work: `#/hunt` opens Wildlife Spotting; `#/crew`, `#/badges`
 Real landmark photos come from Wikimedia Commons. Only public domain, CC0, CC BY and CC BY-SA photos are used, and each one is self-hosted and shown with its credit, licence and source link. To add or refresh them:
 
 1. Go to GitHub, then Actions › **Landmark photos** › **Run workflow**. Leave the field blank to fill in every landmark that has no photo, or list ids such as `katahdin,max-patch` to pick those again.
-2. The workflow opens a pull request. Check each photo and its alt text in `assets/js/at/trail/landmark-photos.js`, then merge.
+2. The workflow opens a pull request. Look at each photo (add wrong picks to `REJECTED` in `scripts/landmark-photos.mjs` and run again) and rewrite its alt text in `assets/js/at/trail/landmark-photos.js`, then merge.
 
 One-time setup: Settings › Actions › General › Workflow permissions › tick "Allow GitHub Actions to create and approve pull requests". Details are in `docs/trail-data-sources.md`.
 

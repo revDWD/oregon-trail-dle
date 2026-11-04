@@ -3,7 +3,7 @@
 // public publishable key, then the at_expedition_hikers() RPC. Needs internet (run it in GitHub Actions).
 import { SUPABASE_CONFIG } from "../assets/js/at/config.js";
 
-const EXPECTED = ["Alden", "Amanda", "Andrew", "David", "Elizabeth", "Kayla", "Kevin", "Kelsey", "Matthew", "Shuva", "Will"];
+const EXPECTED = ["Alden", "Amanda", "Andrew", "David", "Elizabeth", "Kayla", "Kevin", "Kelsey", "Matthew", "Shuva", "Will"]; // keep in sync with the latest roster migration
 const headers = { apikey: SUPABASE_CONFIG.anonKey, "Content-Type": "application/json" };
 const auth = await (await fetch(`${SUPABASE_CONFIG.url}/auth/v1/signup`, { method: "POST", headers, body: "{}" })).json();
 if (!auth.access_token) { console.log("Anonymous sign-in failed:", JSON.stringify(auth)); process.exit(1); }

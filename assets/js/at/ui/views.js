@@ -12,6 +12,7 @@ import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { ACTIVITY_TYPES, ACTIVITY_LABELS, MAX_NOTES_LENGTH, validateActivity, ruleFor, localDateString } from "../engine/activities.js";
 import { groupMilestoneStatus, pickTip } from "../engine/game.js";
 import { buildFieldGuide, regionProgress, whereToLook } from "../engine/field-guide.js";
+import { expeditionJournal } from "../engine/journal.js";
 import { expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
 
 const field = (id, label, control, hint, error) => h("div", { class: "field" },
@@ -56,7 +57,7 @@ export function trailView(s, a) {
   const roster = activeHikers(s);
   const group = groupMilestoneStatus(TRAIL, p.creditedMiles, roster.map((x) => ({ weekCreditedMiles: x.weekMiles })));
   return h("section", { "aria-labelledby": "page-title" },
-    h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, p.completed ? "The expedition finished the Appalachian Trail!" : "The expedition"),
+    h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, p.completed ? "The Expedition Finished the Appalachian Trail!" : "The Expedition"),
     flashNote(s, "trail"),
     featured ? [dispatchCard(featured, { featured: true }), (s.dispatches || []).length > 1 ? h("p", { class: "more-link" }, h("a", { href: "#/camp" }, "Read earlier dispatches at Camp")) : null] : null,
     h("div", { class: "card hero" },
@@ -67,10 +68,10 @@ export function trailView(s, a) {
         stat("Miles to go", formatMiles(p.remainingMiles)),
         stat("Landmarks passed", `${p.passedLandmarks.length} of ${p.landmarks.length}`),
         p.nextLandmark ? stat(`Next: ${p.nextLandmark.name}`, formatMiles(p.distanceToNext)) : stat("Next landmark", "We made it!"))),
-    h("div", { class: "card map-card" }, h("h2", {}, "Trail map"),
+    h("div", { class: "card map-card" }, h("h2", {}, "Trail Map"),
       renderTrailMap(TRAIL, p),
       h("p", { class: "hint" }, `${TRAIL.directions[p.direction].label}. Mileage, elevations and positions are approximate.`)),
-    h("div", { class: "card" }, h("h2", {}, "This week"),
+    h("div", { class: "card" }, h("h2", {}, "This Week"),
       roster.length ? h("ul", { class: "week-hikers" }, roster.map((x) => h("li", {},
         h("a", { href: "#/hikers", onClick: () => a.selectHiker(x.id) }, x.name), h("span", {}, formatMiles(x.weekMiles))))) : null,
       group.next ? h("p", {}, `Next group milestone: ${group.next.title}, ${formatMiles(group.remainingToNext)} to go.`) : h("p", {}, "Every group milestone reached!"),
@@ -113,7 +114,7 @@ export function activityForm({ rules, existing, onSubmit, onCancel, today, hiker
       status.textContent = "Saving…";
       await onSubmit(result.value, status);
     } },
-  h("h2", { id: "form-title" }, e ? "Edit activity" : "Log an activity"),
+  h("h2", { id: "form-title" }, e ? "Edit Activity" : "Log an Activity"),
   hikerSel ? field("hikerId", "Hiker", hikerSel, "Whose miles are these?") : null,
   field("type", "Activity", typeSel),
   field("date", "Date", h("input", { id: "date", name: "date", type: "date", required: true, value: e?.date || today, max: today })),
@@ -131,7 +132,7 @@ export function logView(s, a) {
   // Never fall back to a form without the hiker field while the roster is just unreachable.
   const unknown = !s.expeditionUnavailable && !hasRoster(s);
   return h("section", { "aria-labelledby": "page-title" },
-    h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "Log activity"),
+    h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "Log Activity"),
     h("p", {}, "Every mile counts, whatever the pace. Rest when you need to."),
     unknown ? h("div", { class: "card", role: "status" }, h("p", {}, "We couldn't reach the expedition just now, so the hiker list isn't available. We'll keep trying."),
       h("button", { class: "btn primary", type: "button", onClick: () => a.retryExpedition() }, "Try again"))
@@ -162,14 +163,41 @@ export function historyView(s, a) {
     : h("p", { class: "card" }, "No activities from this device yet. Log a walk to move the expedition forward.");
   return h("section", { "aria-labelledby": "page-title" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "History"),
-    h("p", { class: "hint" }, "Activities logged from this device. Only this device can edit or delete them."),
-    list,
-    s.hasMore ? h("button", { class: "btn", type: "button", onClick: a.loadMore }, "Load older activities") : null,
-    h("details", { class: "card device" }, h("summary", {}, "About this device"),
-      h("p", {}, "There is no login. Activities are saved to the trail server and linked to this browser on this device."),
-      h("p", { class: "hint" }, "Clearing this browser's site data or using private browsing starts over as a new device. Miles already logged for a hiker keep counting."),
-      h("p", {}, "Device ID: ", h("code", { class: "hiker-id" }, s.user.id)),
-      h("p", { class: "hint" }, "The trip organizer may ask for this to let this device post Trail Dispatches.")));
+    journalSection(s),
+    h("section", { class: "your-activities", "aria-labelledby": "activities-title" },
+      h("h2", { id: "activities-title" }, "Your Activities"),
+      h("p", { class: "hint" }, "Activities logged from this device. Only this device can edit or delete them."),
+      list,
+      s.hasMore ? h("button", { class: "btn", type: "button", onClick: a.loadMore }, "Load older activities") : null));
+}
+
+const JOURNAL_SHOWN = 12;
+
+function journalEntry(e) {
+  const icon = e.species ? speciesArt(e.species, true) : badgeArt(e.art, { size: 44, prestige: e.prestige });
+  return h("li", { class: `journal-entry kind-${e.kind}${e.rarity ? ` is-${e.rarity}` : ""}${e.prestige ? " is-prestige" : ""}` },
+    h("span", { class: "journal-icon" }, icon),
+    h("span", { class: "journal-text" }, h("strong", {}, e.title),
+      h("span", { class: "hint" }, `${e.date ? day(e.date) : "Date unknown"} · ${e.detail}`)));
+}
+
+// Everything meaningful on the journey, newest first: landmarks, group milestones, wildlife
+// discoveries, field-guide milestones and badges. Built from data already loaded for Trail and Camp.
+function journalSection(s) {
+  const entries = s.expeditionUnavailable ? [] : expeditionJournal({ hikers: s.hikers, register: s.register, marks: s.marks,
+    sightings: s.fieldGuideUnavailable ? [] : s.fieldGuide, today: s.today });
+  const body = s.expeditionUnavailable
+    ? h("p", { class: "card" }, "The journal fills in once the expedition is reachable again.")
+    : !entries.length
+      ? h("p", { class: "card" }, "The journal is blank for now. Log a walk or photograph some wildlife to write the first entry.")
+      : h("div", { class: "card journal-card" },
+        h("ol", { class: "journal" }, entries.slice(0, JOURNAL_SHOWN).map(journalEntry)),
+        entries.length > JOURNAL_SHOWN ? h("details", { class: "timeline-wrap" }, h("summary", {}, `Older Entries (${entries.length - JOURNAL_SHOWN})`),
+          h("ol", { class: "journal" }, entries.slice(JOURNAL_SHOWN).map(journalEntry))) : null);
+  return h("section", { class: "journal-section", "aria-labelledby": "journal-title" },
+    h("h2", { id: "journal-title" }, "Expedition Journal"),
+    h("p", { class: "hint" }, "Every landmark, wildlife discovery and badge on the journey, newest first."),
+    body);
 }
 
 // One hiker's page at Camp: contribution, badges, milestones and their story so far.
@@ -198,13 +226,13 @@ function hikerPanel(s, hk) {
         h("span", { class: "hint" }, b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned"))
       : h("li", { class: "badge locked" }, badgeArt(b.art, { earned: false }), h("strong", {}, "Locked"),
         h("span", { class: "sr-only" }, "Not yet earned. Keep hiking to discover it.")))),
-    h("h4", {}, "Milestones reached"),
+    h("h4", {}, "Milestones Reached"),
     ms.landmarks.length || ms.groupMilestones.length
       ? h("ul", { class: "milestones" },
         ms.landmarks.map((l) => h("li", {}, `Carried the expedition to ${l.title}`, h("span", { class: "hint" }, ` · mile ${l.miles}${l.reachedOn ? ` · ${day(l.reachedOn)}` : ""}`))),
         ms.groupMilestones.map((m) => h("li", {}, `${m.carried ? "Carried the expedition to" : "On the trail for"} “${m.title}”`, h("span", { class: "hint" }, m.reachedOn ? ` · ${day(m.reachedOn)}` : ""))))
       : h("p", { class: "hint" }, "Milestones appear here as the expedition passes landmarks and group goals."),
-    timeline.length ? h("details", { class: "timeline-wrap" }, h("summary", {}, `${hk.name}'s journey so far (${timeline.length})`),
+    timeline.length ? h("details", { class: "timeline-wrap" }, h("summary", {}, `${hk.name}'s Journey So Far (${timeline.length})`),
       h("ol", { class: "timeline" }, timeline.map((t) => h("li", {}, h("span", { class: "when" }, day(t.date)), h("span", {}, t.text))))) : null);
 }
 
@@ -230,14 +258,14 @@ function hikersSection(s, a, select) {
   }));
   show(s.selectedHiker);
   return h("section", { class: "hikers", "aria-labelledby": "hikers-title" },
-    h("h2", { id: "hikers-title", tabindex: "-1" }, "The hikers"),
+    h("h2", { id: "hikers-title", tabindex: "-1" }, "The Hikers"),
     hikers.length ? [picker, panel] : h("p", { class: "card" }, "No hikers on the roster yet."));
 }
 
 function registerSection(s) {
   const p = s.progress;
   return h("section", { class: "register", "aria-labelledby": "register-title" },
-    h("h2", { id: "register-title" }, "Trail register"),
+    h("h2", { id: "register-title" }, "Trail Register"),
     h("p", { class: "hint" }, "Every landmark and group milestone the expedition has reached, and whose miles carried it there."),
     s.register.length
       ? h("ol", { class: "card register-list", reversed: true }, [...s.register].reverse().map((r) => h("li", {},
@@ -320,7 +348,7 @@ function dispatchForm(s, a, existing) {
       status.textContent = "Posting…";
       a.saveDispatch(existing ? existing.id : null, value);
     } },
-  h("h3", { id: "dispatch-form-title" }, existing ? "Edit dispatch" : "Post a new dispatch"),
+  h("h3", { id: "dispatch-form-title" }, existing ? "Edit Dispatch" : "Post a New Dispatch"),
   field("dTitle", "Title", h("input", { id: "dTitle", name: "dTitle", maxlength: 120, required: true, value: d.title || "" })),
   field("dBody", "Message", h("textarea", { id: "dBody", name: "dBody", rows: 7, maxlength: 5000, required: true, "aria-describedby": "dBody-hint" }, d.body || ""),
     "Formatting: **bold**, *italics*, [link text](https://example.com) (https links only), lines starting with - for lists, # for a heading, > for a quote. Leave a blank line between paragraphs."),
@@ -369,6 +397,7 @@ function guideEntry(s, theme, e) {
       h("dl", { class: "guide-facts" },
         h("dt", {}, "First photographed"), h("dd", {}, `${e.firstSeen ? day(e.firstSeen) : "Unknown"}${by ? ` by ${by.name}` : ""}`),
         h("dt", {}, "Range"), h("dd", {}, sp.range),
+        sp.behavior?.habit ? [h("dt", {}, "How it moves"), h("dd", {}, `${sp.behavior.label}. ${sp.behavior.habit}`)] : null,
         places ? [h("dt", {}, "Spotted in"), h("dd", {}, places)] : null,
         h("dt", {}, "Photos"), h("dd", {}, String(e.sightings)))));
 }
@@ -397,7 +426,7 @@ function fieldGuideBody(s, theme, here) {
       return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, g.entries.map((e) => guideEntry(s, theme, e))));
     }),
     // Regional completion: local species photographed in their own trail section.
-    section({ id: "regions", label: "Trail sections" }, `${regions.filter((r) => r.completedOn).length} of ${regions.length} complete`,
+    section({ id: "regions", label: "Trail Sections" }, `${regions.filter((r) => r.completedOn).length} of ${regions.length} complete`,
       h("p", { class: "hint" }, "Photograph every local species in a section, right there, to complete it."),
       h("ul", { class: "region-progress" }, regions.map((r) => h("li", { class: r.completedOn ? "done" : "" },
         h("span", {}, r.label, r.id === here ? h("strong", {}, " (you are here)") : null),
@@ -408,7 +437,7 @@ function fieldGuideBody(s, theme, here) {
 
 function fieldGuideCard(s, theme, here) {
   if (s.fieldGuideUnavailable) {
-    return h("div", { class: "card field-guide" }, h("h2", {}, "Field guide"),
+    return h("div", { class: "card field-guide" }, h("h2", {}, "Field Guide"),
       h("p", {}, "The field guide fills in once the latest database update is applied. Photos still count on the board."));
   }
   const body = h("div", {}, fieldGuideBody(s, theme, here));
@@ -417,7 +446,7 @@ function fieldGuideCard(s, theme, here) {
   const filter = hikers.length > 1 ? field("guide-who", "Show", h("select", { id: "guide-who", onChange: (ev) => { guideFilter = ev.target.value; body.replaceChildren(...fieldGuideBody(s, theme, here)); } },
     h("option", { value: "", selected: !guideFilter }, "The whole expedition"),
     hikers.map((x) => h("option", { value: x.id, selected: x.id === guideFilter }, `${x.name}'s finds`)))) : null;
-  const card = h("div", { class: "card field-guide" }, h("h2", {}, "Field guide"),
+  const card = h("div", { class: "card field-guide" }, h("h2", {}, "Field Guide"),
     h("p", { class: "hint" }, "Every species you photograph is added here with a fact and where it lives. Wildlife changes as the expedition heads north, and with the seasons."),
     filter, body);
   card.refresh = () => body.replaceChildren(...fieldGuideBody(s, theme, here));
@@ -466,7 +495,7 @@ export function wildlifeView(s, a) {
     who ? h("div", { class: "card spotter" }, field("spotter", "Who's spotting?", who, "Photos are pinned to this hiker's board at Camp.")) : null,
     h("div", { class: "card" }, game.element, saved),
     guideCard,
-    h("div", { class: "card" }, h("h2", {}, "The photo board"), board,
+    h("div", { class: "card" }, h("h2", {}, "The Photo Board"), board,
       h("p", { class: "hint" }, "Up to 10 outings a day count toward the board. Wildlife Spotting is just for fun: only real activity adds trail miles. ", h("a", { href: "#/camp" }, "See the board at Camp"), ".")));
 }
 

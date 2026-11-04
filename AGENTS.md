@@ -62,6 +62,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `camp.js`: scene context, time of day, weather.
     - `expedition.js` and `expedition-themes.js`: Wildlife Spotting rules and data.
     - `field-guide.js`: field guide, region progress, wildlife badges.
+    - `journal.js`: the Expedition Journal on History (`expeditionJournal`).
     - `markdown.js`: safe dispatch text.
   - **`trail/`**: data only.
     - `appalachian-trail.js`: landmarks, route, milestones, regions.
@@ -77,7 +78,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `illustrations.js`: pixel landmark scenes.
     - `dom.js`: `h()` and `svg()` helpers.
 - **Rendering.** The app re-renders a whole view on change.
-  - Background refresh runs every 60 s (`loadExpedition(true)`). It redraws Trail or Camp only when data changed and nobody is typing or focused on a control.
+  - Background refresh runs every 60 s (`loadExpedition(true)`). It redraws Trail, Camp, Log or History only when data changed and nobody is typing or focused on a control (History also waits while an edit form is open).
   - A running Wildlife Spotting round is stopped on re-render (`game.stop()`).
 - **Supabase**
   - Tables are prefixed `at_` because the project also hosts the old Oregon Trail tables.
@@ -139,7 +140,12 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - **Scoring:** each species scores once per outing; repeats score 0 and show "SEEN". Species new to the field guide score ×2. "New" is judged against the chosen spotter's guide, or everyone's if nobody is chosen; with no guide there is no bonus.
   - **Density:** one spawn every 1.8 s, at most 4 animals in view, groups of at most 3.
   - **Field guide:** groups, "N to go", Trail sections completion (a species counts only when photographed *in* its section), first finder, and facts.
+  - **Behaviour classes:** every species inherits one of 14 classes in `BEHAVIOR` (`expedition-themes.js`, via `behavior: BEHAVIOR.<class>`): grazer, skittish, predator, largeMammal, groundBird, songbird, raptor, owl, swimmer, butterfly, darter, hoverer, crawler, cryptid. A class sets pace, pauses, wobble (erratic paths), hover, how wary it is, and how it reacts to the camera: `flee` (bolt away at ×`flee`), `flush` (birds burst up and fly off-screen) or `ignore` (bears, moose, crawlers carry on). `react === "ignore"` ⇔ `!skittish` (test-enforced). Grazers freeze head-up before bolting; skittish animals zigzag. The field guide shows the class as "How it moves". Reduced motion still scales every speed by 0.6.
   - Rules: at most 40 species (DB cap) and no hunting words (both test-enforced). New activities should be **new theme objects**, not new engines.
+- **History**
+  - **Expedition Journal** (top): one dated record, newest first, of landmarks and group milestones (who carried it), the expedition's first photo of each species (rare and legendary finds flagged), field-guide milestones (10, 25, complete), trail sections completed, and every hiker's badge unlocks. Built by `expeditionJournal()` from data already loaded; no new tables or RPCs. 12 entries show, the rest sit under "Older Entries".
+  - **Your Activities**: this device's own activities, editable and deletable.
+  - The "About this device" card (with the Device ID) was removed on request. To make a device an organizer, see `docs/deployment.md` §2b (find its `user_id` on an activity it logged).
 
 ## 5. How to… (common changes)
 
@@ -147,7 +153,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 - **Add Kevin's Trail Note or landmark facts:** edit `assets/js/at/trail/landmark-stories.js` (the owner can use the GitHub pencil icon).
 - **Add a dispatch:** post it from Camp as an organizer. No code change.
 - **Add landmark photos:** run the "Landmark photos" workflow, then review the PR: look at every image (searches sometimes return the wrong place) and rewrite the alt text by hand. Add rejected Commons file titles to `REJECTED` in the script and re-run with those ids. For a hand-picked photo, add `photo` to the landmark's story.
-- **Add a species:** add one object in `NEW_SPECIES` plus habitat weights in `expedition-themes.js`. The guide, hints and badges pick it up.
+- **Add a species:** add one object in `NEW_SPECIES` plus habitat weights in `expedition-themes.js`, and give it `behavior: BEHAVIOR.<class>` (pick the closest class; only add a class if none fits). The guide, hints, journal and badges pick it up.
 - **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art.
 - **Change the schema:** see Rules below.
 
@@ -169,11 +175,13 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Render text with `textContent` or `h()`/`svg()` only; no `innerHTML` (test-enforced). Rich text goes through `engine/markdown.js` → `ui/markdown-view.js`.
   - Data stays in `trail/` and `expedition-themes.js`; logic stays in `engine/`; DOM stays in `ui/`.
   - Every view has exactly one `h1` with `data-focus` (test-enforced). One-time messages use `state.flash = { route, text }`.
+- **Capitalization:** Title Case for page titles, card and section headings, `<summary>` titles, field-guide group labels and nav labels ("The Expedition", "Trail Dispatches", "Reptiles & Amphibians"); minor words (a, an, the, and, of, to, in, on, for, at, by, or, with) stay lowercase unless first. Sentence case for buttons, form labels, hints and body text ("Log activity", "Save changes"). A static test checks headings.
+- **Forms:** every control in a `.field` fills its column and single-line controls share one height (`--tap`). Native date inputs have their WebKit chrome removed so they match on iPad/iOS.
 - **Imagery:** original pixel art, or openly licensed and credited photos (public domain, CC0, CC BY, CC BY-SA). No Appalachian Trail Conservancy logos, branding or protected artwork. Trail facts are approximate.
 
 ## 7. Testing
 
-- `npm test` runs everything (Node test runner, about 150 tests). The RLS suite needs PostgreSQL binaries and skips with a notice otherwise; CI installs them.
+- `npm test` runs everything (Node test runner, about 160 tests). The RLS suite needs PostgreSQL binaries and skips with a notice otherwise; CI installs them.
 - Add tests with every feature.
 - **Visual checks**
   - Serve with `python3 -m http.server <port>`. Use a fresh port each time, because module caching makes reused ports serve stale code.
@@ -198,14 +206,14 @@ The app must keep working when a migration hasn't been applied yet.
   - Keep replies short, give exact SQL, and say plainly when no SQL is needed.
   - Work on one feature branch per sprint, open a PR, and include the Copilot co-author trailer.
 - **Refine, don't rebuild.** Every sprint so far has been a refinement. Wildlife Spotting was enhanced rather than overhauled because its pacing was already good.
-- **Removals are features.** Welcome cards, crew and invite flows, the Coming Up card, day/night buttons and duplicate landmark lists were all removed on request. Don't bring them back.
+- **Removals are features.** Welcome cards, crew and invite flows, the Coming Up card, day/night buttons, duplicate landmark lists and History's "About this device" card were all removed on request. Don't bring them back.
 - **Keep history stable.** Store what was credited, not how to recompute it (factors per row). Compute badge dates from data instead of storing them.
 - **Be honest about verification.** Never claim a test or check passed without running it. Never fabricate image licences.
 
 ## 10. Future vision (see `docs/review-and-roadmap.md` §13–14)
 
 - Landmark arrival moments: a one-time celebration card or postcard with the photo.
-- Auto-dispatch when a rare species is photographed.
+- Auto-dispatch when a rare species is photographed (the journal already records these).
 - A weekly "species of the week".
 - Seasonal events.
 - A short field-guide quiz.

@@ -57,6 +57,12 @@ nav a:focus-visible { outline-color: #fff; outline-offset: -4px; }
 label { display: block; font-weight: 600; margin-bottom: .25rem; }
 input, select, textarea { width: 100%; min-height: var(--tap); padding: .5rem .7rem; border: 2px solid var(--bark); border-radius: 10px; background: #fff; color: var(--ink); }
 input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
+/* Every control fills its column exactly. iPadOS/iOS Safari gives native date inputs an intrinsic
+   width and their own chrome, which made Date wider than the other fields; drop that chrome. */
+.field > input, .field > select, .field > textarea { display: block; max-width: 100%; min-width: 0; margin: 0; }
+.field > input, .field > select { height: var(--tap); }
+input[type="date"] { -webkit-appearance: none; appearance: none; text-align: left; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 
 .bar { height: 14px; border-radius: 999px; background: var(--sky); overflow: hidden; margin: .5rem 0 1rem; border: 1px solid var(--line); }
 .bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--moss), var(--forest)); transition: width .6s ease; }
@@ -167,7 +173,6 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .camp-person.selected .me-mark { animation: flicker 1s steps(2) infinite; }
 .time-dawn .camp-people, .time-dusk .camp-people { filter: saturate(.85); }
 .celebrate { font-weight: 700; color: var(--forest-dark); }
-.hiker-id { font-size: .85rem; }
 @keyframes flicker { 50% { opacity: .55; } }
 @keyframes smoke { from { transform: translateY(0); opacity: .8; } to { transform: translateY(-14px); opacity: 0; } }
 @keyframes drift { from { transform: translateX(-12px); } to { transform: translateX(12px); } }
@@ -322,3 +327,15 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .story-photo { margin: 0; }
 .story-photo img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; display: block; background: #e7dcc3; }
 .story-photo figcaption { font-size: .78rem; margin-top: .25rem; }
+
+/* Expedition Journal (History) */
+.journal-section, .your-activities { margin-bottom: 1.25rem; }
+.journal { list-style: none; padding: 0; margin: 0; }
+.journal-entry { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px dashed var(--line); }
+.journal > .journal-entry:last-child { border-bottom: 0; }
+.journal-icon { flex: none; width: 2.75rem; height: 2.75rem; display: grid; place-items: center; }
+.journal-icon svg { width: 100%; height: 100%; }
+.journal-text { display: flex; flex-direction: column; min-width: 0; }
+.journal-text strong { font-weight: 700; overflow-wrap: anywhere; }
+.journal-entry.is-rare .journal-icon, .journal-entry.is-legend .journal-icon { border-radius: 50%; background: #fff3cf; box-shadow: 0 0 0 2px var(--amber); }
+.journal-card .timeline-wrap { margin-top: .5rem; }

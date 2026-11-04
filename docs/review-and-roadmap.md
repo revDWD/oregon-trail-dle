@@ -406,3 +406,31 @@ The core loop is the strongest part of the game and the original Oregon Trail DL
 6. ⏭ Optional: post a Trail Dispatch automatically when someone photographs a rare or legendary find.
 7. ⏭ Optional: seasonal events (12.4).
 
+
+## 13. Wildlife Spotting refinement: collect them all
+
+### 13.1 Review
+
+The game loop was strong, but scoring rewarded photographing the same deer again and again, and up to six animals on screen made identification hard. The fix is to make scoring follow the field guide. No overhaul was needed.
+
+### 13.2 Implemented
+
+- **Unique photograph scoring.** Each species scores once per outing; later photos of it score 0 and show "SEEN". A species not yet in the field guide scores double (`DISCOVERY_MULTIPLIER`). "Known" means the chosen spotter's own guide, or the whole expedition's if nobody is chosen. If the field-guide migration isn't applied, there is no bonus.
+- **Collection progress.** The field guide shows "N to go" and a **Trail sections** list with one bar per section. A section is complete when every local species has been photographed *in that section*. The game's opening line says how many local species are still missing.
+- **Badges.** There are now 11 wildlife badges:
+  - **Insect Explorer** (renamed from Butterfly Collector).
+  - **Mammal Tracker** (6 mammals).
+  - **Creek Explorer** (3 reptiles or amphibians).
+  - **Regional Naturalist** (complete one trail section).
+  - **Rare Species Finder** (renamed).
+  - **Master Naturalist**: photograph every species. It is the only prestige badge, with a gold double-ring medallion, laurel art, a gold card and a double-width tile.
+  
+  "First Photograph" was not added because "First Wildlife Discovery" already covers it.
+- **Density.** A spawn every 1.8 s (was 1.1), at most 4 animals in view (was 6), and groups of 2–3 at 35% (was 50%).
+
+### 13.3 Next (optional, small)
+
+1. Post a Trail Dispatch automatically when someone photographs a rare or legendary find.
+2. A "species of the week" that scores a small bonus.
+3. A one-question field-guide quiz on a newly found species.
+4. Seasonal events (12.4).

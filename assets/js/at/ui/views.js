@@ -11,7 +11,7 @@ import { regionAtMarker } from "../engine/progress.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { ACTIVITY_TYPES, ACTIVITY_LABELS, MAX_NOTES_LENGTH, validateActivity, ruleFor, localDateString } from "../engine/activities.js";
 import { groupMilestoneStatus, pickTip } from "../engine/game.js";
-import { buildFieldGuide, whereToLook } from "../engine/field-guide.js";
+import { buildFieldGuide, regionProgress, whereToLook } from "../engine/field-guide.js";
 import { expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
 
 const field = (id, label, control, hint, error) => h("div", { class: "field" },
@@ -193,7 +193,7 @@ function hikerPanel(s, hk) {
     h("h4", {}, "Badges"),
     // Locked badges stay a mystery (silhouette only); earning one reveals its art, name and story.
     h("ul", { class: "badge-grid" }, badges.map((b) => b.earned
-      ? h("li", { class: "badge earned" }, badgeArt(b.art, { earned: true }), h("strong", {}, b.title),
+      ? h("li", { class: `badge earned${b.prestige ? " prestige" : ""}` }, badgeArt(b.art, { earned: true, prestige: b.prestige }), h("strong", {}, b.title),
         h("span", { class: "badge-desc" }, b.description),
         h("span", { class: "hint" }, b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned"))
       : h("li", { class: "badge locked" }, badgeArt(b.art, { earned: false }), h("strong", {}, "Locked"),
@@ -373,8 +373,10 @@ function guideEntry(s, theme, e) {
         h("dt", {}, "Photos"), h("dd", {}, String(e.sightings)))));
 }
 
-function fieldGuideBody(s, theme) {
+function fieldGuideBody(s, theme, here) {
   const guide = buildFieldGuide(s.fieldGuide, { hikerId: guideFilter || null, theme });
+  const regions = regionProgress(s.fieldGuide, { hikerId: guideFilter || null, theme });
+  const left = guide.total - guide.found;
   const who = (s.hikers || []).find((x) => x.id === guideFilter);
   const percent = guide.total ? Math.floor((guide.found / guide.total) * 100) : 0;
   // Each group is a collapsible section so the guide stays short on a phone.
@@ -382,7 +384,8 @@ function fieldGuideBody(s, theme) {
     onToggle: (ev) => { if (ev.target.open) openGroups.add(g.id); else openGroups.delete(g.id); } },
   h("summary", {}, h("span", {}, g.label), h("span", { class: "guide-tally" }, count)), ...content);
   return [
-    h("p", { class: "guide-count" }, h("strong", {}, `${guide.found} of ${guide.total}`), ` species photographed${who ? ` by ${who.name}` : ""}.`),
+    h("p", { class: "guide-count" }, h("strong", {}, `${guide.found} of ${guide.total}`), ` species photographed${who ? ` by ${who.name}` : ""}.`,
+      left ? ` ${left} to go.` : " The field guide is complete. Master Naturalist!"),
     bar(percent, "Field guide progress"),
     guide.latest ? h("p", { class: "hint" }, `Latest find: ${titleCase(guide.latest.spec.name)}, ${day(guide.latest.firstSeen)}.`) : null,
     guide.groups.map((g) => {
@@ -392,25 +395,32 @@ function fieldGuideBody(s, theme) {
         return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, found.map((e) => guideEntry(s, theme, e))));
       }
       return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, g.entries.map((e) => guideEntry(s, theme, e))));
-    })
+    }),
+    // Regional completion: local species photographed in their own trail section.
+    section({ id: "regions", label: "Trail sections" }, `${regions.filter((r) => r.completedOn).length} of ${regions.length} complete`,
+      h("p", { class: "hint" }, "Photograph every local species in a section, right there, to complete it."),
+      h("ul", { class: "region-progress" }, regions.map((r) => h("li", { class: r.completedOn ? "done" : "" },
+        h("span", {}, r.label, r.id === here ? h("strong", {}, " (you are here)") : null),
+        h("span", { class: "guide-tally" }, r.completedOn ? `Complete ✓` : `${r.found} of ${r.total}`),
+        bar(Math.floor((r.found / r.total) * 100), `${r.label} progress`)))))
   ];
 }
 
-function fieldGuideCard(s, theme) {
+function fieldGuideCard(s, theme, here) {
   if (s.fieldGuideUnavailable) {
     return h("div", { class: "card field-guide" }, h("h2", {}, "Field guide"),
       h("p", {}, "The field guide fills in once the latest database update is applied. Photos still count on the board."));
   }
-  const body = h("div", {}, fieldGuideBody(s, theme));
+  const body = h("div", {}, fieldGuideBody(s, theme, here));
   const hikers = (s.hikers || []).filter((x) => x.active || x.wildlifeRuns);
   if (guideFilter && !hikers.some((x) => x.id === guideFilter)) guideFilter = "";
-  const filter = hikers.length > 1 ? field("guide-who", "Show", h("select", { id: "guide-who", onChange: (ev) => { guideFilter = ev.target.value; body.replaceChildren(...fieldGuideBody(s, theme)); } },
+  const filter = hikers.length > 1 ? field("guide-who", "Show", h("select", { id: "guide-who", onChange: (ev) => { guideFilter = ev.target.value; body.replaceChildren(...fieldGuideBody(s, theme, here)); } },
     h("option", { value: "", selected: !guideFilter }, "The whole expedition"),
     hikers.map((x) => h("option", { value: x.id, selected: x.id === guideFilter }, `${x.name}'s finds`)))) : null;
   const card = h("div", { class: "card field-guide" }, h("h2", {}, "Field guide"),
     h("p", { class: "hint" }, "Every species you photograph is added here with a fact and where it lives. Wildlife changes as the expedition heads north, and with the seasons."),
     filter, body);
-  card.refresh = () => body.replaceChildren(...fieldGuideBody(s, theme));
+  card.refresh = () => body.replaceChildren(...fieldGuideBody(s, theme, here));
   return card;
 }
 
@@ -435,9 +445,11 @@ export function wildlifeView(s, a) {
   const who = roster.length ? h("select", { id: "spotter", name: "spotter", "aria-describedby": "spotter-hint", onChange: (e) => a.rememberHiker(e.target.value) },
     h("option", { value: "", selected: !roster.some((x) => x.id === s.lastHiker) }, "Choose a hiker"),
     roster.map((x) => h("option", { value: x.id, selected: x.id === s.lastHiker }, x.name))) : null;
-  const guideCard = fieldGuideCard(s, theme);
-  const game = createExpedition(theme, { localHabitat: region ? region.scene : undefined, reducedMotion,
-    known: (s.fieldGuide || []).map((r) => r.species),
+  const guideCard = fieldGuideCard(s, theme, region ? region.scene : null);
+  // Species already in the guide (the chosen spotter's, or everyone's): anything else scores double.
+  const known = () => (s.fieldGuideUnavailable ? null
+    : (s.fieldGuide || []).filter((r) => !(who && who.value) || r.hikerId === who.value).map((r) => r.species));
+  const game = createExpedition(theme, { localHabitat: region ? region.scene : undefined, reducedMotion, known,
     onFinish: async (summary) => {
       // Empty outings aren't saved, so they never use up the 10-a-day allowance.
       if (!summary.score) { saved.textContent = summary.shots ? "Nothing to pin up this time. Spot again?" : "No photos taken, so nothing to pin up this time."; return; }

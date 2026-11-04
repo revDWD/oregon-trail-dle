@@ -268,7 +268,7 @@ export const THEMES = Object.freeze({
   wildlife: Object.freeze({
     id: "wildlife",
     title: "Wildlife Spotting",
-    intro: "You have 30 seconds and 12 frames of film. Every good photo adds points to the photo board at Camp, and every new species goes in the field guide.",
+    intro: "You have 30 seconds and 12 frames of film. Each species scores once per outing, and a species new to the field guide scores double. Fill the guide!",
     start: "Start spotting",
     again: "Spot again",
     action: "snap",
@@ -284,7 +284,8 @@ export const THEMES = Object.freeze({
       hit: (sp, value) => (value > 0 ? `Snap! ${/^[A-Z]/.test(sp.name) ? "" : /^[aeiou]/i.test(sp.name) ? "An " : "A "}${sp.name} for ${value} points.` : `Snap! The photo board is already full, but what a sight: ${sp.name}!`),
       rare: (sp) => `A rare find: ${sp.name}! Hold steady…`,
       legend: (sp) => `Wait… is that ${/^[A-Z]/.test(sp.name) ? "" : "a "}${sp.name}?! Get the photo!`,
-      discovery: (sp) => `New in the field guide: ${sp.name}!`,
+      discovery: (sp) => `New in the field guide: ${sp.name}! Double points.`,
+      repeat: (sp) => `Already got ${/^[A-Z]/.test(sp.name) ? "" : /^[aeiou]/i.test(sp.name) ? "an " : "a "}${sp.name} this outing. Look for something new.`,
       miss: (reloading) => (reloading ? `Nothing in frame. Winding film for ${reloading} seconds.` : "Nothing in frame. Nearby wildlife may have been startled."),
       reloading: (seconds) => `Winding film: ${seconds} seconds.`,
       cooldown: "Hold steady before the next photo.",

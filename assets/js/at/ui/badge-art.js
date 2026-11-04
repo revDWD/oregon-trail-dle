@@ -53,7 +53,13 @@ export const SPRITES = Object.freeze({
   star: [".....yy.....", ".....yy.....", "....yyyy....", "yyyyyyyyyyyy", ".yyyyccyyyy.", "..yyyyyyyy..",
     "...yyyyyy...", "...yyyyyy...", "..yyy..yyy..", "..yy....yy..", ".yy......yy.", "............"],
   footprint: ["..nn.n.n.n..", "..nn.n.n.n..", "............", "...nnnnnn...", "..nnnnnnnn..", "..nnnnnnnn..",
-    "..nnnnnnnn..", "...nnnnnnn..", "...nnnnnn...", "...nnnnnn...", "....nnnn....", "............"]
+    "..nnnnnnnn..", "...nnnnnnn..", "...nnnnnn...", "...nnnnnn...", "....nnnn....", "............"],
+  paw: ["...nn..nn...", "...nn..nn...", "............", ".nn......nn.", ".nn......nn.", "............",
+    "....nnnn....", "...nnnnnn...", "..nnnnnnnn..", "..nnnnnnnn..", "...nn..nn...", "............"],
+  frog: ["............", "..GG....GG..", ".GckG..GckG.", ".GGGGGGGGGG.", "GGGGGGGGGGGG", "GGGkkkkkkGGG",
+    ".GGGGGGGGGG.", "..GGGGGGGG..", ".gGGyyyyGGg.", "gg.GGGGGG.gg", "g..g....g..g", "............"],
+  laurel: ["............", "..g..yy..g..", ".gG..yy..Gg.", "gG.yyyyyy.Gg", "gG..yyyy..Gg", "gG..y..y..Gg",
+    ".gG......Gg.", "..gG....Gg..", "...gG..Gg...", "....rrrr....", "...rr..rr...", "............"]
 });
 
 // Runs of same-coloured pixels on a row become one rect (fewer nodes, same picture).
@@ -73,10 +79,13 @@ function pixels(rows, silhouette = null) {
 }
 
 // A round medallion with the sprite on it. Decorative: the badge's text label carries the meaning.
-export function badgeArt(name, { earned = true, size = 56 } = {}) {
+// prestige: an earned top-honour badge gets a gold, double-ringed medallion.
+export function badgeArt(name, { earned = true, size = 56, prestige = false } = {}) {
   const rows = SPRITES[name] || SPRITES.blaze;
-  return svg("svg", { class: `badge-art${earned ? "" : " locked"}`, viewBox: "0 0 16 16", width: size, height: size,
+  const gold = earned && prestige;
+  return svg("svg", { class: `badge-art${earned ? "" : " locked"}${gold ? " prestige" : ""}`, viewBox: "0 0 16 16", width: size, height: size,
     "aria-hidden": "true", focusable: "false", "shape-rendering": "crispEdges" },
-  svg("circle", { cx: 8, cy: 8, r: 7.6, fill: earned ? "#f4e3b5" : "#e7e2d8", stroke: earned ? "#7a5a3c" : "#a69c8c", "stroke-width": 0.6 }),
+  svg("circle", { cx: 8, cy: 8, r: 7.6, fill: gold ? "#ffe9a8" : earned ? "#f4e3b5" : "#e7e2d8", stroke: gold ? "#b8860b" : earned ? "#7a5a3c" : "#a69c8c", "stroke-width": gold ? 0.8 : 0.6 }),
+  ...(gold ? [svg("circle", { cx: 8, cy: 8, r: 6.7, fill: "none", stroke: "#b8860b", "stroke-width": 0.3 })] : []),
   ...pixels(rows, earned ? null : "#8a8072"));
 }

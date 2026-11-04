@@ -36,7 +36,24 @@ export const SPRITES = Object.freeze({
   pine: [".....gg.....", "....gGGg....", "...gGGGGg...", "....gGGg....", "...gGGGGg...", "..gGGGGGGg..",
     "...gGGGGg...", "..gGGGGGGg..", ".gGGGGGGGGg.", ".....ww.....", ".....ww.....", "..llllllll.."],
   forest: ["............", "............", ".....gg.....", "....gGGg....", forest(".gg."), forest("gGGg"),
-    forest(".gg."), forest("gGGg"), forest("gGGg"), forest(".ww."), "llllllllllll", "............"]
+    forest(".gg."), forest("gGGg"), forest("gGGg"), forest(".ww."), "llllllllllll", "............"],
+  // Wildlife photography badges.
+  camera: ["............", "...kkk......", ".kkkkkkkkkk.", ".kSSSSSSSyk.", ".kSSSkkSSSk.", ".kSSkbbkSSk.",
+    ".kSSkbbkSSk.", ".kSSSkkSSSk.", ".kSSSSSSSSk.", ".kkkkkkkkkk.", "............", "............"],
+  bird: ["............", ".......bb...", "......bbbb..", "......bkbbkk", "..bbbbbbbb..", ".bbbbbcccc..",
+    "bbbbbbcccc..", "..bbbbccc...", "....bbcc....", ".....k.k....", "....kk.kk...", "............"],
+  butterfly: ["....k..k....", ".....kk.....", ".kkk.kk.kkk.", "kooookkooook", "kooookkooook", "kocookkoocok",
+    ".koookkoook.", "..kookkook..", ".koookkoook.", ".kcookkoock.", "..kkk..kkk..", "............"],
+  fern: ["......G.....", ".....GgG....", "...GG.g.GG..", "....GGgGG...", "..GGG.g.GGG.", "...GGGgGGG..",
+    ".GGGG.g.GGGG", "..GGGGgGGGG.", "......g.....", ".....gg.....", "....gg......", "............"],
+  binoculars: ["............", "............", "..kkk..kkk..", "..kwk..kwk..", ".kkkkkkkkkk.", ".kwwkkkkwwk.",
+    "kkwwwkkwwwkk", "kbbbbkkbbbbk", "kbccbkkbccbk", "kbbbbkkbbbbk", ".kkkk..kkkk.", "............"],
+  book: ["............", "..kkkkkkkk..", "..kgggggggk.", "..kgyyyyygk.", "..kgggggggk.", "..kggGGGggk.",
+    "..kgGGGGGgk.", "..kggGGGggk.", "..kgggggggk.", "..kccccccck.", "..kkkkkkkk..", "............"],
+  star: [".....yy.....", ".....yy.....", "....yyyy....", "yyyyyyyyyyyy", ".yyyyccyyyy.", "..yyyyyyyy..",
+    "...yyyyyy...", "...yyyyyy...", "..yyy..yyy..", "..yy....yy..", ".yy......yy.", "............"],
+  footprint: ["..nn.n.n.n..", "..nn.n.n.n..", "............", "...nnnnnn...", "..nnnnnnnn..", "..nnnnnnnn..",
+    "..nnnnnnnn..", "...nnnnnnn..", "...nnnnnn...", "...nnnnnn...", "....nnnn....", "............"]
 });
 
 // Runs of same-coloured pixels on a row become one rect (fewer nodes, same picture).

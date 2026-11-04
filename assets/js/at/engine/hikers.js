@@ -10,6 +10,7 @@
 
 import { GROUP_MILESTONES, RHYTHM_BADGES, computeRhythm } from "./game.js";
 import { landmarksInOrder, round2 } from "./progress.js";
+import { wildlifeBadges } from "./field-guide.js";
 
 // Miles each hiker has personally contributed. `art` names a sprite in ui/badge-art.js.
 export const MILE_BADGES = Object.freeze([
@@ -92,7 +93,8 @@ export function hikerMilestones(hiker, register = []) {
 }
 
 // Every badge a hiker can earn, earned or not, with the date it was earned when known.
-export function hikerBadges(hiker, { marks = [], register = [], today } = {}) {
+// `sightings` are at_field_guide() rows (all hikers; this hiker's are picked out) for the wildlife badges.
+export function hikerBadges(hiker, { marks = [], register = [], today, sightings = [] } = {}) {
   const personal = new Map(marks.filter((m) => m.kind === "personal" && m.hikerId === hiker.id).map((m) => [key(m.mark), m.reachedOn]));
   const total = Number(hiker.totalMiles) || 0;
   const milestones = hikerMilestones(hiker, register);
@@ -118,6 +120,7 @@ export function hikerBadges(hiker, { marks = [], register = [], today } = {}) {
       description: `${b.days} active days with no more than one rest day between them.`,
       earned, earnedOn: earned ? rhythmReachedOn(hiker.activeDates, b.days) : null });
   });
+  badges.push(...wildlifeBadges(sightings.filter((r) => r.hikerId === hiker.id)));
   return badges;
 }
 

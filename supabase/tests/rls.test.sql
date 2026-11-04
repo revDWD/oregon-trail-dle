@@ -408,5 +408,23 @@ select t.ok((select credited_miles from public.at_activities where notes = 'caro
 select t.fails($$update public.at_activities set activity_date = current_date - 119 where notes = 'carol long ago'$$, '22008', 'moving it to another old date is still refused');
 reset role;
 
+-- Wildlife field guide ----------------------------------------------------------------------------
+select t.ok(not has_function_privilege('anon', 'public.at_field_guide()', 'execute'), 'anon cannot read the field guide');
+select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003', false) \gset
+set role authenticated;
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id, species, habitat) values ('wildlife', 60, 3, 4, '$$ || :'kevin' || $$', '{deer,turkey,deer}', 'blue-ridge')$$) = 1, 'runs record species and habitat');
+select t.ok((select species from public.at_expedition_runs where habitat = 'blue-ridge') = '{deer,turkey}'::text[], 'species count once per outing');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots, species) values ('wildlife', 5, 1, 1, '{"Bad Id"}')$$, '23514', 'species ids are validated');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots, species) values ('wildlife', 5, 1, 1, '{deer,fox}')$$, '23514', 'no more species than photos');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots, species, habitat) values ('wildlife', 5, 1, 1, '{deer}', 'Robert''); drop')$$, '23514', 'habitats are validated');
+select t.ok((select sightings from public.at_field_guide() where species = 'deer' and hiker_id = :'kevin') = 1, 'the field guide aggregates sightings per hiker');
+select t.ok((select first_seen from public.at_field_guide() where species = 'turkey') = current_date, 'first sighting date');
+reset role;
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
+set role authenticated;
+select t.ok(t.count('select 1 from public.at_field_guide()') = 2, 'another device sees the shared field guide');
+select t.ok(t.count($$select 1 from public.at_expedition_runs where habitat = 'blue-ridge'$$) = 0, 'but not the runs themselves');
+reset role;
+
 \o
 \echo RLS TESTS PASSED

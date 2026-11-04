@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { THEMES, DEFAULT_THEME, themeFor } from "../../assets/js/at/engine/expedition-themes.js";
-import { WIDTH, HEIGHT, MIN_Y, speciesOf, habitatOf, pickSpecies, chooseOuting, newRound, startle, step, animalAt, fire, spottedList, summary }
+import { WIDTH, HEIGHT, MIN_Y, speciesOf, habitatOf, pickSpecies, chooseOuting, newRound, startle, step, animalAt, fire, spottedList, summary,
+  rollSpecial, inSeason, yBounds, RARE_CHANCE, LEGEND_CHANCE }
   from "../../assets/js/at/engine/expedition.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 
@@ -29,7 +30,8 @@ test("wildlife spotting is the only theme and its data is complete", () => {
     ["pause", "turn", "drift"].forEach((k) => assert.equal(typeof sp.behavior[k], "number", `${sp.id}.${k}`));
     sp.parts.forEach((p) => {
       assert.ok(p.length === 5 || p.length === 6, `${sp.id} part ${p}`);
-      assert.ok([0, 1, 2].includes(p[4]));
+      assert.ok([0, 1, 2, 3].includes(p[4]));
+      if (p[4] === 3) assert.ok(sp.accent, `${sp.id} accent colour`);
       // Ears and antlers may poke above the hit box (as in the original sprites), nothing else.
       assert.ok(p[0] >= 0 && p[0] + p[2] <= sp.w && p[1] >= -10 && p[1] + p[3] <= sp.h + 7, `${sp.id} part ${p} inside its box`);
       if (p.length === 6) assert.ok([1, 2, -1, -2].includes(p[5]));
@@ -143,7 +145,7 @@ test("animals spawn over time and the viewfinder stays on screen", () => {
   const s = round({ random: seq(0.3, 0.7, 0.1, 0.9) });
   tick(s, 3);
   assert.ok(s.animals.length > 0);
-  s.animals.forEach((a) => assert.ok(a.y >= MIN_Y && a.y <= HEIGHT));
+  s.animals.forEach((a) => { const [low, high] = yBounds(speciesOf(theme, a.kind)); assert.ok(a.y >= low && a.y <= high, a.kind); });
   for (let i = 0; i < 40; i += 1) step(s, 0.1, { dx: 1, dy: -1 });
   assert.deepEqual([s.aim.x, s.aim.y], [WIDTH, 0]);
   tick(s, theme.rounds.seconds);
@@ -165,9 +167,112 @@ test("summary and spotted list describe the outing", () => {
   const d = place(s, "deer", 100, 140); aimAt(s, d); s.fireCooldown = 0; fire(s);
   s.aim = { x: 5, y: 175 }; s.fireCooldown = 0; fire(s);
   assert.equal(spottedList(theme, s.spotted), "2 white-tailed deer, 1 wild turkey");
-  assert.deepEqual(summary(s), { theme: "wildlife", score: 92, hits: 3, shots: 4, accuracy: 75, caught: { deer: 2, turkey: 1 } });
+  assert.deepEqual(summary(s), { theme: "wildlife", score: 92, hits: 3, shots: 4, accuracy: 75, caught: { deer: 2, turkey: 1 }, species: ["deer", "turkey"], habitat: "blue-ridge" });
   assert.match(theme.text.finish(summary(s), spottedList(theme, s.spotted)), /3 animals for 92 photo points: 2 white-tailed deer/);
   assert.match(theme.text.finish({ score: 0, hits: 0, shots: 1, accuracy: 0 }, ""), /1 frame this time/);
   assert.equal(theme.text.hit(speciesOf(theme, "cottontail"), 4), "Snap! An eastern cottontail for 4 points.");
   assert.equal(theme.text.hit(speciesOf(theme, "moose"), 100), "Snap! A moose for 100 points.");
+});
+
+test("the field guide has birds, insects, reptiles and amphibians, each with a fact and a range", () => {
+  const groups = new Set(theme.species.map((sp) => sp.group));
+  assert.deepEqual([...groups].sort(), ["bird", "herp", "insect", "legend", "mammal"]);
+  ["bald-eagle", "red-tailed-hawk", "turkey", "blue-jay", "meadowlark", "barred-owl", "monarch", "darner", "firefly", "bumble-bee", "mantis", "tiger-beetle",
+    "fox", "beaver", "coyote", "otter", "box-turtle", "wood-frog"].forEach((id) => assert.ok(speciesOf(theme, id), id));
+  theme.species.forEach((sp) => {
+    assert.ok(sp.fact && sp.fact.length <= 200 && sp.range, `${sp.id} fact/range`);
+    assert.ok(["common", "uncommon", "rare", "legend"].includes(sp.rarity), sp.id);
+    assert.match(sp.id, /^[a-z][a-z0-9-]{1,30}$/, "matches the species id check");
+    assert.ok(sp.value <= theme.rounds.maxScore);
+  });
+  const special = new Set(theme.species.filter((sp) => sp.rarity === "rare" || sp.rarity === "legend").map((sp) => sp.id));
+  Object.entries(theme.habitats).forEach(([id, hab]) => {
+    assert.ok(hab.fact, `${id} fact`);
+    Object.keys(hab.animals).forEach((sp) => assert.ok(!special.has(sp), `${sp} never spawns by weight in ${id}`));
+    hab.rare.forEach((sp) => assert.equal(speciesOf(theme, sp).rarity, "rare"));
+    hab.legends.forEach((sp) => assert.equal(speciesOf(theme, sp).rarity, "legend"));
+  });
+  assert.ok(theme.species.length <= 40, "a run can record every species (database cap is 40)");
+});
+
+test("regional wildlife: the ecosystem changes along the trail", () => {
+  const weight = (hab, id) => theme.habitats[hab].animals[id] || 0;
+  assert.ok(weight("north-woods", "loon") > 0 && weight("southern-ridges", "loon") === 0, "loons only up north");
+  assert.ok(weight("rocky-ridges", "red-tailed-hawk") >= Math.max(...Object.keys(theme.habitats).map((h) => weight(h, "red-tailed-hawk"))), "Pennsylvania hawk flyway");
+  assert.ok(weight("high-balds", "firefly") > weight("north-woods", "firefly"));
+  assert.ok(weight("southern-ridges", "box-turtle") > 0 && weight("north-woods", "box-turtle") === 0);
+  assert.ok(theme.habitats["north-woods"].rare.includes("lynx") && !theme.habitats["southern-ridges"].rare.includes("lynx"));
+  assert.ok(theme.habitats["rocky-ridges"].legends.includes("snallygaster"));
+});
+
+test("seasons: warm-weather species are scarce in winter, snowy owls only come in winter", () => {
+  const monarch = speciesOf(theme, "monarch");
+  assert.equal(inSeason(monarch, false), true);
+  assert.equal(inSeason(monarch, true), false);
+  assert.equal(inSeason(speciesOf(theme, "snowy-owl"), false), false);
+  assert.equal(inSeason(speciesOf(theme, "deer"), true), true);
+  const count = (winter) => { let n = 0; for (let i = 0; i < 1000; i += 1) if (pickSpecies(theme, "high-balds", seq(i / 1000), { winter }).season === "warm") n += 1; return n; };
+  assert.ok(count(true) < count(false) / 2, "far fewer insects and frogs in winter");
+  assert.equal(chooseOuting(theme, "alpine", { random: seq(0.1), month: 1 }).winter, true);
+  assert.equal(chooseOuting(theme, "alpine", { random: seq(0.1), month: 7 }).winter, false);
+});
+
+test("rare and legendary finds: rolled once per outing, very rarely, from the local lists", () => {
+  assert.ok(RARE_CHANCE <= 0.06 && LEGEND_CHANCE <= 0.005 && LEGEND_CHANCE < RARE_CHANCE);
+  assert.equal(rollSpecial(theme, "north-woods", { random: seq(0.5) }), null);
+  assert.equal(rollSpecial(theme, "north-woods", { random: seq(LEGEND_CHANCE + RARE_CHANCE + 0.001) }), null);
+  const rare = rollSpecial(theme, "north-woods", { random: seq(LEGEND_CHANCE + 0.001, 0, 0.5) });
+  assert.equal(rare.id, "lynx");
+  assert.ok(rare.at >= 4 && rare.at <= theme.rounds.seconds - 8);
+  assert.equal(speciesOf(theme, rollSpecial(theme, "rocky-ridges", { random: seq(0, 0.99, 0) }).id).rarity, "legend");
+  // Out-of-season rare species are skipped: no snowy owl in July.
+  for (let i = 0; i < 10; i += 1) {
+    const found = rollSpecial(theme, "alpine", { random: seq(LEGEND_CHANCE + 0.001, i / 10, 0.5) });
+    assert.notEqual(found && found.id, "snowy-owl");
+  }
+  // Over many outings the rates match the constants.
+  let rares = 0; let legends = 0;
+  const random = seq(...Array.from({ length: 5003 }, (_, i) => ((i * 7919) % 5003) / 5003));
+  for (let i = 0; i < 5000; i += 1) {
+    const found = rollSpecial(theme, "blue-ridge", { random });
+    if (found && speciesOf(theme, found.id).rarity === "rare") rares += 1;
+    if (found && speciesOf(theme, found.id).rarity === "legend") legends += 1;
+  }
+  assert.ok(rares > 0 && rares < 5000 * 0.1, `rares ${rares}`);
+  assert.ok(legends < 5000 * 0.02, `legends ${legends}`);
+});
+
+test("a special find appears once at its time, scores its value and says so", () => {
+  const s = round({ special: { id: "white-deer", at: 1 }, random: seq(0.5) });
+  tick(s, 0.5);
+  assert.ok(!s.animals.some((a) => a.kind === "white-deer"));
+  tick(s, 1);
+  const deer = s.animals.find((a) => a.kind === "white-deer");
+  assert.ok(deer && s.special.shown);
+  aimAt(s, deer);
+  const out = fire(s);
+  assert.equal(out.result, "hit");
+  assert.equal(out.rarity, "rare");
+  assert.equal(out.value, 150);
+  assert.match(s.popups.at(-1).text, /^RARE! \+150/);
+  tick(s, 5);
+  assert.equal(s.animals.filter((a) => a.kind === "white-deer").length <= 1, true, "never a second one");
+  assert.ok(summary(s).species.includes("white-deer"));
+});
+
+test("flyers use the sky: soaring birds above the horizon, ground animals below it", () => {
+  const [hawkLow, hawkHigh] = yBounds(speciesOf(theme, "bald-eagle"));
+  assert.ok(hawkLow < MIN_Y && hawkHigh <= MIN_Y + 6);
+  assert.ok(yBounds(speciesOf(theme, "monarch"))[0] < MIN_Y);
+  assert.equal(yBounds(speciesOf(theme, "deer"))[0], MIN_Y);
+  const s = round();
+  const eagle = place(s, "bald-eagle", 100, 20);
+  tick(s, 2);
+  assert.ok(eagle.y >= hawkLow && eagle.y <= hawkHigh);
+});
+
+test("hit text reads naturally for proper names", () => {
+  assert.match(theme.text.hit(speciesOf(theme, "bigfoot"), 200), /^Snap! Bigfoot for 200/);
+  assert.match(theme.text.hit(speciesOf(theme, "otter"), 45), /^Snap! A river otter/);
+  assert.match(theme.text.legend(speciesOf(theme, "jackalope")), /a jackalope/);
 });

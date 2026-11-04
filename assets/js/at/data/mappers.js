@@ -36,6 +36,24 @@ export function isMissingFunction(error) {
   return code === "PGRST202" || code === "42883" || /could not find the function/i.test(String((raw && raw.message) || ""));
 }
 
+// One at_field_guide() row: a hiker's sightings of one species in one habitat.
+export function sightingFromRow(row) {
+  return {
+    hikerId: row.hiker_id || null,
+    species: row.species,
+    habitat: row.habitat || "",
+    firstSeen: row.first_seen,
+    sightings: Number(row.sightings) || 0
+  };
+}
+
+// True when the database doesn't have a column yet (migration not applied).
+export function isMissingColumn(error) {
+  const raw = error && (error.cause || error);
+  const code = String((raw && raw.code) || "");
+  return code === "PGRST204" || code === "42703";
+}
+
 export function activityFromRow(row) {
   return {
     id: row.id,

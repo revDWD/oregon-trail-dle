@@ -2,4 +2,212 @@
 // Real landmark photos, self-hosted in assets/img/landmarks/. Only public domain, CC0, CC BY or CC BY-SA
 // images are allowed, and the credit, license and source link must stay with each photo.
 // Safe to hand-edit (e.g. improve alt text, or delete an entry and re-run the script to pick another).
-export const LANDMARK_PHOTOS = Object.freeze({});
+export const LANDMARK_PHOTOS = Object.freeze({
+  "bear-mountain": {
+    "src": "assets/img/landmarks/bear-mountain.jpg",
+    "alt": "Bear Mountain: Bear Mountain Bridge",
+    "credit": "Fran Trudeau from Wappingers Falls, NY, USA",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Mountain_Bridge,_Hudson_River.jpg",
+    "year": "2011"
+  },
+  "big-meadows": {
+    "src": "assets/img/landmarks/big-meadows.jpg",
+    "alt": "Big Meadows: One of the bathrooms at the Big Meadows Campground in Shenandoah National Park in Virginia. This ba…",
+    "credit": "G. Edward Johnson",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bathroom_at_Big_Meadows_Campground_Shenandoah_2022-06-19_12-20-55_1.jpg",
+    "year": "2022"
+  },
+  "bly-gap": {
+    "src": "assets/img/landmarks/bly-gap.jpg",
+    "alt": "Bly Gap: South Mountain is the northern extension of the Blue Ridge Mountain range in Maryland and Pennsylva…",
+    "credit": "Ken Lund from Las Vegas, Nevada, USA",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:South_Mountain,_Maryland_(7235278532).jpg",
+    "year": "2012"
+  },
+  "clingmans-dome": {
+    "src": "assets/img/landmarks/clingmans-dome.jpg",
+    "alt": "Clingmans Dome: View to the east from Clingmans Dome, Great Smoky Mountains National Park, North Carolina, USA",
+    "credit": "Acroterion",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_east_from_Clingman%27s_Dome_GSMNP_NC1.jpg",
+    "year": "2016"
+  },
+  "damascus": {
+    "src": "assets/img/landmarks/damascus.jpg",
+    "alt": "Damascus: Please note that these photos are for personal use only. If posting to social media or sharing the…",
+    "credit": "Virginia Office of the Governor",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hurricane_Helene_Damage_(Damascus,_VA).jpg",
+    "year": "2024"
+  },
+  "delaware-water-gap": {
+    "src": "assets/img/landmarks/delaware-water-gap.jpg",
+    "alt": "Delaware Water Gap: Knowlton Township's rural character is evident in this view of the Delaware Water Gap from Linaberr…",
+    "credit": "ChuckWalsh ( talk ) ( Uploads )",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Delaware_Water_Gap_from_I_80.jpg",
+    "year": "2006"
+  },
+  "dragons-tooth": {
+    "src": "assets/img/landmarks/dragons-tooth.jpg",
+    "alt": "Dragon's Tooth: Rocks at the top; Dragon Tooth, Virginia",
+    "credit": "Caballero1967",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dragon_Tooth,_Virginia.jpg",
+    "year": "2013"
+  },
+  "fontana-dam": {
+    "src": "assets/img/landmarks/fontana-dam.jpg",
+    "alt": "Fontana Dam: Fontana Village Resort in Fontana Dam, North Carolina, and Graham County.",
+    "credit": "Harrison Keely",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fontana_Village_Resort_in_Fontana_Dam,_North_Carolina,_and_Graham_County_01.jpg",
+    "year": "2024"
+  },
+  "grayson-highlands": {
+    "src": "assets/img/landmarks/grayson-highlands.jpg",
+    "alt": "Grayson Highlands: Grayson Highlands State Park",
+    "credit": "bobistraveling",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wild_Ponies_Grayson_Highlands_SP_VA_7423.jpg",
+    "year": "2015"
+  },
+  "hanover": {
+    "src": "assets/img/landmarks/hanover.jpg",
+    "alt": "Hanover: Photograph of Dartmouth Hall at the campus of Dartmouth College in Hanover, New Hampshire .",
+    "credit": "Kane5187",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dartmouth_College_campus_2007-06-23_Dartmouth_Hall_02.JPG",
+    "year": "2007"
+  },
+  "harpers-ferry": {
+    "src": "assets/img/landmarks/harpers-ferry.jpg",
+    "alt": "Harpers Ferry: 30 High Street, Harpers Ferry, West Virginia.",
+    "credit": "Acroterion",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:30_High_Street_Harpers_Ferry_WV1.jpg",
+    "year": "2023"
+  },
+  "hot-springs": {
+    "src": "assets/img/landmarks/hot-springs.jpg",
+    "alt": "Hot Springs: File name: 06_10_016059 Title: T-28. Looking North from French Broad lookout, French Broad River an…",
+    "credit": "Boston Public Library",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:T-28._Looking_North_from_French_Broad_lookout,_French_Broad_River_and_Southern_R._R._in_foreground,_Hot_Springs,_N._C._(5811468193).jpg",
+    "year": "2011"
+  },
+  "katahdin": {
+    "src": "assets/img/landmarks/katahdin.jpg",
+    "alt": "Mount Katahdin: Picture taken near Compass Pond along the Golden Road",
+    "credit": "Michael Sipos",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Katahdin.jpg",
+    "year": "2023"
+  },
+  "mahoosuc-notch": {
+    "src": "assets/img/landmarks/mahoosuc-notch.jpg",
+    "alt": "Mahoosuc Notch: I am the author of this work.",
+    "credit": "Gm206 at English Wikipedia",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mahoosuc_trail1.JPG",
+    "year": "2007"
+  },
+  "max-patch": {
+    "src": "assets/img/landmarks/max-patch.jpg",
+    "alt": "Max Patch: The Appalachian Trail crosses the grassy bald area atop Max Patch Mountain, a 4,616-ft (1,407m) sum…",
+    "credit": "User:Washedwithblood7",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Appalachian_Trail_crosses_the_grassy_bald_area_atop_Max_Patch_Mountain.jpg",
+    "year": "2009"
+  },
+  "mcafee-knob": {
+    "src": "assets/img/landmarks/mcafee-knob.jpg",
+    "alt": "McAfee Knob: McAfee's Knob",
+    "credit": "computingdoc",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:McAfee%27s_Knob_-_panoramio_(1).jpg",
+    "year": "2007"
+  },
+  "monson": {
+    "src": "assets/img/landmarks/monson.jpg",
+    "alt": "Monson: Zoom into this map at maps.bpl.org . Author: Norris, George E. Publisher: Geo. E. Norris Date: 1889…",
+    "credit": "http://maps.bpl.org",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Monson,_Maine_(2675080893).jpg",
+    "year": "2008"
+  },
+  "mount-greylock": {
+    "src": "assets/img/landmarks/mount-greylock.jpg",
+    "alt": "Mount Greylock: This photo shows the very summit of Mount Greylock with a clear sky.",
+    "credit": "Vvburen",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Greylock_Summit_01.jpg",
+    "year": "2018"
+  },
+  "mount-washington": {
+    "src": "assets/img/landmarks/mount-washington.jpg",
+    "alt": "Presidential Range: Title: The Mount Washington and the Presidential Range, Bretton Woods, White Mts., N.H. Subjects: H…",
+    "credit": "Tichnor Brothers, Publisher",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_Mount_Washington_and_the_Presidential_Range,_Bretton_Woods,_White_Mts.,_N.H_(62648).jpg",
+    "year": "1930"
+  },
+  "nantahala": {
+    "src": "assets/img/landmarks/nantahala.jpg",
+    "alt": "Nantahala Gorge: The threatened noonday globe snail only occurs on the north-facing side of the Nantahala River Gorg…",
+    "credit": "USFWS/Southeast",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Jason_Mays_searches_for_snails_uphill_from_the_Nantahala_River_(47967213478).jpg",
+    "year": "2019"
+  },
+  "pen-mar": {
+    "src": "assets/img/landmarks/pen-mar.jpg",
+    "alt": "Pen Mar: Vista from the Appalachian Trail in Pen Mar Park in Pen Mar, Maryland .",
+    "credit": "Zeete",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vista_from_the_Appalachian_Trail_in_Pen_Mar_Park,_MD.jpg",
+    "year": "2024"
+  },
+  "rockfish-gap": {
+    "src": "assets/img/landmarks/rockfish-gap.jpg",
+    "alt": "Rockfish Gap: Rockfish Gap is a wind gap located in the Blue Ridge Mountains between Charlottesville and Waynesbo…",
+    "credit": "Ken Lund from Reno, Nevada, USA",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rockfish_Gap_Meeting,_Rockfish_Gap_Viewpoint,_Interstate_64,_Virginia_(2854227916).jpg",
+    "year": "2008"
+  },
+  "springer-mountain": {
+    "src": "assets/img/landmarks/springer-mountain.jpg",
+    "alt": "Springer Mountain: Dowdell's Knob The road extending one mile south traverses a spur which projects into Pine Mountain…",
+    "credit": "Dsdugan",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:21-07-024-dowdell.jpg",
+    "year": "2021"
+  }
+});

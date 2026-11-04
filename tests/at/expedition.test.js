@@ -167,8 +167,8 @@ test("summary and spotted list describe the outing", () => {
   const d = place(s, "deer", 100, 140); aimAt(s, d); s.fireCooldown = 0; fire(s);
   s.aim = { x: 5, y: 175 }; s.fireCooldown = 0; fire(s);
   assert.equal(spottedList(theme, s.spotted), "2 white-tailed deer, 1 wild turkey");
-  assert.deepEqual(summary(s), { theme: "wildlife", score: 92, hits: 3, shots: 4, accuracy: 75, caught: { deer: 2, turkey: 1 }, species: ["deer", "turkey"], habitat: "blue-ridge" });
-  assert.match(theme.text.finish(summary(s), spottedList(theme, s.spotted)), /3 animals for 92 photo points: 2 white-tailed deer/);
+  assert.deepEqual(summary(s), { theme: "wildlife", score: 52, hits: 3, shots: 4, accuracy: 75, caught: { deer: 2, turkey: 1 }, species: ["deer", "turkey"], newSpecies: [], habitat: "blue-ridge" });
+  assert.match(theme.text.finish(summary(s), spottedList(theme, s.spotted)), /3 animals for 52 photo points: 2 white-tailed deer/);
   assert.match(theme.text.finish({ score: 0, hits: 0, shots: 1, accuracy: 0 }, ""), /1 frame this time/);
   assert.equal(theme.text.hit(speciesOf(theme, "cottontail"), 4), "Snap! An eastern cottontail for 4 points.");
   assert.equal(theme.text.hit(speciesOf(theme, "moose"), 100), "Snap! A moose for 100 points.");
@@ -254,7 +254,7 @@ test("a special find appears once at its time, scores its value and says so", ()
   assert.equal(out.result, "hit");
   assert.equal(out.rarity, "rare");
   assert.equal(out.value, 150);
-  assert.match(s.popups.at(-1).text, /^RARE! \+150/);
+  assert.match(s.popups.at(-1).text, /^RARE \+150/);
   tick(s, 5);
   assert.equal(s.animals.filter((a) => a.kind === "white-deer").length <= 1, true, "never a second one");
   assert.ok(summary(s).species.includes("white-deer"));
@@ -275,4 +275,31 @@ test("hit text reads naturally for proper names", () => {
   assert.match(theme.text.hit(speciesOf(theme, "bigfoot"), 200), /^Snap! Bigfoot for 200/);
   assert.match(theme.text.hit(speciesOf(theme, "otter"), 45), /^Snap! A river otter/);
   assert.match(theme.text.legend(speciesOf(theme, "jackalope")), /a jackalope/);
+});
+
+test("collection scoring: each species scores once per outing; new field guide species score double", () => {
+  const s = round({ known: ["deer"] });
+  const snap = (kind, y) => { const a = place(s, kind, 100, y); aimAt(s, a); s.fireCooldown = 0; return fire(s); };
+  const deer = snap("deer", 100);
+  assert.deepEqual([deer.value, deer.isNew, deer.repeat], [speciesOf(theme, "deer").value, false, false]);
+  const again = snap("deer", 120);
+  assert.deepEqual([again.value, again.repeat], [0, true]);
+  assert.equal(s.popups.at(-1).text, "SEEN");
+  assert.match(theme.text.repeat(speciesOf(theme, "deer")), /^Already got a white-tailed deer this outing/);
+  const turkey = snap("turkey", 140);
+  assert.deepEqual([turkey.value, turkey.isNew], [speciesOf(theme, "turkey").value * 2, true]);
+  assert.match(s.popups.at(-1).text, /^NEW \+/);
+  assert.deepEqual(summary(s).newSpecies, ["turkey"]);
+  assert.equal(s.score, speciesOf(theme, "deer").value + speciesOf(theme, "turkey").value * 2);
+  // Without a field guide (migration not applied) there is no discovery bonus.
+  const plain = round();
+  const t = place(plain, "turkey", 100, 100); aimAt(plain, t);
+  assert.equal(fire(plain).value, speciesOf(theme, "turkey").value);
+});
+
+test("density: never more than four animals in view, arriving every couple of seconds", () => {
+  const s = round({ random: seq(0.1, 0.9, 0.2, 0.05, 0.6) });
+  let most = 0;
+  for (let t = 0; t < 30; t += 0.05) { step(s, 0.05, { dx: 0, dy: 0 }); most = Math.max(most, s.animals.filter((a) => !a.snapped).length); }
+  assert.ok(most > 0 && most <= 4, `at most 4 (saw ${most})`);
 });

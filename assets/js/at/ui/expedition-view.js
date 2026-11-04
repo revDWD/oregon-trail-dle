@@ -322,13 +322,14 @@ const isField = (target) => Boolean(target && target.closest && target.closest("
 /**
  * @param theme    a theme from expedition-themes.js
  * @param options  { localHabitat (region scene), month (1-12), reducedMotion, random, known (species ids
- *                  already in the field guide), onFinish(summary) -> Promise|void }
+ *                  already in the field guide, or a function returning them, read at the start of each
+ *                  outing; null = guide unavailable, no discovery bonus), onFinish(summary) -> Promise|void }
  */
-export function createExpedition(theme, { localHabitat, month = new Date().getMonth() + 1, reducedMotion = false, random, known = [], onFinish = () => {} } = {}) {
+export function createExpedition(theme, { localHabitat, month = new Date().getMonth() + 1, reducedMotion = false, random, known = null, onFinish = () => {} } = {}) {
   const rules = theme.rounds;
-  const seen = new Set(known);
+  const knownNow = () => { const list = typeof known === "function" ? known() : known; return list ? [...list] : null; };
   const pickOuting = () => chooseOuting(theme, localHabitat, { random, month });
-  const roundFor = (outing) => newRound(theme, { ...outing, random, special: rollSpecial(theme, outing.habitat, { random, winter: outing.winter }), speedFactor: reducedMotion ? 0.6 : 1 });
+  const roundFor = (outing) => newRound(theme, { ...outing, random, known: knownNow(), special: rollSpecial(theme, outing.habitat, { random, winter: outing.winter }), speedFactor: reducedMotion ? 0.6 : 1 });
   let state = roundFor(pickOuting());
   let running = false;
   let raf = 0;
@@ -350,7 +351,11 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
 
   const groundText = () => {
     const habitat = theme.habitats[state.habitat];
-    return `${habitat.label}, ${WEATHER_TEXT[state.weather] || state.weather}${state.autumn && !habitat.pines ? ", autumn colours" : ""}.`;
+    const list = knownNow();
+    const local = Object.keys(habitat.animals);
+    const left = list ? local.filter((id) => !list.includes(id)).length : null;
+    const todo = left === null ? "" : left ? ` ${left} of ${local.length} local species still missing from the guide.` : " Every local species is in the guide. Watch for rare finds!";
+    return `${habitat.label}, ${WEATHER_TEXT[state.weather] || state.weather}${state.autumn && !habitat.pines ? ", autumn colours" : ""}.${todo}`;
   };
   const updateReadout = () => {
     time.value.textContent = `${Math.ceil(state.timeLeft)}s`;
@@ -417,10 +422,8 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
       if (out.result === "hit") sound.hit(); else sound.miss();
     }
     let text = out.result === "hit" ? theme.text.hit(out.species, out.value) : theme.text.miss(state.reload > 0 ? state.reload.toFixed(1) : null);
-    if (out.result === "hit" && !seen.has(out.species.id)) {
-      seen.add(out.species.id);
-      text += ` ${theme.text.discovery(out.species)}`;
-    }
+    if (out.result === "hit" && out.repeat) text = theme.text.repeat(out.species);
+    else if (out.result === "hit" && out.isNew) text += ` ${theme.text.discovery(out.species)}`;
     message.textContent = text;
     paint();
     updateReadout();
@@ -477,7 +480,7 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
   const element = h("div", { class: "expedition" },
     h("div", { class: "expedition-hud", "aria-live": "off" }, time.box, ammo.box, reload.box, score.box),
     h("div", { class: "expedition-frame" }, canvas),
-    h("p", { class: "expedition-help" }, `${help} points. Wildlife follows the section of trail you're on. W A S D or arrows to aim; Space or tap to ${theme.action}. Four frames are wound at a time; the next ones wind automatically. A missed frame startles nearby wildlife.`),
+    h("p", { class: "expedition-help" }, `${help} points. Each species scores once per outing; species new to the field guide score double. Wildlife follows the section of trail you're on. W A S D or arrows to aim; Space or tap to ${theme.action}. Four frames are wound at a time; the next ones wind automatically. A missed frame startles nearby wildlife.`),
     h("div", { class: "expedition-footer" }, message, h("div", { class: "row" }, muteButton, startButton)));
   return {
     element,

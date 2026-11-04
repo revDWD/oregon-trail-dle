@@ -56,14 +56,31 @@ export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES
 }
 
 // Wildlife photography badges for one hiker. Each is dated by the first sighting that completed it.
+// Per trail section: how many of its local species have been photographed *there*.
+// completedOn is the date the last missing local species was first photographed in that section.
+export function regionProgress(sightings = [], { hikerId = null, theme = THEMES.wildlife } = {}) {
+  return Object.entries(theme.habitats).map(([id, hab]) => {
+    const local = Object.keys(hab.animals);
+    const firsts = local.map((sp) => earliest(sightings
+      .filter((r) => r.habitat === id && r.species === sp && (!hikerId || r.hikerId === hikerId))
+      .map((r) => r.firstSeen || "0000-00-00")));
+    const found = firsts.filter(Boolean).length;
+    return { id, label: hab.label, found, total: local.length,
+      completedOn: found === local.length ? firsts.sort().at(-1) : null };
+  });
+}
+
 export const WILDLIFE_BADGES = Object.freeze([
   { id: "trail-photographer", art: "camera", title: "Trail Photographer", description: "Photograph 10 different species.", count: 10 },
   { id: "bird-watcher", art: "bird", title: "Bird Watcher", description: "Photograph 5 different kinds of bird.", count: 5, group: "bird" },
-  { id: "butterfly-collector", art: "butterfly", title: "Butterfly Collector", description: "Photograph 4 different insects, from monarchs to fireflies.", count: 4, group: "insect" },
+  { id: "insect-explorer", art: "butterfly", title: "Insect Explorer", description: "Photograph 4 different insects, from monarchs to fireflies.", count: 4, group: "insect" },
+  { id: "mammal-tracker", art: "paw", title: "Mammal Tracker", description: "Photograph 6 different mammals.", count: 6, group: "mammal" },
+  { id: "creek-explorer", art: "frog", title: "Creek Explorer", description: "Photograph 3 reptiles or amphibians.", count: 3, group: "herp" },
   { id: "trail-naturalist", art: "fern", title: "Trail Naturalist", description: "Photograph wildlife in 4 different trail habitats.", habitats: 4 },
+  { id: "regional-naturalist", art: "book", title: "Regional Naturalist", description: "Photograph every local species of one trail section, in that section.", region: true },
   { id: "wildlife-expert", art: "binoculars", title: "Wildlife Expert", description: "Photograph 20 different species.", count: 20 },
-  { id: "rare-find", art: "star", title: "Rare Find", description: "Photograph one of the trail's rare species.", count: 1, rarity: "rare" },
-  { id: "complete-field-guide", art: "book", title: "Complete Field Guide", description: "Photograph every species in the field guide.", all: true },
+  { id: "rare-find", art: "star", title: "Rare Species Finder", description: "Photograph one of the trail's rare species.", count: 1, rarity: "rare" },
+  { id: "complete-field-guide", art: "laurel", title: "Master Naturalist", description: "Photograph every species in the field guide. The trail's highest honour.", all: true, prestige: true },
   { id: "trail-legend", art: "footprint", title: "Trail Legend", description: "Photograph something nobody will believe.", count: 1, rarity: "legend" }
 ]);
 
@@ -75,7 +92,15 @@ export function wildlifeBadges(sightings = [], theme = THEMES.wildlife) {
     if (!firstByHabitat.has(r.habitat) || r.firstSeen < firstByHabitat.get(r.habitat)) firstByHabitat.set(r.habitat, r.firstSeen);
   });
   const nth = (dates, n) => { const sorted = dates.filter(Boolean).sort(); return sorted.length >= n ? sorted[n - 1] : null; };
+  const regions = regionProgress(sightings, { theme });
   return WILDLIFE_BADGES.map((b) => {
+    const base = { id: b.id, kind: "wildlife", art: b.art, title: b.title, description: b.description, prestige: !!b.prestige };
+    if (b.region) {
+      const done = regions.map((r) => r.completedOn).filter(Boolean).sort();
+      const best = [...regions].sort((x, y) => (y.found / y.total) - (x.found / x.total))[0] || { found: 0, total: 1, label: "" };
+      return { ...base, earned: done.length > 0, earnedOn: done[0] || null,
+        progress: done.length ? { count: 1, need: 1 } : { count: best.found, need: best.total, label: best.label } };
+    }
     let dates;
     let need = b.count;
     if (b.habitats) { dates = [...firstByHabitat.values()]; need = b.habitats; } else {
@@ -86,7 +111,6 @@ export function wildlifeBadges(sightings = [], theme = THEMES.wildlife) {
     }
     const count = dates.length;
     const earned = count >= need;
-    return { id: b.id, kind: "wildlife", art: b.art, title: b.title, description: b.description, earned,
-      earnedOn: earned ? nth(dates, need) : null, progress: { count: Math.min(count, need), need } };
+    return { ...base, earned, earnedOn: earned ? nth(dates, need) : null, progress: { count: Math.min(count, need), need } };
   });
 }

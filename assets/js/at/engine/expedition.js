@@ -8,8 +8,11 @@ export const WIDTH = 320;
 export const HEIGHT = 180;
 export const MIN_Y = 62;
 const AIM_SPEED = 150;
-const SPAWN_EVERY = 1.1;
-const MAX_ANIMALS = 6;
+// Calmer than the original hunt: fewer animals at once so each sighting is worth a decision.
+const SPAWN_EVERY = 1.8;
+const MAX_ANIMALS = 4;
+const GROUP_CHANCE = 0.35;
+const MAX_GROUP = 3;
 const HIT_PAD = 2;
 const STARTLE_RADIUS = 46;
 const LEAVE_AFTER = 14;
@@ -19,6 +22,8 @@ const LOCAL_CHANCE = 0.65;
 export const RARE_CHANCE = 0.05;
 export const LEGEND_CHANCE = 0.004;
 const OFF_SEASON = 0.25;
+// Collection scoring: each species scores once per outing; a species new to the field guide scores double.
+export const DISCOVERY_MULTIPLIER = 2;
 
 export const defaultRandom = () => {
   const buffer = new Uint32Array(1);
@@ -90,8 +95,9 @@ export function chooseOuting(theme, localHabitat, { random = defaultRandom, mont
   return { habitat, weather: pool[Math.floor(random() * pool.length)], autumn, winter };
 }
 
-// options: { habitat, weather, autumn, winter, speedFactor, special } (speedFactor < 1 for reduced
-// motion; special is a rollSpecial() result, or null for none).
+// options: { habitat, weather, autumn, winter, speedFactor, special, known } (speedFactor < 1 for reduced
+// motion; special is a rollSpecial() result, or null for none; known = species ids already in the field
+// guide, or omitted when the guide is unavailable, which turns the discovery bonus off).
 export function newRound(theme, options = {}) {
   const r = theme.rounds;
   return {
@@ -102,6 +108,8 @@ export function newRound(theme, options = {}) {
     autumn: Boolean(options.autumn),
     winter: Boolean(options.winter),
     special: options.special ? { ...options.special, shown: false } : null,
+    known: options.known ? new Set(options.known) : null,
+    discovered: [],
     speedFactor: options.speedFactor || 1,
     clock: 0,
     nextHerd: 1,
@@ -134,7 +142,7 @@ function spawn(state, forced) {
   const baseY = spec.fly ? low + state.random() * (high - low) : MIN_Y + 8 + state.random() * (HEIGHT - MIN_Y - 8 - spec.h - 8);
   let count = 1;
   const groupSize = spec.herd || spec.flock;
-  if (groupSize && state.random() < 0.5) count = Math.min(1 + Math.ceil(state.random() * (groupSize - 1)), MAX_ANIMALS + 1 - active(state).length);
+  if (groupSize && state.random() < GROUP_CHANCE) count = Math.min(1 + Math.ceil(state.random() * (Math.min(groupSize, MAX_GROUP) - 1)), MAX_ANIMALS - active(state).length);
   const herdId = count > 1 ? state.nextHerd++ : 0;
   for (let i = 0; i < Math.max(count, 1); i += 1) {
     state.animals.push({
@@ -308,13 +316,18 @@ export function fire(state) {
   startle(state);
   bolt(state, animal, animal.x + spec.w / 2 >= x ? 1 : -1);
   animal.mult = 2.4;
-  const value = Math.max(Math.min(spec.value, rules.maxScore - state.score), 0);
+  const repeat = state.spotted.includes(spec.id);
+  const isNew = !repeat && Boolean(state.known) && !state.known.has(spec.id);
+  const worth = repeat ? 0 : spec.value * (isNew ? DISCOVERY_MULTIPLIER : 1);
+  const value = Math.max(Math.min(worth, rules.maxScore - state.score), 0);
   state.score += value;
   state.spotted.push(spec.id);
+  if (isNew) state.discovered.push(spec.id);
   state.puffs.push({ x, y, age: 0, hit: true });
-  const tag = spec.rarity === "legend" ? "LEGEND! " : spec.rarity === "rare" ? "RARE! " : "";
-  state.popups.push({ x: animal.x + spec.w / 2, y: animal.y, age: 0, special: Boolean(tag), text: value > 0 ? `${tag}+${value} ${state.theme.unitShort}` : `${tag}${state.theme.fullText}`.trim() });
-  return { result: "hit", species: spec, value, rarity: spec.rarity || "common" };
+  const tag = `${spec.rarity === "legend" ? "LEGEND " : spec.rarity === "rare" ? "RARE " : ""}${isNew ? "NEW " : ""}`;
+  const text = repeat ? "SEEN" : value > 0 ? `${tag}+${value} ${state.theme.unitShort}` : `${tag}${state.theme.fullText}`.trim();
+  state.popups.push({ x: animal.x + spec.w / 2, y: animal.y, age: 0, special: Boolean(tag), text });
+  return { result: "hit", species: spec, value, rarity: spec.rarity || "common", repeat, isNew };
 }
 
 // "2 white-tailed deer, 1 wild turkey" in the order first spotted.
@@ -335,6 +348,7 @@ export function summary(state) {
     accuracy: state.shots ? Math.round((state.hits / state.shots) * 100) : 0,
     caught,
     species: Object.keys(caught),
+    newSpecies: [...state.discovered],
     habitat: state.habitat
   };
 }

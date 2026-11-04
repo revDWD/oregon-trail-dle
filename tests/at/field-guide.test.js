@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { THEMES } from "../../assets/js/at/engine/expedition-themes.js";
-import { buildFieldGuide, whereToLook, wildlifeBadges, WILDLIFE_BADGES, GROUPS } from "../../assets/js/at/engine/field-guide.js";
+import { buildFieldGuide, regionProgress, whereToLook, wildlifeBadges, WILDLIFE_BADGES, GROUPS } from "../../assets/js/at/engine/field-guide.js";
 import { hikerBadges } from "../../assets/js/at/engine/hikers.js";
 import { SPRITES } from "../../assets/js/at/ui/badge-art.js";
 
@@ -60,7 +60,7 @@ test("wildlife badges are earned by distinct species, groups, habitats and speci
   assert.equal(badges["trail-photographer"].earned, false, "legends don't count toward species totals");
   const all = theme.species.filter((sp) => sp.rarity !== "legend").map((sp, i) => row("h1", sp.id, "lakes", `2026-12-${String(1 + (i % 28)).padStart(2, "0")}`));
   badges = Object.fromEntries(wildlifeBadges(all).map((b) => [b.id, b]));
-  ["trail-photographer", "wildlife-expert", "complete-field-guide", "butterfly-collector"].forEach((id) => assert.equal(badges[id].earned, true, id));
+  ["trail-photographer", "wildlife-expert", "complete-field-guide", "insect-explorer"].forEach((id) => assert.equal(badges[id].earned, true, id));
   assert.ok(wildlifeBadges([]).every((b) => !b.earned && b.earnedOn === null));
 });
 
@@ -77,4 +77,33 @@ test("hiker badges include their own wildlife badges only, with unique, valid ar
     const rows = SPRITES[b.art];
     assert.ok(rows && rows.length === 12 && rows.every((r) => r.length === 12 && /^[.kwlcgGyorsSbnp]+$/.test(r)), `${b.art} is a 12x12 sprite`);
   });
+});
+
+test("regional completion: every local species photographed in that section, dated by the last one", () => {
+  const [id, hab] = Object.entries(theme.habitats)[0];
+  const local = Object.keys(hab.animals);
+  const rows = local.map((sp, i) => row("h1", sp, id, `2026-11-${String(10 + i).padStart(2, "0")}`));
+  const elsewhere = Object.keys(theme.habitats).find((x) => x !== id);
+  const partial = [...rows.slice(1), row("h1", local[0], elsewhere, "2026-11-01")];
+  const p = regionProgress(partial).find((r) => r.id === id);
+  assert.deepEqual([p.found, p.total, p.completedOn], [local.length - 1, local.length, null], "photographed elsewhere doesn't count");
+  const done = regionProgress(rows).find((r) => r.id === id);
+  assert.equal(done.completedOn, rows.at(-1).firstSeen);
+  assert.equal(regionProgress(rows, { hikerId: "h2" }).find((r) => r.id === id).found, 0);
+  const badge = (rs) => wildlifeBadges(rs).find((b) => b.id === "regional-naturalist");
+  assert.deepEqual([badge(partial).earned, badge(partial).progress.count], [false, local.length - 1]);
+  assert.deepEqual([badge(rows).earned, badge(rows).earnedOn], [true, rows.at(-1).firstSeen]);
+});
+
+test("group badges and the prestigious Master Naturalist", () => {
+  const byGroup = (g) => theme.species.filter((sp) => sp.group === g && sp.rarity !== "legend").map((sp) => sp.id);
+  const rows = [...byGroup("mammal").slice(0, 6), ...byGroup("herp").slice(0, 3)].map((sp) => row("h1", sp, "blue-ridge", "2026-11-05"));
+  const got = Object.fromEntries(wildlifeBadges(rows).map((b) => [b.id, b]));
+  assert.equal(got["mammal-tracker"].earned, true);
+  assert.equal(got["creek-explorer"].earned, true);
+  assert.equal(got["rare-find"].title, "Rare Species Finder");
+  const master = got["complete-field-guide"];
+  assert.deepEqual([master.title, master.prestige, master.earned, master.art], ["Master Naturalist", true, false, "laurel"]);
+  assert.equal(WILDLIFE_BADGES.filter((b) => b.prestige).length, 1, "only one top honour");
+  ["paw", "frog", "laurel"].forEach((name) => assert.ok(SPRITES[name], name));
 });

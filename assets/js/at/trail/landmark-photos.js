@@ -183,6 +183,15 @@ export const LANDMARK_PHOTOS = Object.freeze({
     "sourceUrl": "https://commons.wikimedia.org/wiki/File:Jason_Mays_searches_for_snails_uphill_from_the_Nantahala_River_(47967213478).jpg",
     "year": "2019"
   },
+  "pearisburg": {
+    "src": "assets/img/landmarks/pearisburg.jpg",
+    "alt": "Pearisburg: View east along U.S. Route 460 Business (Wenonah Avenue) between Hartley Way and Birchlawn Circle i…",
+    "credit": "Famartin",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:2017-06-11_14_53_26_View_east_along_U.S._Route_460_Business_(Wenonah_Avenue)_between_Hartley_Way_and_Birchlawn_Circle_in_Pearisburg,_Giles_County,_Virginia.jpg",
+    "year": "2017"
+  },
   "pen-mar": {
     "src": "assets/img/landmarks/pen-mar.jpg",
     "alt": "Pen Mar: Vista from the Appalachian Trail in Pen Mar Park in Pen Mar, Maryland .",
@@ -191,6 +200,15 @@ export const LANDMARK_PHOTOS = Object.freeze({
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
     "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vista_from_the_Appalachian_Trail_in_Pen_Mar_Park,_MD.jpg",
     "year": "2024"
+  },
+  "roan-highlands": {
+    "src": "assets/img/landmarks/roan-highlands.jpg",
+    "alt": "Roan Highlands: Sunset over the Blue Ridge Mountains, looking south from Grassy Ridge (between Jane Bald and Round…",
+    "credit": "Brian Stansberry",
+    "license": "CC BY 2.5",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.5",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grassyridge-blueridge-sunset.jpg",
+    "year": "2006"
   },
   "rockfish-gap": {
     "src": "assets/img/landmarks/rockfish-gap.jpg",

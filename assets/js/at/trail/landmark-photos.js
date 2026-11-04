@@ -2,4 +2,230 @@
 // Real landmark photos, self-hosted in assets/img/landmarks/. Only public domain, CC0, CC BY or CC BY-SA
 // images are allowed, and the credit, license and source link must stay with each photo.
 // Safe to hand-edit (e.g. improve alt text, or delete an entry and re-run the script to pick another).
-export const LANDMARK_PHOTOS = Object.freeze({});
+export const LANDMARK_PHOTOS = Object.freeze({
+  "bear-mountain": {
+    "src": "assets/img/landmarks/bear-mountain.jpg",
+    "alt": "Bear Mountain Bridge spanning the Hudson River below forested hills",
+    "credit": "Fran Trudeau from Wappingers Falls, NY, USA",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Mountain_Bridge,_Hudson_River.jpg",
+    "year": "2011"
+  },
+  "big-meadows": {
+    "src": "assets/img/landmarks/big-meadows.jpg",
+    "alt": "Big Meadows in autumn: open grassland with scattered trees in Shenandoah National Park",
+    "credit": "Cbaile19",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Big_Meadows,_Shenandoah_National_Park,_2003-10-10,_01.jpg",
+    "year": "2003"
+  },
+  "clingmans-dome": {
+    "src": "assets/img/landmarks/clingmans-dome.jpg",
+    "alt": "View east from Clingmans Dome over ridge after ridge of the Great Smoky Mountains",
+    "credit": "Acroterion",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_east_from_Clingman%27s_Dome_GSMNP_NC1.jpg",
+    "year": "2016"
+  },
+  "damascus": {
+    "src": "assets/img/landmarks/damascus.jpg",
+    "alt": "Hikers crossing a steel bridge on the Virginia Creeper Trail in Damascus, Virginia",
+    "credit": "Waldo Jaquith",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Creeper_Trail_Bridge.jpg",
+    "year": "2006"
+  },
+  "delaware-water-gap": {
+    "src": "assets/img/landmarks/delaware-water-gap.jpg",
+    "alt": "The Delaware Water Gap notch in the Kittatinny Ridge seen across New Jersey farmland",
+    "credit": "ChuckWalsh ( talk ) ( Uploads )",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Delaware_Water_Gap_from_I_80.jpg",
+    "year": "2006"
+  },
+  "dragons-tooth": {
+    "src": "assets/img/landmarks/dragons-tooth.jpg",
+    "alt": "The tall rock spire of Dragon’s Tooth on Cove Mountain, Virginia",
+    "credit": "Caballero1967",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dragon_Tooth,_Virginia.jpg",
+    "year": "2013"
+  },
+  "fontana-dam": {
+    "src": "assets/img/landmarks/fontana-dam.jpg",
+    "alt": "Forested mountains above the Little Tennessee River near Fontana Dam, North Carolina",
+    "credit": "w_lemay",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Little_Tennessee_River,_Fontana_Dam,_NC.jpg",
+    "year": "2021"
+  },
+  "grayson-highlands": {
+    "src": "assets/img/landmarks/grayson-highlands.jpg",
+    "alt": "A shaggy wild pony grazing in Grayson Highlands State Park, Virginia",
+    "credit": "bobistraveling",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wild_Ponies_Grayson_Highlands_SP_VA_7423.jpg",
+    "year": "2015"
+  },
+  "hanover": {
+    "src": "assets/img/landmarks/hanover.jpg",
+    "alt": "Dartmouth Hall, a white colonial building on the Dartmouth College campus in Hanover, New Hampshire",
+    "credit": "Kane5187",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dartmouth_College_campus_2007-06-23_Dartmouth_Hall_02.JPG",
+    "year": "2007"
+  },
+  "harpers-ferry": {
+    "src": "assets/img/landmarks/harpers-ferry.jpg",
+    "alt": "A historic brick building on High Street in Harpers Ferry, West Virginia",
+    "credit": "Acroterion",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:30_High_Street_Harpers_Ferry_WV1.jpg",
+    "year": "2023"
+  },
+  "hot-springs": {
+    "src": "assets/img/landmarks/hot-springs.jpg",
+    "alt": "Vintage postcard looking north over the French Broad River near Hot Springs, North Carolina",
+    "credit": "Boston Public Library",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:T-28._Looking_North_from_French_Broad_lookout,_French_Broad_River_and_Southern_R._R._in_foreground,_Hot_Springs,_N._C._(5811468193).jpg",
+    "year": "2011"
+  },
+  "katahdin": {
+    "src": "assets/img/landmarks/katahdin.jpg",
+    "alt": "Snow-capped Mount Katahdin rising beyond a half-frozen river in Maine",
+    "credit": "Michael Sipos",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Katahdin.jpg",
+    "year": "2023"
+  },
+  "mahoosuc-notch": {
+    "src": "assets/img/landmarks/mahoosuc-notch.jpg",
+    "alt": "A backpacker scrambling between huge boulders in Mahoosuc Notch",
+    "credit": "Gm206 at English Wikipedia",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mahoosuc_trail1.JPG",
+    "year": "2007"
+  },
+  "max-patch": {
+    "src": "assets/img/landmarks/max-patch.jpg",
+    "alt": "The Appalachian Trail crossing the grassy bald summit of Max Patch",
+    "credit": "User:Washedwithblood7",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Appalachian_Trail_crosses_the_grassy_bald_area_atop_Max_Patch_Mountain.jpg",
+    "year": "2009"
+  },
+  "mcafee-knob": {
+    "src": "assets/img/landmarks/mcafee-knob.jpg",
+    "alt": "View from the rocky ledge of McAfee Knob over the Catawba Valley, Virginia",
+    "credit": "computingdoc",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:McAfee%27s_Knob_-_panoramio_(1).jpg",
+    "year": "2007"
+  },
+  "monson": {
+    "src": "assets/img/landmarks/monson.jpg",
+    "alt": "1889 bird’s-eye view map of the village of Monson, Maine, on Lake Hebron",
+    "credit": "http://maps.bpl.org",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Monson,_Maine_(2675080893).jpg",
+    "year": "2008"
+  },
+  "mount-greylock": {
+    "src": "assets/img/landmarks/mount-greylock.jpg",
+    "alt": "The stone Veterans War Memorial Tower on the summit of Mount Greylock",
+    "credit": "Vvburen",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Greylock_Summit_01.jpg",
+    "year": "2018"
+  },
+  "mount-washington": {
+    "src": "assets/img/landmarks/mount-washington.jpg",
+    "alt": "Vintage postcard of Mount Washington and the snowy Presidential Range above Bretton Woods",
+    "credit": "Tichnor Brothers, Publisher",
+    "license": "Public domain",
+    "licenseUrl": null,
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_Mount_Washington_and_the_Presidential_Range,_Bretton_Woods,_White_Mts.,_N.H_(62648).jpg",
+    "year": "1930"
+  },
+  "nantahala": {
+    "src": "assets/img/landmarks/nantahala.jpg",
+    "alt": "Rafters paddling whitewater on the Nantahala River",
+    "credit": "anoldent",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nantahala_River_raft_2009.jpg",
+    "year": "2009"
+  },
+  "neel-gap": {
+    "src": "assets/img/landmarks/neel-gap.jpg",
+    "alt": "The stone Walasi-Yi building at Neel Gap, where the Appalachian Trail passes through a breezeway",
+    "credit": "Thomsonmg2000",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Walasi-Yi_Interpretive_Center.JPG",
+    "year": "2012"
+  },
+  "pearisburg": {
+    "src": "assets/img/landmarks/pearisburg.jpg",
+    "alt": "The wide New River flowing over rocky riffles in Giles County, Virginia, near Pearisburg",
+    "credit": "Jllackey",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_New_River_in_Giles_County,_VA.jpg",
+    "year": "2018"
+  },
+  "pen-mar": {
+    "src": "assets/img/landmarks/pen-mar.jpg",
+    "alt": "A pavilion and Appalachian Trail sign at the Pen Mar Park overlook, Maryland",
+    "credit": "Zeete",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vista_from_the_Appalachian_Trail_in_Pen_Mar_Park,_MD.jpg",
+    "year": "2024"
+  },
+  "roan-highlands": {
+    "src": "assets/img/landmarks/roan-highlands.jpg",
+    "alt": "Sunset over the Blue Ridge seen from Grassy Ridge in the Roan Highlands",
+    "credit": "Brian Stansberry",
+    "license": "CC BY 2.5",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.5",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grassyridge-blueridge-sunset.jpg",
+    "year": "2006"
+  },
+  "rockfish-gap": {
+    "src": "assets/img/landmarks/rockfish-gap.jpg",
+    "alt": "Historical marker at Rockfish Gap describing the 1818 meeting that chose the University of Virginia site",
+    "credit": "Ken Lund from Reno, Nevada, USA",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rockfish_Gap_Meeting,_Rockfish_Gap_Viewpoint,_Interstate_64,_Virginia_(2854227916).jpg",
+    "year": "2008"
+  },
+  "springer-mountain": {
+    "src": "assets/img/landmarks/springer-mountain.jpg",
+    "alt": "Bronze Appalachian Trail plaque with a hiker set in rock on the summit of Springer Mountain",
+    "credit": "Thomson200",
+    "license": "CC0",
+    "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Appalachian_Trail_plaque_Springer_Mountain.JPG",
+    "year": "2014"
+  }
+});

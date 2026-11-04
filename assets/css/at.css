@@ -27,6 +27,7 @@ h1:focus { outline: none; }
 main { max-width: 42rem; margin: 0 auto; padding: 1rem; }
 main:focus { outline: none; }
 footer { max-width: 42rem; margin: 0 auto; padding: 0 1rem; color: var(--muted); font-size: .85rem; }
+footer .credits { font-size: .75rem; opacity: .85; margin-top: -.4rem; }
 .card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; margin: 0 0 1rem; box-shadow: 0 2px 0 rgba(91,70,54,.12); }
 .hero .big { font-size: 3rem; font-weight: 800; margin: 0; color: var(--forest); line-height: 1.1; }
 .center { text-align: center; }
@@ -319,4 +320,5 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .story-part p { margin: .15rem 0 0; }
 .story-part.kevin { background: #fff7e3; border-left: 4px solid var(--amber); border-radius: 6px; padding: .4rem .6rem; font-family: Georgia, serif; }
 .story-photo { margin: 0; }
-.story-photo img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.story-photo img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; display: block; background: #e7dcc3; }
+.story-photo figcaption { font-size: .78rem; margin-top: .25rem; }

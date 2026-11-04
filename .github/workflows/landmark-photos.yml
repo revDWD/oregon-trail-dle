@@ -1,0 +1,42 @@
+name: Landmark photos
+# Manually run: Actions > Landmark photos > Run workflow. Fetches openly licensed landmark photos from
+# Wikimedia Commons and opens a pull request so a person reviews every picture and credit before merge.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Landmark ids to (re)pick, comma separated (blank = all landmarks without a photo)"
+        required: false
+        default: ""
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch photos
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          if [ -n "$ONLY" ]; then node scripts/landmark-photos.mjs --only="$ONLY" --refresh; else node scripts/landmark-photos.mjs; fi
+      - name: Run tests
+        run: npm test
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then echo "No new photos."; exit 0; fi
+          branch="landmark-photos-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add assets/img/landmarks assets/js/at/trail/landmark-photos.js
+          git commit -m "Add landmark photos from Wikimedia Commons"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "Landmark photos from Wikimedia Commons" \
+            --body "Review each photo (Files changed > assets/img/landmarks) and its credit and alt text in landmark-photos.js before merging. Only public domain, CC0, CC BY and CC BY-SA photos are picked."

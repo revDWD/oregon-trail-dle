@@ -343,7 +343,7 @@ select t.ok(to_regprocedure('public.at_join_expedition(text)') is null and to_re
 select t.ok(not has_function_privilege('anon', 'public.at_expedition_hikers(date)', 'execute'), 'anon cannot read hiker totals');
 select t.ok(not has_function_privilege('anon', 'public.at_expedition_marks(numeric[], numeric[])', 'execute'), 'anon cannot read marks');
 select t.ok(not has_function_privilege('authenticated', 'public.at_check_hiker()', 'execute'), 'the trigger function is not callable');
-select t.ok((select string_agg(name, ',' order by sort_order) from public.at_hikers) = 'David,Kevin', 'David and Kevin are seeded');
+select t.ok((select string_agg(name, ',' order by sort_order) from public.at_hikers) = 'Alden,Amanda,Andrew,David,Elizabeth,Kayla,Kevin,Kelsey,Matthew,Shuva,Will', 'the full roster is seeded, in order');
 select id as david from public.at_hikers where name = 'David' \gset
 select id as kevin from public.at_hikers where name = 'Kevin' \gset
 insert into public.at_hikers (name, sort_order, active) values ('Retired', 9, false);
@@ -354,7 +354,7 @@ select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003
 set role authenticated;
 select t.ok(public.at_is_expedition_member(), 'every signed-in device takes part');
 select t.fails('select * from public.at_hikers', '42501', 'roster table is not directly readable');
-select t.ok(t.count('select 1 from public.at_expedition_hikers()') = 2, 'a new device reads the roster totals (David, Kevin)');
+select t.ok(t.count('select 1 from public.at_expedition_hikers()') = 11, 'a new device reads the roster totals (all eleven hikers)');
 insert into public.at_activities (activity_date, activity_type, actual_miles, notes, hiker_id) values (current_date, 'walking', 5, 'carol for david', :'david');
 insert into public.at_activities (activity_date, activity_type, actual_miles, notes, hiker_id) values (current_date - 1, 'hiking', 3, 'carol for kevin', :'kevin');
 insert into public.at_activities (activity_date, activity_type, actual_miles, notes) values (current_date, 'walking', 50, 'carol no hiker');

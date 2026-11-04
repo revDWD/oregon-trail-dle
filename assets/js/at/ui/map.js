@@ -6,6 +6,7 @@ import { h, svg, formatMiles } from "./dom.js";
 import { landmarkArt } from "./illustrations.js";
 import { mileMarkers, journeyProgress, journeyWindow, positionFor } from "../engine/progress.js";
 import { landmarkStory } from "../trail/landmark-stories.js";
+import { LANDMARK_PHOTOS } from "../trail/landmark-photos.js";
 
 // Same simplified Albers projection that generated us-states.js (viewBox 0 0 1000 570).
 const P = {
@@ -117,7 +118,7 @@ export function landmarkStatus(landmark, progress) {
 function detailPanel(trail, progress, landmark) {
   const region = (trail.regions || []).find((r) => landmark.miles >= r.start && landmark.miles <= r.end);
   return h("div", { class: `map-detail${landmark.passed ? " passed" : ""}` },
-    landmarkArt(landmark.kind, `Illustration: ${landmark.kind} scenery`),
+    landmarkPicture(landmark),
     h("div", {},
       h("h3", {}, landmark.name, h("span", { class: "hint" }, `, ${landmark.state}`)),
       h("p", { class: "tag" }, landmarkStatus(landmark, progress)),
@@ -130,15 +131,32 @@ function detailPanel(trail, progress, landmark) {
       storyBlock(landmark)));
 }
 
-// The educational layer: history, nature, a fun fact, Kevin's notes, an optional credited photo.
+// A real, credited photo (landmark-stories `photo` overrides the generated LANDMARK_PHOTOS), else the
+// pixel-art scene. If the photo fails to load, the pixel art takes its place.
+export function landmarkPhoto(id) {
+  return landmarkStory(id)?.photo || LANDMARK_PHOTOS[id] || null;
+}
+
+function landmarkPicture(landmark) {
+  const art = () => landmarkArt(landmark.kind, `Illustration: ${landmark.kind} scenery`);
+  const photo = landmarkPhoto(landmark.id);
+  if (!photo) return art();
+  const link = (href, text) => href ? h("a", { href, target: "_blank", rel: "noopener" }, text) : text;
+  const figure = h("figure", { class: "story-photo" },
+    h("img", { src: photo.src, alt: photo.alt || `Photograph of ${landmark.name}`, loading: "lazy", decoding: "async", width: 1024, height: 683,
+      onError: () => figure.replaceWith(art()) }),
+    h("figcaption", { class: "hint" }, "Photo: ", photo.credit, photo.year ? `, ${photo.year}` : "",
+      photo.license ? [" · ", link(photo.licenseUrl, photo.license)] : null,
+      photo.sourceUrl ? [" · ", link(photo.sourceUrl, "source")] : null));
+  return figure;
+}
+
+// The educational layer: history, nature, a fun fact and Kevin's notes.
 function storyBlock(landmark) {
   const story = landmarkStory(landmark.id);
   if (!story) return null;
   const part = (cls, title, text) => text ? h("div", { class: `story-part ${cls}` }, h("h4", {}, title), h("p", {}, text)) : null;
   return h("div", { class: "landmark-story" },
-    story.photo ? h("figure", { class: "story-photo" },
-      h("img", { src: story.photo.src, alt: story.photo.alt || "", loading: "lazy", decoding: "async" }),
-      h("figcaption", { class: "hint" }, `Photo: ${story.photo.credit}${story.photo.license ? ` (${story.photo.license})` : ""}`)) : null,
     part("history", "Why it matters", story.history),
     part("nature", "Nature notes", story.nature),
     part("dyk", "Did you know?", story.didYouKnow),

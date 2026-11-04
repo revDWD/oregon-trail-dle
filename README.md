@@ -2,12 +2,12 @@
 
 A friends-based fitness game: log walks, hikes, runs and rides, and turn them into progress along the Appalachian Trail. Live site: https://atfitnesstracker.abbydavid.com
 
-- **The expedition**: one shared journey from Springer Mountain to Katahdin. Every activity is logged for an official hiker (David, Kevin, ...), and everyone's miles move the group together
+- **The expedition**: one shared journey from Springer Mountain to Katahdin. Every activity is logged for one of the eleven official hikers (Alden, Amanda, Andrew, David, Elizabeth, Kayla, Kevin, Kelsey, Matthew, Shuva, Will), and everyone's miles move the group together
 - **Interactive trail map**: zoom/pan/pinch, regional sections, mile posts, landmark detail cards with original illustrations
 - **Trail Dispatches**: the organizer's announcements ("Message from Camp" on the Trail page, full archive at Camp), with simple formatting
 - **Camp, the hub**: a pixel-art camp that follows the device clock (morning, day, evening, night) and grows with the expedition's miles. Pick a hiker to see their miles contributed, badges, milestones and journey; the trail register shows who carried the group past each landmark
 - **Journey progress** on the Trail map: each region lists its landmarks (✓ passed, ➜ next, ○ ahead); tap one to see it on the map
-- **Landmark stories**: tap any landmark for why it matters, nature notes, a "Did you know?" and Kevin's Trail Notes; a Previous / Current / Next strip under the map tells the journey so far
+- **Landmark stories**: tap any landmark for a real, credited photo (when one has been added; otherwise pixel art), why it matters, nature notes, a "Did you know?" and Kevin's Trail Notes; a Previous / Current / Next strip under the map tells the journey so far
 - **Per-hiker badges** (locked ones stay mystery silhouettes until earned) with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
 - **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles. 37 species (mammals, birds, insects, reptiles and amphibians) change with the trail section and the season; very rare finds and a few playful legends are rolled once per outing. A **Field guide** collects every species photographed (fact, range, first sighting, who found it), and eleven wildlife badges reward collecting
 - Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
@@ -53,7 +53,7 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 The roster lives in the `at_hikers` table. In the Supabase SQL Editor:
 
 ```sql
-insert into public.at_hikers (name, sort_order) values ('Sarah', 3);              -- add a hiker
+insert into public.at_hikers (name, sort_order) values ('Sarah', 12);             -- add a hiker
 update public.at_hikers set active = false where name = 'Sarah';               -- retire (their miles stay)
 ```
 
@@ -66,3 +66,14 @@ See `docs/deployment.md` for the Supabase values, the SQL migrations (run them a
 Updating the site: merge to `main` and GitHub Pages redeploys in a minute or two. Database changes are new files in `supabase/migrations/` that are pasted into the Supabase SQL Editor.
 
 Old bookmarks still work: `#/hunt` opens Wildlife Spotting; `#/crew`, `#/badges` and `#/hikers` open Camp at "The hikers". The previous Oregon Trail version is preserved at the git tag `oregon-trail-final`.
+
+## Landmark photos
+
+Real landmark photos come from Wikimedia Commons. Only public domain, CC0, CC BY and CC BY-SA photos are used, and each one is self-hosted and shown with its credit, licence and source link. To add or refresh them:
+
+1. Go to GitHub, then Actions › **Landmark photos** › **Run workflow**. Leave the field blank to fill in every landmark that has no photo, or list ids such as `katahdin,max-patch` to pick those again.
+2. The workflow opens a pull request. Check each photo and its alt text in `assets/js/at/trail/landmark-photos.js`, then merge.
+
+One-time setup: Settings › Actions › General › Workflow permissions › tick "Allow GitHub Actions to create and approve pull requests". Details are in `docs/trail-data-sources.md`.
+
+Created by David (project design and direction). Trail Dispatches and Trail Notes are by Kevin, the expedition organizer.

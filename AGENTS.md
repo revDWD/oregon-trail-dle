@@ -179,7 +179,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Every change goes in a **new** idempotent migration; never edit an applied one.
   - It must pass `bash supabase/tests/run-rls-tests.sh`, which applies the legacy schema, then each migration twice back-to-back (per-file idempotency), then runs the RLS, reset and upgrade suites. Since the cleanup migration, *older* migrations are not re-runnable after it (e.g. 20261103 indexes `challenge_id`); that is expected and why the runner checks each file twice in sequence.
   - Retire tables by moving them to `archive`, guarded with `to_regclass`, and add a case to `supabase/tests/upgrade.test.sql`.
-  - The owner pastes SQL into the Supabase SQL Editor, so always give SQL as **plain text without Markdown fences** (a pasted ``` once caused a syntax error).
+  - The owner pastes SQL into the Supabase SQL Editor, so always give SQL as **plain text without Markdown fences** (a pasted ``` once caused a syntax error). The chat also renders `$$…$$` as maths and mangles it, so SQL for the owner is written **without dollar quoting** (DO/function bodies as `'…'` strings with doubled quotes, as in `20261108000000_at_cleanup.sql`) and shown as an **indented** block with comments stripped, never inside ``` fences.
   - Security failures are blocking bugs.
 - **Rendering and code organisation**
   - Render text with `textContent` or `h()`/`svg()` only; no `innerHTML` (test-enforced). Rich text goes through `engine/markdown.js` → `ui/markdown-view.js`.

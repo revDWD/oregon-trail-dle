@@ -22,20 +22,20 @@
 --   alter table public.at_expedition_runs enable trigger user;
 --   commit;
 -- To delete the copies for good:   drop schema archive cascade;
+-- No dollar quoting ($$) on purpose: chat renders it as maths when the owner copies this SQL.
 
 begin;
 
 create schema if not exists archive;
 revoke all on schema archive from public, anon, authenticated;
 
-do $$
+do '
 declare
-  v_stamp text := to_char(clock_timestamp() at time zone 'utc', 'YYYYMMDD"_"HH24MISS');
+  v_stamp text := to_char(clock_timestamp() at time zone ''utc'', ''YYYYMMDD"_"HH24MISS'');
 begin
-  execute format('create table archive.%I as table public.at_activities', 'at_activities_' || v_stamp);
-  execute format('create table archive.%I as table public.at_expedition_runs', 'at_expedition_runs_' || v_stamp);
-  raise notice 'Backed up to archive.at_activities_% and archive.at_expedition_runs_%', v_stamp, v_stamp;
-end $$;
+  execute format(''create table archive.%I as table public.at_activities'', ''at_activities_'' || v_stamp);
+  execute format(''create table archive.%I as table public.at_expedition_runs'', ''at_expedition_runs_'' || v_stamp);
+end';
 
 delete from public.at_activities;
 delete from public.at_expedition_runs;
@@ -50,4 +50,4 @@ select (select count(*) from public.at_activities) as activities,
        (select count(*) from public.at_expedition_runs) as wildlife_outings,
        (select string_agg(name, ', ' order by sort_order) from public.at_hikers where active) as hikers,
        (select string_agg(tablename, ', ' order by tablename) from pg_tables
-         where schemaname = 'archive' and tablename ~ '^at_(activities|expedition_runs)_[0-9]{8}_[0-9]{6}$') as backups;
+         where schemaname = 'archive' and tablename ~ '^at_(activities|expedition_runs)_[0-9]{8}_[0-9]{6}') as backups;

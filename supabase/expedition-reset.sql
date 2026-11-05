@@ -50,4 +50,4 @@ select (select count(*) from public.at_activities) as activities,
        (select count(*) from public.at_expedition_runs) as wildlife_outings,
        (select string_agg(name, ', ' order by sort_order) from public.at_hikers where active) as hikers,
        (select string_agg(tablename, ', ' order by tablename) from pg_tables
-         where schemaname = 'archive' and tablename ~ '^at_(activities|expedition_runs)_[0-9]{8}_[0-9]{6}$') as backups;
+         where schemaname = 'archive' and tablename ~ '^at_(activities|expedition_runs)_[0-9]{8}_[0-9]{6}') as backups;

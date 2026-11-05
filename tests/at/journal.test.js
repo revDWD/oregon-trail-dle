@@ -77,3 +77,17 @@ test("an empty expedition has an empty journal, and a missing field guide just l
   assert.ok(list.length > 0);
   assert.ok(!list.some((e) => e.kind === "species" || e.kind === "guide" || e.kind === "section"));
 });
+
+test("species badges join the journal without repeating the expedition's first photos", () => {
+  const list = journal();
+  const entries = list.filter((e) => e.id.startsWith("species-badges-"));
+  // David's deer came after Kevin's first photo, so it is his badge story; every other photo here
+  // was a first for the whole expedition and is already told by its "First photo" entry.
+  assert.deepEqual(entries.map((e) => [e.id, e.date, e.title, e.detail]),
+    [["species-badges-h-david-2026-11-03", "2026-11-03", "David earned a species badge", "White-tailed Deer"]]);
+  assert.equal(entries[0].kind, "badge");
+  const many = journal({ sightings: [...sightings, row("h-david", "elk", "2026-11-03"), row("h-kevin", "elk", "2026-11-01")] });
+  assert.equal(many.find((e) => e.id === "species-badges-h-david-2026-11-03").title, "David earned 2 species badges");
+  assert.equal(many.find((e) => e.id === "species-badges-h-david-2026-11-03").detail, "Elk and White-tailed Deer");
+  assert.equal(list.find((e) => e.id === "species-deer").title, "First photo: White-tailed Deer", "species names use Title Case");
+});

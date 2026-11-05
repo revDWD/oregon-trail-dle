@@ -10,7 +10,7 @@
 
 import { GROUP_MILESTONES, RHYTHM_BADGES, computeRhythm } from "./game.js";
 import { landmarksInOrder, round2 } from "./progress.js";
-import { wildlifeBadges } from "./field-guide.js";
+import { listTitles, speciesBadgeDays, wildlifeBadges } from "./field-guide.js";
 
 // Miles each hiker has personally contributed. `art` names a sprite in ui/badge-art.js.
 export const MILE_BADGES = Object.freeze([
@@ -124,18 +124,40 @@ export function hikerBadges(hiker, { marks = [], register = [], today, sightings
   return badges;
 }
 
-// The next mileage badge a hiker is walking toward (null once they have them all).
+// The next mileage badge a hiker is walking toward (null once they have them all). `percent` is the
+// way from the previous mileage badge (or 0) to this one.
 export function nextMileBadge(hiker) {
   const total = Number(hiker.totalMiles) || 0;
-  const next = MILE_BADGES.find((b) => total < b.miles);
-  return next ? { ...next, remaining: round2(next.miles - total), percent: Math.floor((total / next.miles) * 100) } : null;
+  const i = MILE_BADGES.findIndex((b) => total < b.miles);
+  if (i < 0) return null;
+  const next = MILE_BADGES[i];
+  const from = i ? MILE_BADGES[i - 1].miles : 0;
+  return { ...next, remaining: round2(next.miles - total), percent: Math.floor(((total - from) / (next.miles - from)) * 100) };
 }
 
-// A hiker's story so far, oldest first: badges earned and landmarks they carried the expedition past.
-export function hikerTimeline(badges, milestones) {
+// Everything a hiker can collect, as one number: achievement badges (hikerBadges) plus one badge per
+// species (speciesBadges). Legend species badges are a bonus outside the total, so 100% is reachable.
+export function badgeCollection(badges = [], species = []) {
+  const count = (list) => list.filter((b) => b.earned).length;
+  const regular = species.filter((b) => !b.bonus);
+  const earned = count(badges) + count(regular);
+  const total = badges.length + regular.length;
+  return {
+    earned, total, percent: total ? Math.floor((earned / total) * 100) : 0,
+    badges: { earned: count(badges), total: badges.length },
+    species: { earned: count(regular), total: regular.length },
+    legends: count(species.filter((b) => b.bonus))
+  };
+}
+
+// A hiker's story so far, oldest first: badges earned, landmarks they carried the expedition past,
+// and species badges (one line per day, so a good photo walk doesn't flood the story).
+export function hikerTimeline(badges, milestones, species = []) {
   const items = [
     ...badges.filter((b) => b.earned && b.earnedOn).map((b) => ({ date: b.earnedOn, kind: "badge", id: b.id, art: b.art, text: `Earned ${b.title}` })),
-    ...milestones.landmarks.filter((l) => l.reachedOn).map((l) => ({ date: l.reachedOn, kind: "landmark", id: l.id, art: "flag", text: `Carried the expedition to ${l.title}` }))
+    ...milestones.landmarks.filter((l) => l.reachedOn).map((l) => ({ date: l.reachedOn, kind: "landmark", id: l.id, art: "flag", text: `Carried the expedition to ${l.title}` })),
+    ...speciesBadgeDays(species).map((d) => ({ date: d.date, kind: "species", id: `species-${d.date}`,
+      text: `Species ${d.titles.length === 1 ? "badge" : "badges"}: ${listTitles(d.titles)}` }))
   ];
   return items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.text.localeCompare(b.text)));
 }

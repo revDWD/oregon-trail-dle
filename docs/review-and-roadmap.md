@@ -485,3 +485,40 @@ The game loop was strong, but scoring rewarded photographing the same deer again
 2. **Journal filter by hiker.** Reuse the field guide's "Show" select on the Expedition Journal.
 3. **Auto-dispatch for rare and legendary finds.** The journal already records them; a Camp highlight could reuse the same entry.
 4. **Species-specific habit overrides.** A few iconic species (wild turkey's strut, loon's dive) could override the class `habit` text without new movement code.
+
+## 16. Badges, data cleanup and fresh start
+
+### 16.1 Species badges
+
+- One badge per species (33, plus the 4 Trail Legends as secret bonus badges), from `speciesBadges()` in `engine/field-guide.js`. A badge is earned with the hiker's own first photo of that species and dated by it; repeat photos add nothing, matching "build a field guide" scoring.
+- Art is the species' own pixel sprite in a medallion. Locked badges are silhouettes with "???", like the field guide. Rare species get a teal ring; legends a gold medallion.
+- Shown at Camp in a collapsible **Species Badges (N of 33)** grid. New ones are celebrated after an outing in one line; the hiker's journey and the Expedition Journal group them per day, and the journal skips species already told by the expedition's "First photo" entry.
+
+### 16.2 Camp progress bar
+
+- **Finding:** the green bar under each hiker's stats was `nextMileBadge().percent`: miles so far ÷ miles for the *next* mileage badge, measured from 0, with only an aria label. It ignored the badges and species listed beside it, and jumped back when a badge was earned, so it looked disconnected. (The maths was correct for what it measured.)
+- **Change:** a visibly labelled **Badge Collection** bar = (achievement badges earned + species badges earned) ÷ (24 + 33), with "X of 57 badges · Z%". The stats now read "Achievement badges X of 24" and "Species badges X of 33", so the bar is exactly the sum of what is shown. Legends are a bonus, so 100% is reachable. Mileage stays as text ("38 mi to the next mileage badge"), and its `percent` now runs from the previous mileage badge.
+
+### 16.3 Database audit
+
+Method: every table, view, function and trigger in the migrations, cross-checked against every `.from()`/`.rpc()` in `data/layer.js` (the only file allowed to call Supabase, test-enforced), the workflows and scripts. GitHub code search found no other repository using this Supabase project.
+
+| Object | Status | Evidence | Action |
+|---|---|---|---|
+| `at_hikers`, `at_activities`, `at_conversion_rules`, `at_expedition_runs`, `at_dispatches`, `at_organizers` | Live | Used by the layer or by live RPCs/policies | Kept |
+| RPCs `at_expedition_hikers`, `at_expedition_marks`, `at_field_guide`, `at_my_summary`, `at_is_organizer`, `at_is_expedition_member` | Live | Called by the layer or policies | Kept |
+| `at_challenges`, `at_challenge_members` | Dead since 20261105 (open expedition) | No layer call; the UI for crews was removed | Dropped |
+| `at_profiles`, `at_ensure_profile`, `at_handle_new_user` + auth trigger | Dead | Layer's `profile` API was unused; trigger wrote a row on every anonymous sign-in | Dropped (trigger falls back to a no-op if not permitted) |
+| `at_create/join/leave_challenge`, `at_get_invite_code`, `at_leaderboard`, `at_challenge_summary`, `at_camp_supplies` | Dead | Photo board now from `at_expedition_hikers.wildlife_score` | Dropped |
+| `at_dispatches.challenge_id` ("crew only") | Dead | No crews to address | Crew-only rows archived, column dropped, read policy simplified |
+| `community_progress`, `mileage_log`, `add_community_*` (Oregon Trail DLE) | Legacy | Only the pre-AT game used them; the RPCs were callable with the public key | Tables moved to private `archive`; functions dropped |
+
+Roadmap check: the only items that needed challenges (crew weekly challenge, crew leaderboard, opt-in profile feed) were obsoleted by the open expedition. Future weekly goals or a "species of the week" key on week and hiker, so nothing planned needs the removed tables.
+
+Dead code removed with them: `layer.profile`, `layer.challenges`, `expeditions.supplies`, their mappers, the dispatch "Who can read it" select and "crew only" byline, `CHALLENGE_KEY` in `localStorage`.
+
+Safety: everything is in one idempotent migration (`20261108000000_at_cleanup.sql`), applied after the frontend that stops using it. `supabase/tests/upgrade.test.sql` builds a database with the legacy schema and real-looking data, runs the cleanup twice and checks what was kept, archived and dropped. `rls.test.sql` asserts every public table is `at_*`.
+
+### 16.4 Fresh start
+
+`supabase/expedition-reset.sql` (not a migration) backs up and clears `at_activities` and `at_expedition_runs` in one transaction. Everything else that looks like progress is computed from those two tables, so this is the whole reset. Hikers, conversion rules, dispatches, organizers and all app-defined content (trail, landmarks, species, badges) are untouched. `supabase/tests/reset.test.sql` checks the reset, the backups, that everything can be earned again (logging, marks, field guide, first dates, daily outing caps), and the documented undo.

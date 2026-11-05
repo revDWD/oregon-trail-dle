@@ -15,12 +15,8 @@ test("every data call is refused before touching the database when signed out", 
   const client = createFakeClient({ session: null });
   const data = createDataLayer(client);
   const attempts = [
-    () => data.profile.get(), () => data.profile.update({ displayName: "x" }),
     () => data.activities.list(), () => data.activities.create({}), () => data.activities.update("a", {}),
-    () => data.activities.remove("a"), () => data.activities.summary(),
-    () => data.challenges.listMine(), () => data.challenges.create({ name: "x" }), () => data.challenges.join("ABC"),
-    () => data.challenges.leave("c"), () => data.challenges.remove("c"), () => data.challenges.inviteCode("c"),
-    () => data.challenges.leaderboard("c"), () => data.challenges.summary("c")
+    () => data.activities.remove("a"), () => data.activities.summary()
   ];
   for (const attempt of attempts) {
     await assert.rejects(attempt, (error) => error instanceof DataError && error.code === "auth");
@@ -85,7 +81,7 @@ test("database errors become friendly DataErrors without leaking internals", asy
   assert.equal(toDataError({ message: "JWT expired" }).code, "auth");
   assert.equal(toDataError(null), null);
   const client = createFakeClient({ session: signedIn, respond: () => ({ data: null, error: { code: "42501", message: "denied" } }) });
-  await assert.rejects(createDataLayer(client).challenges.leaderboard("c"), (e) => e.code === "forbidden");
+  await assert.rejects(createDataLayer(client).activities.summary(), (e) => e.code === "forbidden");
 });
 
 test("ensureSession starts an anonymous session only when there is none", async () => {
@@ -112,37 +108,10 @@ test("anonymous sign-in failures surface as DataErrors; auth subscription works"
   assert.equal(client.unsubscribed, true);
 });
 
-test("challenge calls map to the documented RPCs", async () => {
-  const client = createFakeClient({
-    session: signedIn,
-    respond: (call) => {
-      if (call.name === "at_create_challenge") return { data: { id: "c1", name: "Crew", direction: "nobo", start_date: "2026-06-01", invite_code: "ABCDEF123456" }, error: null };
-      if (call.name === "at_leaderboard") return { data: [{ user_id: "u1", display_name: "Abby", role: "owner", total_credited_miles: "12.5", week_credited_miles: "3", activity_count: 4, last_activity_date: "2026-06-14" }], error: null };
-      if (call.name === "at_challenge_summary") return { data: [{ member_count: 3, total_credited_miles: "40", activity_count: 9 }], error: null };
-      if (call.name === "at_join_challenge") return { data: "c1", error: null };
-      return { data: null, error: null };
-    }
-  });
-  const data = createDataLayer(client);
-  assert.equal((await data.challenges.create({ name: "Crew", direction: "nobo", startDate: "2026-06-01" })).inviteCode, "ABCDEF123456");
-  assert.equal(await data.challenges.join("abcd-efgh"), "c1");
-  const board = await data.challenges.leaderboard("c1", "2026-06-15");
-  assert.deepEqual(board[0], { userId: "u1", displayName: "Abby", role: "owner", totalCreditedMiles: 12.5, weekCreditedMiles: 3, activityCount: 4, lastActivityDate: "2026-06-14" });
-  assert.deepEqual(await data.challenges.summary("c1"), { memberCount: 3, totalCreditedMiles: 40, activityCount: 9 });
-  const names = client.calls.filter((c) => c.kind === "rpc").map((c) => c.name);
-  assert.deepEqual(names, ["at_create_challenge", "at_join_challenge", "at_leaderboard", "at_challenge_summary"]);
-  assert.equal(client.calls.find((c) => c.name === "at_leaderboard").args.p_week_start, "2026-06-15");
-});
-
-test("profile get falls back to at_ensure_profile for pre-existing users", async () => {
-  let reads = 0;
-  const client = createFakeClient({
-    session: signedIn,
-    respond: (call) => (call.kind === "rpc" ? { data: null, error: null } : { data: ++reads === 1 ? [] : [{ id: "user-1", display_name: "Hiker", weekly_goal_miles: null }], error: null })
-  });
-  const profile = await createDataLayer(client).profile.get();
-  assert.equal(profile.displayName, "Hiker");
-  assert.ok(client.calls.some((c) => c.name === "at_ensure_profile"));
+test("the data layer exposes only live features (no challenges, profiles or camp supplies)", () => {
+  const data = createDataLayer(createFakeClient({ session: signedIn }));
+  assert.deepEqual(Object.keys(data).sort(), ["activities", "auth", "dispatches", "expedition", "expeditions", "rules"]);
+  assert.deepEqual(Object.keys(data.expeditions), ["record"]);
 });
 
 test("conversion rules fall back to defaults when unreadable", async () => {
@@ -170,33 +139,28 @@ test("new camp/dispatch calls are refused when signed out", async () => {
   for (const attempt of [
     () => data.dispatches.list(), () => data.dispatches.create({ title: "t", body: "b" }), () => data.dispatches.update("d", {}),
     () => data.dispatches.remove("d"), () => data.dispatches.isOrganizer(),
-    () => data.expeditions.record({ theme: "wildlife", score: 1, hits: 1, shots: 1 }), () => data.expeditions.supplies()
+    () => data.expeditions.record({ theme: "wildlife", score: 1, hits: 1, shots: 1 })
   ]) await assert.rejects(attempt, (error) => error instanceof DataError && error.code === "auth");
   assert.equal(client.calls.length, 0);
 });
 
-test("dispatch list asks the server for public and current-crew dispatches only, pinned first", async () => {
-  const crewA = "11111111-1111-4111-8111-111111111111";
+test("dispatch list asks the server for published dispatches, pinned first, without crew filters", async () => {
   const rows = [
-    { id: "1", challenge_id: null, title: "Hi", body: "b", author_name: "Kevin", pinned: true, published_at: "2026-11-01T00:00:00Z" },
-    { id: "2", challenge_id: crewA, title: "A", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-02T00:00:00Z" }
+    { id: "1", title: "Hi", body: "b", author_name: "Kevin", pinned: true, published_at: "2026-11-01T00:00:00Z" },
+    { id: "2", title: "A", body: "b", author_name: "Kevin", pinned: false, published_at: "2026-11-02T00:00:00Z" }
   ];
   const client = createFakeClient({ session: signedIn, respond: () => ({ data: rows, error: null }) });
-  const data = createDataLayer(client);
-  const list = await data.dispatches.list({ challengeId: crewA });
+  const list = await createDataLayer(client).dispatches.list({ limit: 500 });
   assert.deepEqual(list.map((d) => d.id), ["1", "2"]);
   assert.equal(list[0].authorName, "Kevin");
+  assert.ok(!("challengeId" in list[0]));
   const call = client.calls[0];
   assert.equal(call.table, "at_dispatches");
-  // Filtering happens before the page limit, so other crews' dispatches can't crowd out these.
-  assert.deepEqual(call.filters, [["or", `challenge_id.is.null,challenge_id.eq.${crewA}`]]);
+  assert.deepEqual(call.filters, []);
+  assert.deepEqual(call.range, [0, 99]);
   assert.deepEqual(call.order.map((o) => o[0]), ["pinned", "published_at"]);
-  assert.doesNotMatch(call.columns, /created_by/);
-
-  await data.dispatches.list();
-  assert.deepEqual(client.calls[1].filters, [["or", "challenge_id.is.null"]]);
-  await data.dispatches.list({ challengeId: "x),challenge_id.neq.null" });
-  assert.deepEqual(client.calls[2].filters, [["or", "challenge_id.is.null"]], "malformed ids are never put in the filter");
+  // challenge_id was dropped by the cleanup migration; never select it (works before and after).
+  assert.doesNotMatch(call.columns, /created_by|challenge_id/);
 });
 
 test("creating a dispatch never sends created_by; non-organizers get a friendly error", async () => {
@@ -206,7 +170,7 @@ test("creating a dispatch never sends created_by; non-organizers get a friendly 
   const data = createDataLayer(client);
   await assert.rejects(() => data.dispatches.create({ title: " Hello ", body: "**Hi**", authorName: "" }), (e) => e.code === "forbidden");
   const payload = client.calls.find((c) => c.op === "insert").payload;
-  assert.deepEqual(Object.keys(payload).sort(), ["author_name", "body", "challenge_id", "pinned", "title"]);
+  assert.deepEqual(Object.keys(payload).sort(), ["author_name", "body", "pinned", "title"]);
   assert.equal(payload.title, "Hello");
   assert.equal(payload.author_name, "Camp");
   await assert.rejects(() => data.dispatches.update("x", { title: "t", body: "b" }), (e) => e.code === "forbidden");
@@ -220,20 +184,15 @@ test("organizer check is a UI hint that fails closed", async () => {
   assert.equal(await broken.dispatches.isOrganizer(), false);
 });
 
-test("expedition results send only theme and score fields; supplies map per theme", async () => {
+test("expedition results send only theme and score fields", async () => {
   const client = createFakeClient({ session: signedIn, respond: (c) => c.kind === "rpc"
-    ? { data: [{ theme: "wildlife", my_score: "120", my_runs: "2", crew_score: "300", crew_runs: "5" }], error: null }
+    ? { data: null, error: null }
     : { data: [{ id: "r1", theme: "wildlife", score: 80, played_on: "2026-11-03" }], error: null } });
   const data = createDataLayer(client);
   await data.expeditions.record({ theme: "wildlife", score: 79.6, hits: 2, shots: 5 });
   const insert = client.calls.find((c) => c.op === "insert");
   assert.equal(insert.table, "at_expedition_runs");
   assert.deepEqual(insert.payload, { theme: "wildlife", score: 80, hits: 2, shots: 5 });
-  const supplies = await data.expeditions.supplies("crew-a");
-  assert.deepEqual(supplies, { wildlife: { myScore: 120, myRuns: 2, crewScore: 300, crewRuns: 5 } });
-  assert.deepEqual(client.calls.at(-1).args, { p_challenge: "crew-a" });
-  await data.expeditions.supplies();
-  assert.deepEqual(client.calls.at(-1).args, {});
 });
 
 test("expedition calls are refused when signed out", async () => {

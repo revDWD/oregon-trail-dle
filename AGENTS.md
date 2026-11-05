@@ -81,8 +81,10 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Background refresh runs every 60 s (`loadExpedition(true)`). It redraws Trail, Camp, Log or History only when data changed and nobody is typing or focused on a control (History also waits while an edit form is open).
   - A running Wildlife Spotting round is stopped on re-render (`game.stop()`).
 - **Supabase**
-  - Tables are prefixed `at_` because the project also hosts the old Oregon Trail tables.
+  - Tables are prefixed `at_`. Every table in `public` is now `at_*` (test-enforced): the old Oregon Trail tables (`community_progress`, `mileage_log`) and the unused challenge/profile tables were retired by `20261108000000_at_cleanup.sql` (see `docs/review-and-roadmap.md` §16).
+  - Retired data is **archived, not destroyed**: it moves to the private `archive` schema (no grants to anon/authenticated, not in Realtime). Expedition resets back up there too.
   - Migrations live in `supabase/migrations/`, one idempotent file per change.
+  - **Fresh start:** `supabase/expedition-reset.sql` backs up then clears `at_activities` and `at_expedition_runs`. Every mile, mark, badge, journal entry, field-guide find and Camp stat is derived from those two tables, so nothing else needs clearing. Hikers, rules, dispatches and organizers stay. Tested in `supabase/tests/reset.test.sql`.
   - What other devices can see comes only from SECURITY DEFINER RPCs that return **aggregates**: `at_expedition_hikers`, `at_expedition_marks`, `at_field_guide` and `at_my_summary`.
   - Devices own, and alone can edit, the rows they logged. Credited miles and factors are set by triggers.
 - **Tooling**
@@ -119,7 +121,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - In page order:
     1. **Trail Dispatches** (top).
     2. The pixel camp scene.
-    3. "The hikers": picker plus per-hiker panel showing miles, share, week, badges, species and milestones.
+    3. "The hikers": picker plus per-hiker panel showing miles, share, week, achievement and species badge counts, the **Badge Collection** bar, achievement badges, a collapsible **Species Badges** grid, milestones and their journey.
     4. The trail register.
     5. The dispatch archive.
   - Time of day follows the device clock: morning 5–9, day 9–17, evening 17–21, night 21–5. There are no buttons.
@@ -134,6 +136,12 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - 11 wildlife badges.
   - Art is original 12×12 pixel sprites: unique per badge, palette-checked by tests.
   - "Master Naturalist" (`complete-field-guide`) is the only `prestige` badge and gets a gold medallion.
+- **Species badges**, one per species, from `speciesBadges()` (`field-guide.js`). Kept apart from `hikerBadges()` (the 24 achievement badges).
+  - Earned with the hiker's own first photo of that species; the date is that photo's `firstSeen`. Repeat photos add nothing.
+  - Art is the species sprite in a medallion; locked badges are a silhouette with "???". Rare species get a teal ring.
+  - Trail Legends are secret: their badges appear only once photographed, in gold, as a bonus outside every total.
+  - Celebrated after an outing (one line for all new species), grouped per day in the hiker's timeline and the journal. The journal skips a species badge already told by the expedition's "First photo" entry.
+- **Badge Collection bar** (Camp): `badgeCollection(badges, species)` = (achievement badges earned + regular species badges earned) / (24 + 33). It measures exactly the badges shown beneath it, so 100% is reachable without legends. The old bar showed mileage toward the next mileage badge, unlabelled, and felt disconnected; mileage is now a line of text and its name stays a surprise.
 - **Wildlife Spotting**
   - The restored Oregon Trail DLE hunt, re-themed as photography with the same pacing and renderer. The data-only theme is in `expedition-themes.js`; rules are in `expedition.js`.
   - Species follow the section's habitat and the season. Rare finds are rolled at 5% and legends at 0.4% per outing.
@@ -143,7 +151,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - **Behaviour classes:** every species inherits one of 14 classes in `BEHAVIOR` (`expedition-themes.js`, via `behavior: BEHAVIOR.<class>`): grazer, skittish, predator, largeMammal, groundBird, songbird, raptor, owl, swimmer, butterfly, darter, hoverer, crawler, cryptid. A class sets pace, pauses, wobble (erratic paths), hover, how wary it is, and how it reacts to the camera: `flee` (bolt away at ×`flee`), `flush` (birds burst up and fly off-screen) or `ignore` (bears, moose, crawlers carry on). `react === "ignore"` ⇔ `!skittish` (test-enforced). Grazers freeze head-up before bolting; skittish animals zigzag. The field guide shows the class as "How it moves". Reduced motion still scales every speed by 0.6.
   - Rules: at most 40 species (DB cap) and no hunting words (both test-enforced). New activities should be **new theme objects**, not new engines.
 - **History**
-  - **Expedition Journal** (top): one dated record, newest first, of landmarks and group milestones (who carried it), the expedition's first photo of each species (rare and legendary finds flagged), field-guide milestones (10, 25, complete), trail sections completed, and every hiker's badge unlocks. Built by `expeditionJournal()` from data already loaded; no new tables or RPCs. 12 entries show, the rest sit under "Older Entries".
+  - **Expedition Journal** (top): one dated record, newest first, of landmarks and group milestones (who carried it), the expedition's first photo of each species (rare and legendary finds flagged), field-guide milestones (10, 25, complete), trail sections completed, and every hiker's badge unlocks (species badges grouped per hiker per day). Built by `expeditionJournal()` from data already loaded; no new tables or RPCs. 12 entries show, the rest sit under "Older Entries".
   - **Your Activities**: this device's own activities, editable and deletable.
   - The "About this device" card (with the Device ID) was removed on request. To make a device an organizer, see `docs/deployment.md` §2b (find its `user_id` on an activity it logged).
 
@@ -154,7 +162,8 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 - **Add a dispatch:** post it from Camp as an organizer. No code change.
 - **Add landmark photos:** run the "Landmark photos" workflow, then review the PR: look at every image (searches sometimes return the wrong place) and rewrite the alt text by hand. Add rejected Commons file titles to `REJECTED` in the script and re-run with those ids. For a hand-picked photo, add `photo` to the landmark's story.
 - **Add a species:** add one object in `NEW_SPECIES` plus habitat weights in `expedition-themes.js`, and give it `behavior: BEHAVIOR.<class>` (pick the closest class; only add a class if none fits). The guide, hints, journal and badges pick it up.
-- **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art.
+- **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art. (A new species gets its species badge automatically.)
+- **Reset the expedition:** give the owner `supabase/expedition-reset.sql` as plain text. It backs up into `archive.*_YYYYMMDD_HHMMSS` first. The undo recipe is in the script header: it pauses the logging triggers (`disable trigger user`) so old dates and outing dates restore unchanged; a plain `insert … select` would be refused. Tested in `reset.test.sql`.
 - **Change the schema:** see Rules below.
 
 ## 6. Rules
@@ -164,11 +173,12 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - There is no login UI by design: `auth.ensureSession()` uses anonymous sign-in.
 - **Secrets and storage**
   - Never commit secrets; only the public URL and publishable key go in `config.js`.
-  - Supabase is the source of truth. `localStorage` may hold only `CHALLENGE_KEY` and `HIKER_KEY` (test-enforced). All Supabase calls stay in `data/layer.js`.
+  - Supabase is the source of truth. `localStorage` may hold only `HIKER_KEY`, the last-chosen hiker (test-enforced). All Supabase calls stay in `data/layer.js`.
   - The client never sets `user_id`, `credited_miles`, `conversion_factor`, `created_by` or `played_on`.
 - **Schema changes**
   - Every change goes in a **new** idempotent migration; never edit an applied one.
-  - It must pass `bash supabase/tests/run-rls-tests.sh`, which applies every migration twice.
+  - It must pass `bash supabase/tests/run-rls-tests.sh`, which applies the legacy schema, then each migration twice back-to-back (per-file idempotency), then runs the RLS, reset and upgrade suites. Since the cleanup migration, *older* migrations are not re-runnable after it (e.g. 20261103 indexes `challenge_id`); that is expected and why the runner checks each file twice in sequence.
+  - Retire tables by moving them to `archive`, guarded with `to_regclass`, and add a case to `supabase/tests/upgrade.test.sql`.
   - The owner pastes SQL into the Supabase SQL Editor, so always give SQL as **plain text without Markdown fences** (a pasted ``` once caused a syntax error).
   - Security failures are blocking bugs.
 - **Rendering and code organisation**
@@ -206,7 +216,7 @@ The app must keep working when a migration hasn't been applied yet.
   - Keep replies short, give exact SQL, and say plainly when no SQL is needed.
   - Work on one feature branch per sprint, open a PR, and include the Copilot co-author trailer.
 - **Refine, don't rebuild.** Every sprint so far has been a refinement. Wildlife Spotting was enhanced rather than overhauled because its pacing was already good.
-- **Removals are features.** Welcome cards, crew and invite flows, the Coming Up card, day/night buttons, duplicate landmark lists and History's "About this device" card were all removed on request. Don't bring them back.
+- **Removals are features.** Welcome cards, crew and invite flows (and, since the cleanup sprint, their challenge/profile tables), the Coming Up card, day/night buttons, duplicate landmark lists and History's "About this device" card were all removed on request. Don't bring them back.
 - **Keep history stable.** Store what was credited, not how to recompute it (factors per row). Compute badge dates from data instead of storing them.
 - **Be honest about verification.** Never claim a test or check passed without running it. Never fabricate image licences.
 

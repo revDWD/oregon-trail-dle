@@ -21,20 +21,38 @@ else
 fi
 
 run_pg "$BIN/initdb" -D "$WORK/data" -A trust -U postgres >/dev/null
-run_pg "$BIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses=''" -l "$WORK/log" -w start >/dev/null
+run_pg "$BIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses='' -c wal_level=logical" -l "$WORK/log" -w start >/dev/null
 
 # Copy the SQL next to the cluster so the postgres OS user can read it wherever the repo lives.
-cp "$HERE/supabase-shim.sql" "$HERE"/*.test.sql "$HERE"/../migrations/*.sql "$WORK/"
+cp "$HERE/supabase-shim.sql" "$HERE"/*.test.sql "$HERE"/../migrations/*.sql "$HERE/../legacy-oregon-schema.sql" "$HERE/../expedition-reset.sql" "$WORK/"
 chmod a+r "$WORK"/*.sql
 export PGOPTIONS="-c client_min_messages=warning"
 PSQL=("$BIN/psql" -h "$WORK" -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -d postgres)
 run_pg "${PSQL[@]}" -f "$WORK/supabase-shim.sql"
-# Migrations run in filename (timestamp) order, then all of them again: re-running must be harmless.
-MIGRATIONS=()
-for f in "$HERE"/../migrations/*.sql; do MIGRATIONS+=("$(basename "$f")"); done
-for m in "${MIGRATIONS[@]}"; do run_pg "${PSQL[@]}" -f "$WORK/$m"; done
-for m in "${MIGRATIONS[@]}"; do
+# The live project still had the Oregon Trail DLE tables; the cleanup migration archives them.
+run_pg "${PSQL[@]}" -f "$WORK/legacy-oregon-schema.sql" >/dev/null
+# Migrations run in filename (timestamp) order. Each one runs twice in a row: pasting the same file
+# again must be harmless. (Older files are not re-run after newer ones: the cleanup migration drops
+# objects they create, so replaying them would resurrect removed tables.)
+for f in "$HERE"/../migrations/*.sql; do
+  m="$(basename "$f")"
+  run_pg "${PSQL[@]}" -f "$WORK/$m"
   run_pg "${PSQL[@]}" -f "$WORK/$m" >/dev/null 2>"$WORK/rerun.err" \
     || { cat "$WORK/rerun.err" >&2; echo "$m is not re-runnable" >&2; exit 1; }
 done
 run_pg "${PSQL[@]}" -f "$WORK/rls.test.sql"
+# The expedition reset (supabase/expedition-reset.sql) runs against the populated test database.
+run_pg "${PSQL[@]}" -f "$WORK/reset.test.sql"
+
+# Upgrade path: a second database stops before the cleanup migration, gets live-like data, and
+# upgrade.test.sql applies the cleanup to it.
+CLEANUP="20261108000000_at_cleanup.sql"
+run_pg "${PSQL[@]}" -c "create database upgrade"
+UPSQL=("$BIN/psql" -h "$WORK" -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -d upgrade)
+run_pg "${UPSQL[@]}" -f "$WORK/supabase-shim.sql"
+run_pg "${UPSQL[@]}" -f "$WORK/legacy-oregon-schema.sql" >/dev/null
+for f in "$HERE"/../migrations/*.sql; do
+  m="$(basename "$f")"
+  [[ "$m" < "$CLEANUP" ]] && run_pg "${UPSQL[@]}" -f "$WORK/$m"
+done
+run_pg "${UPSQL[@]}" -f "$WORK/upgrade.test.sql"

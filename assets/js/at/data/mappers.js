@@ -120,38 +120,6 @@ export function markFromRow(row) {
   return { kind: row.kind, mark: Number(row.mark), hikerId: row.hiker_id || null, reachedOn: row.reached_on || null };
 }
 
-export function profileFromRow(row) {
-  return {
-    id: row.id,
-    displayName: row.display_name,
-    weeklyGoalMiles: row.weekly_goal_miles === null || row.weekly_goal_miles === undefined ? null : Number(row.weekly_goal_miles)
-  };
-}
-
-export function challengeFromRow(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    trailId: row.trail_id,
-    direction: row.direction,
-    startDate: row.start_date,
-    endDate: row.end_date || null,
-    ownerId: row.owner_id
-  };
-}
-
-export function leaderboardFromRows(rows) {
-  return rows.map((row) => ({
-    userId: row.user_id,
-    displayName: row.display_name,
-    role: row.role,
-    totalCreditedMiles: Number(row.total_credited_miles),
-    weekCreditedMiles: Number(row.week_credited_miles),
-    activityCount: Number(row.activity_count),
-    lastActivityDate: row.last_activity_date || null
-  }));
-}
-
 export function ruleFromRow(row) {
   return {
     type: row.activity_type,
@@ -164,7 +132,6 @@ export function ruleFromRow(row) {
 export function dispatchFromRow(row) {
   return {
     id: row.id,
-    challengeId: row.challenge_id || null,
     title: row.title,
     body: row.body,
     authorName: row.author_name,
@@ -180,21 +147,8 @@ export function dispatchToRow(value) {
     title: String(value.title || "").trim(),
     body: String(value.body || "").trim(),
     author_name: String(value.authorName || "Camp").trim() || "Camp",
-    pinned: Boolean(value.pinned),
-    challenge_id: value.challengeId || null
+    pinned: Boolean(value.pinned)
   };
   if (value.publishedAt) row.published_at = value.publishedAt;
   return row;
-}
-
-// at_camp_supplies rows (one per theme) -> { [theme]: { myScore, myRuns, crewScore, crewRuns } }.
-export function suppliesFromRows(rows) {
-  const out = {};
-  (rows || []).forEach((row) => {
-    out[row.theme] = {
-      myScore: Number(row.my_score) || 0, myRuns: Number(row.my_runs) || 0,
-      crewScore: Number(row.crew_score) || 0, crewRuns: Number(row.crew_runs) || 0
-    };
-  });
-  return out;
 }

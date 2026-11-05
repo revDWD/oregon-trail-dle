@@ -29,7 +29,11 @@ The site is static (no build step). GitHub Pages serves the repository root from
 
 7. **Wildlife field guide:** paste the whole of `supabase/migrations/20261106000000_at_field_guide.sql` and run it. Each Wildlife Spotting outing then records which species were photographed (and the habitat), and the field guide and wildlife badges fill in. Until it is applied, outings still save to the photo board and the guide shows a short "waiting for the update" note.
 
-(Or with the Supabase CLI: `supabase link --project-ref eojzvyyhzdapwgsrtyne` then `supabase db push`.)
+8. **Cleanup (retire unused tables):** merge and deploy the matching PR first, then paste the whole of `supabase/migrations/20261108000000_at_cleanup.sql` and run it. It is idempotent. It moves the old Oregon Trail tables (`community_progress`, `mileage_log`) and any crew-only dispatches into a private `archive` schema, and drops the unused challenge, profile and supplies tables and functions (and the anonymous `add_community_*` write functions). Afterwards every table in `public` is `at_*`. Step 3's `at_profiles` check no longer applies.
+
+9. **Fresh start (optional, destructive but backed up):** paste the whole of `supabase/expedition-reset.sql` and run it. In one transaction it copies `at_activities` and `at_expedition_runs` into `archive.at_activities_YYYYMMDD_HHMMSS` / `archive.at_expedition_runs_YYYYMMDD_HHMMSS`, then empties both. Miles, landmarks, badges, the journal, the field guide and Camp stats all start again at mile 0; hikers, rules, dispatches and organizers stay. It ends by showing the row counts (both 0) and the backup names. To undo, use the restore block in the script's header comment (it briefly pauses the logging triggers so old dates are accepted exactly as they were).
+
+(Or with the Supabase CLI: `supabase link --project-ref eojzvyyhzdapwgsrtyne` then `supabase db push`. The reset script is not a migration; always run it by hand.)
 
 ## 2b. Let the organizer (Kevin) post Trail Dispatches
 

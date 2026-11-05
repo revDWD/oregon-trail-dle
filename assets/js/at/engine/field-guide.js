@@ -15,6 +15,10 @@ export const GROUPS = Object.freeze([
 const earliest = (dates) => dates.filter(Boolean).sort()[0] || null;
 const isLegend = (sp) => sp.rarity === "legend";
 
+// "white-tailed deer" -> "White-tailed Deer" (headings and badge names use Title Case).
+export const speciesTitle = (name) => String(name).split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
+const withArticle = (name) => `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
+
 // Habitats to try for a species, best first (at most two labels), plus a season hint.
 export function whereToLook(spec, theme = THEMES.wildlife) {
   const places = Object.entries(theme.habitats)
@@ -113,4 +117,39 @@ export function wildlifeBadges(sightings = [], theme = THEMES.wildlife) {
     const earned = count >= need;
     return { ...base, earned, earnedOn: earned ? nth(dates, need) : null, progress: { count: Math.min(count, need), need } };
   });
+}
+
+// One collectible badge per species, earned with this hiker's first photograph of it (repeat photos
+// add nothing). The species sprite is the badge art. Trail Legends stay secret: a legend badge is
+// listed only once photographed, and is a bonus that never counts toward totals.
+export function speciesBadges(sightings = [], { hikerId = null, theme = THEMES.wildlife } = {}) {
+  return buildFieldGuide(sightings, { hikerId, theme }).entries
+    .filter((e) => !isLegend(e.spec) || e.found)
+    .map((e) => ({
+      id: `species-${e.spec.id}`, kind: "species", spec: e.spec, group: e.spec.group, rarity: e.spec.rarity || "common",
+      bonus: isLegend(e.spec), title: speciesTitle(e.spec.name),
+      description: isLegend(e.spec) ? "A Trail Legend, caught on camera. Nobody will believe it."
+        : `Photograph ${withArticle(e.spec.name)} in Wildlife Spotting.`,
+      earned: e.found, earnedOn: e.found ? e.firstSeen : null
+    }));
+}
+
+// Species badges earned on the same day, as one story line each: [{ date, badges, ids, titles }],
+// oldest first; badges (and ids/titles) are in title order.
+export function speciesBadgeDays(badges = []) {
+  const days = new Map();
+  badges.filter((b) => b.kind === "species" && b.earned && b.earnedOn).forEach((b) => {
+    if (!days.has(b.earnedOn)) days.set(b.earnedOn, []);
+    days.get(b.earnedOn).push(b);
+  });
+  return [...days].sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([date, list]) => {
+      const badges = [...list].sort((a, b) => a.title.localeCompare(b.title));
+      return { date, badges, ids: badges.map((b) => b.id), titles: badges.map((b) => b.title) };
+    });
+}
+
+// "Black Bear", "Black Bear and Monarch Butterfly", "Black Bear, Elk and Moose".
+export function listTitles(titles = []) {
+  return titles.length < 2 ? titles.join("") : `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
 }

@@ -11,9 +11,9 @@ import { regionAtMarker } from "../engine/progress.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { ACTIVITY_TYPES, ACTIVITY_LABELS, MAX_NOTES_LENGTH, validateActivity, ruleFor, localDateString } from "../engine/activities.js";
 import { groupMilestoneStatus, pickTip } from "../engine/game.js";
-import { buildFieldGuide, regionProgress, whereToLook } from "../engine/field-guide.js";
+import { buildFieldGuide, regionProgress, speciesBadges, speciesTitle, whereToLook } from "../engine/field-guide.js";
 import { expeditionJournal } from "../engine/journal.js";
-import { expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
+import { badgeCollection, expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
 
 const field = (id, label, control, hint, error) => h("div", { class: "field" },
   h("label", { for: id }, label), control,
@@ -46,7 +46,7 @@ function dispatchCard(d, { featured = false, actions = null } = {}) {
   return h("article", { class: `card dispatch${featured ? " featured" : ""}${d.pinned ? " pinned" : ""}`, "aria-labelledby": `dispatch-${d.id}` },
     featured ? h("p", { class: "eyebrow" }, h("span", { "aria-hidden": "true" }, "🔥 "), "Message from Camp") : null,
     h(head, { id: `dispatch-${d.id}` }, d.title),
-    h("p", { class: "byline" }, `${d.authorName} · ${when(d.publishedAt)}${d.pinned ? " · pinned" : ""}${d.challengeId ? " · crew only" : ""}`),
+    h("p", { class: "byline" }, `${d.authorName} · ${when(d.publishedAt)}${d.pinned ? " · pinned" : ""}`),
     renderMarkdown(d.body),
     actions);
 }
@@ -200,13 +200,22 @@ function journalSection(s) {
     body);
 }
 
+// A species badge: the species sprite in a medallion. Locked badges stay a silhouette, like the guide.
+const speciesBadge = (b) => (b.earned
+  ? h("li", { class: `badge species-badge earned${b.bonus ? " prestige" : b.rarity === "rare" ? " rare" : ""}` },
+    h("span", { class: "species-medal" }, speciesArt(b.spec, true)), h("strong", {}, b.title),
+    b.bonus ? h("span", { class: "tag" }, "Legend") : b.rarity === "rare" ? h("span", { class: "tag" }, "Rare find") : null,
+    h("span", { class: "hint" }, b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned"))
+  : h("li", { class: "badge species-badge locked" }, h("span", { class: "species-medal" }, speciesArt(b.spec, false)), h("strong", {}, "???"),
+    h("span", { class: "sr-only" }, "Not yet photographed. Find it in Wildlife Spotting.")));
+
 // One hiker's page at Camp: contribution, badges, milestones and their story so far.
 function hikerPanel(s, hk) {
   const badges = hikerBadges(hk, { marks: s.marks, register: s.register, today: s.today, sightings: s.fieldGuide });
-  const guide = buildFieldGuide(s.fieldGuide, { hikerId: hk.id });
+  const species = speciesBadges(s.fieldGuide, { hikerId: hk.id });
   const ms = hikerMilestones(hk, s.register);
-  const timeline = hikerTimeline(badges, ms);
-  const earned = badges.filter((b) => b.earned).length;
+  const timeline = hikerTimeline(badges, ms, species);
+  const all = badgeCollection(badges, species);
   const next = nextMileBadge(hk);
   return h("article", { class: "card hiker-card", "aria-labelledby": "hiker-name" },
     h("h3", { id: "hiker-name", tabindex: "-1" }, hk.name),
@@ -214,11 +223,15 @@ function hikerPanel(s, hk) {
       stat("Miles contributed", formatMiles(hk.totalMiles)),
       stat("Share of the expedition", `${hikerShare(hk, s.totals)}%`),
       stat("This week", formatMiles(hk.weekMiles)),
-      stat("Badges earned", `${earned} of ${badges.length}`),
-      stat("Species photographed", `${guide.found} of ${guide.total}`)),
-    next ? [bar(next.percent, "Progress to the next mileage badge"), h("p", { class: "hint" }, `${formatMiles(next.remaining)} to the next mileage badge.`)]
-      : h("p", {}, "Every mileage badge earned. Legendary!"),
-    h("h4", {}, "Badges"),
+      stat("Achievement badges", `${all.badges.earned} of ${all.badges.total}`),
+      stat("Species badges", `${all.species.earned} of ${all.species.total}`)),
+    // The bar measures exactly what is shown below it: every badge this hiker can collect.
+    h("p", { class: "collection-label" }, h("strong", {}, "Badge Collection"),
+      h("span", {}, `${all.earned} of ${all.total} badges · ${all.percent}%`)),
+    bar(all.percent, `Badge collection: ${all.earned} of ${all.total} badges earned`),
+    h("p", { class: "hint" }, next ? `${formatMiles(next.remaining)} to the next mileage badge.` : "Every mileage badge earned. Legendary!",
+      all.legends ? ` Bonus: ${all.legends} Trail ${all.legends === 1 ? "Legend" : "Legends"} photographed!` : ""),
+    h("h4", {}, "Achievement Badges"),
     // Locked badges stay a mystery (silhouette only); earning one reveals its art, name and story.
     h("ul", { class: "badge-grid" }, badges.map((b) => b.earned
       ? h("li", { class: `badge earned${b.prestige ? " prestige" : ""}` }, badgeArt(b.art, { earned: true, prestige: b.prestige }), h("strong", {}, b.title),
@@ -226,6 +239,10 @@ function hikerPanel(s, hk) {
         h("span", { class: "hint" }, b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned"))
       : h("li", { class: "badge locked" }, badgeArt(b.art, { earned: false }), h("strong", {}, "Locked"),
         h("span", { class: "sr-only" }, "Not yet earned. Keep hiking to discover it.")))),
+    h("details", { class: "timeline-wrap species-badges" },
+      h("summary", {}, `Species Badges (${all.species.earned} of ${all.species.total})`),
+      h("p", { class: "hint" }, "Photograph a species for the first time in Wildlife Spotting to earn its badge."),
+      h("ul", { class: "badge-grid species-grid" }, species.map(speciesBadge))),
     h("h4", {}, "Milestones Reached"),
     ms.landmarks.length || ms.groupMilestones.length
       ? h("ul", { class: "milestones" },
@@ -342,7 +359,7 @@ function dispatchForm(s, a, existing) {
       e.preventDefault();
       const f = new FormData(e.target);
       const value = { title: String(f.get("dTitle") || "").trim(), body: String(f.get("dBody") || "").trim(), authorName: f.get("dAuthor"),
-        pinned: f.get("dPinned") === "on", challengeId: f.get("dAudience") === "crew" && s.challenge ? s.challenge.id : null };
+        pinned: f.get("dPinned") === "on" };
       if (!value.title || !value.body) { status.textContent = "A title and a message are both needed."; return; }
       if (value.title.length > 120 || value.body.length > 5000) { status.textContent = "Keep the title under 120 characters and the message under 5,000."; return; }
       status.textContent = "Posting…";
@@ -353,9 +370,6 @@ function dispatchForm(s, a, existing) {
   field("dBody", "Message", h("textarea", { id: "dBody", name: "dBody", rows: 7, maxlength: 5000, required: true, "aria-describedby": "dBody-hint" }, d.body || ""),
     "Formatting: **bold**, *italics*, [link text](https://example.com) (https links only), lines starting with - for lists, # for a heading, > for a quote. Leave a blank line between paragraphs."),
   field("dAuthor", "Signed as", h("input", { id: "dAuthor", name: "dAuthor", maxlength: 40, value: d.authorName || "Kevin" })),
-  field("dAudience", "Who can read it", h("select", { id: "dAudience", name: "dAudience" },
-    h("option", { value: "everyone", selected: !d.challengeId }, "Everyone using the app"),
-    s.challenge ? h("option", { value: "crew", selected: Boolean(d.challengeId) }, `Only ${s.challenge.name}`) : null)),
   h("div", { class: "field check" }, h("input", { id: "dPinned", name: "dPinned", type: "checkbox", checked: Boolean(d.pinned) }), h("label", { for: "dPinned" }, "Pin to the top of the Trail page")),
   status,
   h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, existing ? "Save dispatch" : "Post dispatch"),
@@ -375,7 +389,7 @@ function speciesArt(spec, found) {
   ...spec.parts.map((p) => svg("rect", { x: p[0] + dx, y: p[1] + dy, width: p[2], height: p[3], fill: found ? PART_COLOR(spec, p[4]) : "#8a8072" })));
 }
 
-const titleCase = (name) => name[0].toUpperCase() + name.slice(1);
+const titleCase = speciesTitle;
 const RARITY_TAG = { rare: "Rare find", legend: "Legend" };
 let guideFilter = ""; // "" = whole expedition, or a hiker id; kept while the app is open
 const openGroups = new Set(); // field guide sections the hiker has opened

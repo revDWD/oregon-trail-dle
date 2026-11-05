@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { THEMES } from "../../assets/js/at/engine/expedition-themes.js";
-import { buildFieldGuide, regionProgress, whereToLook, wildlifeBadges, WILDLIFE_BADGES, GROUPS } from "../../assets/js/at/engine/field-guide.js";
+import { buildFieldGuide, regionProgress, whereToLook, wildlifeBadges, WILDLIFE_BADGES, GROUPS, speciesBadges, speciesBadgeDays, speciesTitle, listTitles } from "../../assets/js/at/engine/field-guide.js";
 import { hikerBadges } from "../../assets/js/at/engine/hikers.js";
 import { SPRITES } from "../../assets/js/at/ui/badge-art.js";
 
@@ -106,4 +106,52 @@ test("group badges and the prestigious Master Naturalist", () => {
   assert.deepEqual([master.title, master.prestige, master.earned, master.art], ["Master Naturalist", true, false, "laurel"]);
   assert.equal(WILDLIFE_BADGES.filter((b) => b.prestige).length, 1, "only one top honour");
   ["paw", "frog", "laurel"].forEach((name) => assert.ok(SPRITES[name], name));
+});
+
+test("species names read as Title Case badge names", () => {
+  assert.equal(speciesTitle("white-tailed deer"), "White-tailed Deer");
+  assert.equal(speciesTitle("Canada lynx"), "Canada Lynx");
+  assert.equal(speciesTitle("six-spotted tiger beetle"), "Six-spotted Tiger Beetle");
+  assert.equal(listTitles([]), "");
+  assert.equal(listTitles(["Elk"]), "Elk");
+  assert.equal(listTitles(["Black Bear", "Elk"]), "Black Bear and Elk");
+  assert.equal(listTitles(["Black Bear", "Elk", "Moose"]), "Black Bear, Elk and Moose");
+});
+
+test("every regular species has a badge; legends appear only once photographed", () => {
+  const regular = theme.species.filter((sp) => sp.rarity !== "legend");
+  const fresh = speciesBadges([], { hikerId: "h1" });
+  assert.equal(fresh.length, regular.length, "one badge per regular species, legends kept secret");
+  assert.ok(fresh.every((b) => !b.earned && b.earnedOn === null && !b.bonus && b.kind === "species"));
+  assert.equal(new Set(fresh.map((b) => b.id)).size, fresh.length);
+  assert.deepEqual(fresh.map((b) => b.id), regular.map((sp) => `species-${sp.id}`));
+  assert.equal(fresh.find((b) => b.id === "species-deer").title, "White-tailed Deer");
+  assert.equal(fresh.find((b) => b.id === "species-deer").description, "Photograph a white-tailed deer in Wildlife Spotting.");
+  assert.equal(fresh.find((b) => b.id === "species-elk").description, "Photograph an elk in Wildlife Spotting.");
+  assert.ok(fresh.every((b) => b.spec && Array.isArray(b.spec.parts) && b.spec.parts.length), "every species badge has the sprite as art");
+});
+
+test("a species badge is earned with the hiker's own first photo; repeats and other hikers change nothing", () => {
+  const rows = [
+    row("h1", "deer", "southern-ridges", "2026-11-05", 4),
+    row("h1", "deer", "blue-ridge", "2026-11-03"),
+    row("h2", "bear", "southern-ridges", "2026-11-01"),
+    row("h1", "bigfoot", "blue-ridge", "2026-11-06")
+  ];
+  const mine = speciesBadges(rows, { hikerId: "h1" });
+  const deer = mine.find((b) => b.id === "species-deer");
+  assert.equal(deer.earned, true);
+  assert.equal(deer.earnedOn, "2026-11-03", "the first photo anywhere on the trail");
+  assert.equal(mine.find((b) => b.id === "species-bear").earned, false, "another hiker's photo doesn't count");
+  const legend = mine.find((b) => b.id === "species-bigfoot");
+  assert.ok(legend.earned && legend.bonus, "a legend badge is a bonus");
+  assert.equal(mine.length, theme.species.filter((sp) => sp.rarity !== "legend").length + 1);
+  assert.equal(speciesBadges(rows, { hikerId: "h2" }).filter((b) => b.earned).length, 1);
+});
+
+test("species badges earned the same day are grouped into one story line", () => {
+  const rows = [row("h1", "elk", "blue-ridge", "2026-11-03"), row("h1", "bear", "blue-ridge", "2026-11-03"), row("h1", "moose", "north-woods", "2026-11-09")];
+  const days = speciesBadgeDays(speciesBadges(rows, { hikerId: "h1" }));
+  assert.deepEqual(days.map((d) => [d.date, d.titles]), [["2026-11-03", ["Black Bear", "Elk"]], ["2026-11-09", ["Moose"]]]);
+  assert.deepEqual(days[0].ids, ["species-bear", "species-elk"], "ids line up with titles");
 });

@@ -7,6 +7,7 @@ import { computeProgress } from "../engine/progress.js";
 import { DEFAULT_RULES, localDateString } from "../engine/activities.js";
 import { weekStart } from "../engine/game.js";
 import { timeOfDay } from "../engine/camp.js";
+import { listTitles, speciesBadges } from "../engine/field-guide.js";
 import { PERSONAL_MARKS, expeditionTotals, groupMarks, hikerBadges, trailRegister } from "../engine/hikers.js";
 import { h, clear } from "./dom.js";
 import { trailView, logView, historyView, campView, wildlifeView } from "./views.js";
@@ -21,7 +22,6 @@ const ANCHORS = { crew: "hikers-title", badges: "hikers-title", hikers: "hikers-
 const root = document.getElementById("app");
 const nav = document.getElementById("nav");
 const live = document.getElementById("live");
-const CHALLENGE_KEY = "at.selectedChallenge"; // harmless preference only (crew-only dispatches)
 const HIKER_KEY = "at.hiker"; // last hiker chosen on this device, to preselect the forms
 const DIRECTION = TRAIL.defaultDirection; // the expedition walks northbound, Springer to Katahdin
 const PAGE = 50;
@@ -29,7 +29,7 @@ const PAGE = 50;
 const state = {
   user: null, rules: DEFAULT_RULES, activities: [], hasMore: false, editingId: null, today: localDateString(),
   expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], fieldGuide: [], fieldGuideUnavailable: false, selectedHiker: null, lastHiker: null, flash: null,
-  challenges: [], challenge: null, dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null
+  dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null
 };
 let game = null; // the running expedition, stopped whenever the page re-renders
 let layer = null;
@@ -86,14 +86,9 @@ async function loadAll() {
   try {
     state.today = localDateString();
     state.lastHiker = readHiker();
-    const [rules, page, challenges] = await Promise.all([
-      layer.rules.list(), layer.activities.list({ limit: PAGE + 1 }), layer.challenges.listMine().catch(() => [])
-    ]);
+    const [rules, page] = await Promise.all([layer.rules.list(), layer.activities.list({ limit: PAGE + 1 })]);
     state.rules = rules.length ? rules : DEFAULT_RULES;
     state.hasMore = page.length > PAGE; state.activities = page.slice(0, PAGE);
-    state.challenges = challenges;
-    const saved = localStorage.getItem(CHALLENGE_KEY);
-    state.challenge = challenges.find((c) => c.id === saved) || challenges[0] || null;
     await Promise.all([loadExpedition(false), loadCamp()]);
     render({ focus: true });
     if (state.flash) announce(state.flash.text);
@@ -143,9 +138,8 @@ function redrawInBackground() {
 
 // Camp data is optional: if the camp migration isn't applied yet the rest of the app still works.
 async function loadCamp() {
-  const challengeId = state.challenge?.id || null;
   const [dispatches, isOrganizer] = await Promise.all([
-    layer.dispatches.list({ challengeId }).then((d) => { state.dispatchesUnavailable = false; return d; }).catch(() => { state.dispatchesUnavailable = true; return []; }),
+    layer.dispatches.list().then((d) => { state.dispatchesUnavailable = false; return d; }).catch(() => { state.dispatchesUnavailable = true; return []; }),
     layer.dispatches.isOrganizer()
   ]);
   state.dispatches = dispatches; state.isOrganizer = isOrganizer;
@@ -157,19 +151,34 @@ async function reloadActivities() {
 }
 
 // Badges a hiker just unlocked (compares before/after a reload). Celebrated once, never nagged.
+// Species badges from one outing are one line, so a good photo walk reads as a single cheer.
+function earnedBadges(hk, register) {
+  return {
+    badges: hikerBadges(hk, { marks: state.marks, register, today: state.today, sightings: state.fieldGuide }).filter((b) => b.earned),
+    species: speciesBadges(state.fieldGuide, { hikerId: hk.id }).filter((b) => b.earned)
+  };
+}
+
 function newlyEarned(before) {
   const out = [];
+  const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
   state.hikers.forEach((hk) => {
-    const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
     const had = new Set(before.get(hk.id) || []);
-    hikerBadges(hk, { marks: state.marks, register, today: state.today, sightings: state.fieldGuide }).filter((b) => b.earned && !had.has(b.id)).forEach((b) => out.push(`${hk.name} earned ${b.title}!`));
+    const now = earnedBadges(hk, register);
+    now.badges.filter((b) => !had.has(b.id)).forEach((b) => out.push(`${hk.name} earned ${b.title}!`));
+    const fresh = now.species.filter((b) => !had.has(b.id)).map((b) => b.title).sort();
+    if (fresh.length === 1) out.push(`${hk.name} earned the ${fresh[0]} species badge!`);
+    else if (fresh.length) out.push(`${hk.name} earned ${fresh.length} species badges: ${listTitles(fresh)}!`);
   });
   return out;
 }
 
 function earnedSnapshot() {
   const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
-  return new Map(state.hikers.map((hk) => [hk.id, hikerBadges(hk, { marks: state.marks, register, today: state.today, sightings: state.fieldGuide }).filter((b) => b.earned).map((b) => b.id)]));
+  return new Map(state.hikers.map((hk) => {
+    const now = earnedBadges(hk, register);
+    return [hk.id, [...now.badges, ...now.species].map((b) => b.id)];
+  }));
 }
 
 async function afterActivityChange() {

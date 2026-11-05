@@ -1,9 +1,10 @@
 -- Minimal emulation of the parts of Supabase the migration depends on.
 -- ONLY for local/CI tests (never run this against a real Supabase project).
 
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin bypassrls;
+-- Roles are cluster-wide, so a second test database reuses them.
+do $$ begin create role anon nologin; exception when duplicate_object then null; end $$;
+do $$ begin create role authenticated nologin; exception when duplicate_object then null; end $$;
+do $$ begin create role service_role nologin bypassrls; exception when duplicate_object then null; end $$;
 
 create schema auth;
 create table auth.users (
@@ -24,3 +25,6 @@ grant execute on function auth.uid() to anon, authenticated;
 -- revoke what it does not want, so reproduce that default to prove it does.
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+
+-- Supabase Realtime's publication (empty until a table is added to it).
+create publication supabase_realtime;

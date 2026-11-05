@@ -49,10 +49,10 @@ test("Supabase tables and RPCs are only called from the data layer", () => {
   });
 });
 
-test("localStorage only holds harmless preferences (selected crew, last hiker), never data", () => {
+test("localStorage only holds harmless preferences (last hiker), never data", () => {
   const uses = appJs.flatMap((file) => [...read(file).matchAll(/localStorage\.\w+\(([^)]*)\)/g)].map((m) => m[1]));
   assert.ok(uses.length > 0);
-  uses.forEach((arg) => assert.match(arg, /^(CHALLENGE_KEY|HIKER_KEY)\b/));
+  uses.forEach((arg) => assert.match(arg, /^HIKER_KEY\b/));
 });
 
 test("no secrets are committed", () => {
@@ -183,4 +183,18 @@ test("headings, card titles and section summaries use Title Case", () => {
       assert.ok(i > 0 && minor.has(w.replace(/[^a-z]/g, "")), `${file}: "${title}" should be Title Case ("${word}")`);
     });
   }
+});
+
+test("Camp shows every species badge and a labelled badge-collection bar", () => {
+  const views = read("assets/js/at/ui/views.js");
+  const panel = views.slice(views.indexOf("function hikerPanel"), views.indexOf("function hikersSection"));
+  assert.match(panel, /speciesBadges\(s\.fieldGuide, \{ hikerId: hk\.id \}\)/, "species badges are per hiker");
+  assert.match(panel, /badgeCollection\(badges, species\)/, "the bar counts the badges shown below it");
+  assert.match(panel, /bar\(all\.percent, `Badge collection: /, "the bar's accessible name says what it measures");
+  assert.match(panel, /"Badge Collection"/, "the bar has a visible label");
+  assert.doesNotMatch(panel, /bar\(next\.percent/, "the mileage bar no longer stands in for overall progress");
+  assert.match(panel, /Species Badges \(/);
+  assert.match(views, /species-badge locked[\s\S]{0,200}"\?\?\?"/, "locked species badges stay a mystery");
+  const app = read("assets/js/at/ui/app.js");
+  assert.match(app, /speciesBadges\(state\.fieldGuide, \{ hikerId: hk\.id \}\)/, "new species badges are celebrated");
 });

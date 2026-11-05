@@ -46,24 +46,35 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'alice@example.test', '{"display_name": "Alice"}'),
   ('bbbbbbbb-0000-4000-8000-000000000002', 'bob@example.test', '{"display_name": "Bob <b>"}'),
   ('cccccccc-0000-4000-8000-000000000003', 'carol@example.test', '{}');
-
-select t.ok((select display_name from public.at_profiles where id = 'aaaaaaaa-0000-4000-8000-000000000001') = 'Alice', 'sign-up trigger creates a profile');
-select t.ok((select display_name from public.at_profiles where id = 'bbbbbbbb-0000-4000-8000-000000000002') = 'Bob b', 'display names are sanitised by the trigger');
-select t.ok((select display_name from public.at_profiles where id = 'cccccccc-0000-4000-8000-000000000003') = 'Hiker', 'default name does not come from the email address');
-
 -- Anonymous sign-ins (the app has no login screen) create auth users with no email or metadata.
 insert into auth.users (id, email) values ('dddddddd-0000-4000-8000-000000000004', null);
-select t.ok((select display_name from public.at_profiles where id = 'dddddddd-0000-4000-8000-000000000004') = 'Hiker', 'anonymous (email-less) users get a profile');
+
+-- Schema cleanup (20261108000000_at_cleanup.sql) -------------------------------------------------
+select t.ok(to_regclass('public.at_profiles') is null and to_regclass('public.at_challenges') is null
+        and to_regclass('public.at_challenge_members') is null, 'profile and challenge tables are gone');
+select t.ok(not exists (select 1 from pg_trigger where tgname = 'at_on_auth_user_created'), 'sign-ins no longer write a profile row');
+select t.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname in ('at_create_challenge', 'at_join_challenge', 'at_leave_challenge',
+     'at_get_invite_code', 'at_leaderboard', 'at_challenge_summary', 'at_camp_supplies', 'at_ensure_profile',
+     'at_handle_new_user', 'add_community_miles', 'add_community_contribution')), 'dead and legacy functions are gone');
+select t.ok(not exists (select 1 from information_schema.columns
+   where table_schema = 'public' and table_name = 'at_dispatches' and column_name = 'challenge_id'), 'dispatches have no crew column');
+select t.ok(to_regclass('public.community_progress') is null and to_regclass('public.mileage_log') is null, 'legacy tables left public');
+select t.ok(to_regclass('archive.community_progress') is not null and to_regclass('archive.mileage_log') is not null, 'legacy data is archived, not lost');
+select t.ok((select count(*) from archive.community_progress) = 1, 'archived rows survive');
+select t.ok(not exists (select 1 from pg_publication_tables where schemaname = 'archive'), 'archived tables no longer broadcast over Realtime');
+select t.ok(not has_schema_privilege('anon', 'archive', 'usage') and not has_schema_privilege('authenticated', 'archive', 'usage'), 'the archive is private');
+select t.ok(not exists (select 1 from information_schema.role_table_grants
+   where table_schema = 'archive' and grantee in ('anon', 'authenticated', 'PUBLIC')), 'no API role holds archive table grants');
+select t.ok(not exists (select 1 from pg_tables where schemaname = 'public' and tablename not like 'at\_%'), 'every public table belongs to the AT app');
 
 -- Static privilege checks -----------------------------------------------------------------------
 select t.ok(not exists (
   select 1 from information_schema.role_table_grants
    where grantee in ('anon', 'public') and table_schema = 'public' and table_name like 'at\_%'), 'anon/public hold no table privileges');
-select t.ok(not has_column_privilege('authenticated', 'public.at_challenges', 'invite_code', 'select'), 'invite_code is not selectable');
 select t.ok(not has_column_privilege('authenticated', 'public.at_activities', 'credited_miles', 'insert'), 'credited_miles is not insertable');
 select t.ok(not has_column_privilege('authenticated', 'public.at_activities', 'user_id', 'insert'), 'user_id is not insertable');
 select t.ok(not has_column_privilege('authenticated', 'public.at_activities', 'user_id', 'update'), 'user_id is not updatable');
-select t.ok(not has_table_privilege('authenticated', 'public.at_challenge_members', 'insert'), 'members cannot be inserted directly');
 select t.ok(not has_table_privilege('authenticated', 'public.at_conversion_rules', 'insert'), 'rules are read-only for clients');
 select t.ok(not exists (
   select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -72,24 +83,21 @@ select t.ok(not exists (
   select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname like 'at\_%' and p.prosecdef
      and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) cfg where cfg like 'search_path=%')), 'every SECURITY DEFINER function pins search_path');
-select t.ok(not has_function_privilege('anon', 'public.at_leaderboard(uuid, date)', 'execute') and not has_function_privilege('anon', 'public.at_my_summary(date)', 'execute'), 'anon cannot execute the leaderboard');
+select t.ok(not has_function_privilege('anon', 'public.at_my_summary(date)', 'execute'), 'anon cannot execute summaries');
 
 -- Anonymous visitors ------------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', '', false) \gset
 set role anon;
 select t.fails('select * from public.at_activities', '42501', 'anon cannot read activities');
-select t.fails('select * from public.at_profiles', '42501', 'anon cannot read profiles');
-select t.fails('select * from public.at_challenges', '42501', 'anon cannot read challenges');
+select t.fails('select * from archive.mileage_log', '42501', 'anon cannot read the archive');
 select t.fails($$insert into public.at_activities (activity_date, activity_type, actual_miles) values (current_date, 'walking', 1)$$, '42501', 'anon cannot insert');
-select t.fails($$select public.at_leaderboard('aaaaaaaa-0000-4000-8000-000000000001')$$, '42501', 'anon cannot call the leaderboard');
-select t.fails($$select public.at_create_challenge('x')$$, '42501', 'anon cannot create challenges');
 select t.fails($$select * from public.at_my_summary()$$, '42501', 'anon cannot read summaries');
 reset role;
 
 -- A valid token whose user id is missing behaves like signed-out for RPCs ------------------------------
 set role authenticated;
-select t.fails($$select public.at_create_challenge('x')$$, '28000', 'RPCs require auth.uid()');
-select t.fails($$select * from public.at_leaderboard('aaaaaaaa-0000-4000-8000-000000000001')$$, '28000', 'leaderboard requires auth.uid()');
+select t.fails($$select * from public.at_expedition_hikers()$$, '28000', 'RPCs require auth.uid()');
+select t.fails('select * from archive.community_progress', '42501', 'signed-in devices cannot read the archive either');
 select t.ok(t.count('select 1 from public.at_activities') = 0, 'no uid means no rows');
 select t.fails($$insert into public.at_activities (activity_date, activity_type, actual_miles) values (current_date, 'walking', 1)$$, '23502,42501', 'cannot insert without an owner');
 reset role;
@@ -155,87 +163,33 @@ select t.ok((select total_credited_miles from public.at_my_summary()) = 12, 'sum
 select t.ok((select activity_count from public.at_my_summary()) = 3, 'summary counts own activities');
 select t.ok(cardinality((select active_dates from public.at_my_summary())) = 2, 'summary lists distinct recent active dates');
 select t.ok((select week_credited_miles from public.at_my_summary(current_date - 30)) = 12, 'week start is caller supplied');
-select t.fails($$update public.at_profiles set display_name = '<script>' where id = auth.uid()$$, '23514', 'display names reject markup');
-update public.at_profiles set weekly_goal_miles = 25 where id = auth.uid();
-
--- Alice creates a challenge (started 3 days ago, so the 10-day-old hike is outside the window)
-select (public.at_create_challenge('Fellowship of the Trail', 'nobo', current_date - 3)) ->> 'invite_code' as code \gset
-select t.ok(length(:'code') = 12, 'invite code issued to the owner');
-select (public.at_create_challenge('Second', 'sobo')) ->> 'id' as second_id \gset
-select t.ok(public.at_get_invite_code(:'second_id') is not null, 'owner can read the invite code');
-select id as chal from public.at_challenges where name = 'Fellowship of the Trail' \gset
-select t.fails($$select invite_code from public.at_challenges$$, '42501', 'invite_code column is not readable');
-select t.fails($$insert into public.at_challenges (name, invite_code) values ('Direct', 'ABC')$$, '42501', 'no direct challenge inserts');
-select t.fails($$insert into public.at_challenge_members (challenge_id, user_id, role) values (gen_random_uuid(), auth.uid(), 'owner')$$, '42501', 'no direct membership inserts');
-select t.fails($$select public.at_create_challenge('<b>')$$, '22023', 'challenge names reject markup');
-select t.fails($$select public.at_create_challenge('ok', 'east')$$, '22023', 'direction validated');
-select t.fails($$select public.at_leave_challenge('$$ || :'chal' || $$')$$, '42501', 'owner cannot leave');
 reset role;
 
--- Bob: outsider, then member -----------------------------------------------------------------------------
+-- Bob: another device ------------------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
 set role authenticated;
 
 select t.ok(t.count('select 1 from public.at_activities') = 0, 'bob cannot read the activities of others');
-select t.ok(t.count($$select 1 from public.at_profiles where id = 'aaaaaaaa-0000-4000-8000-000000000001'$$) = 0, 'bob cannot read the profile or goal of others');
 select t.ok(t.rows($$update public.at_activities set notes = 'hacked' where user_id = 'aaaaaaaa-0000-4000-8000-000000000001'$$) = 0, 'bob cannot edit the activities of others');
 select t.ok(t.rows($$delete from public.at_activities where user_id = 'aaaaaaaa-0000-4000-8000-000000000001'$$) = 0, 'bob cannot delete the activities of others');
-select t.ok(t.rows($$update public.at_profiles set display_name = 'Pwned' where id = 'aaaaaaaa-0000-4000-8000-000000000001'$$) = 0, 'bob cannot edit the profile of others');
-select t.fails($$insert into public.at_profiles (id, display_name) values ('aaaaaaaa-0000-4000-8000-000000000001', 'Dup')$$, '42501', 'bob cannot create a profile for another id');
 select t.ok(t.count('select 1 from public.at_conversion_rules') = 5, 'rules are readable');
-select t.ok(t.count('select 1 from public.at_challenges') = 0, 'non-members cannot see challenges');
-select t.ok(t.rows($$delete from public.at_challenges$$) = 0, 'non-members cannot delete challenges');
-select t.fails($$select * from public.at_leaderboard('$$ || :'chal' || $$')$$, '42501', 'non-members cannot read the leaderboard');
-select t.fails($$select * from public.at_challenge_summary('$$ || :'chal' || $$')$$, '42501', 'non-members cannot read the summary');
-select t.fails($$select public.at_get_invite_code('$$ || :'chal' || $$')$$, '42501', 'non-owners cannot read the invite code');
-select t.fails($$select public.at_join_challenge('NOTACODE0000')$$, 'P0002', 'unknown invite codes are rejected');
-select t.fails($$select public.at_join_challenge(null)$$, 'P0002', 'null invite code rejected');
-
--- Lower-case and dashes are tolerated when joining
-select public.at_join_challenge(lower(substr(:'code', 1, 4) || '-' || substr(:'code', 5, 4) || '-' || substr(:'code', 9))) as joined \gset
-select t.ok(:'joined' = :'chal', 'bob joins with a formatted code');
-select t.ok(t.count('select 1 from public.at_challenges') = 1, 'members can see the challenge');
-select t.ok(t.count('select 1 from public.at_challenge_members') = 1, 'members only see their own membership row');
-select t.fails($$select public.at_get_invite_code('$$ || :'chal' || $$')$$, '42501', 'members still cannot read the invite code');
-select t.ok(t.rows($$delete from public.at_challenges$$) = 0, 'members cannot delete the challenge');
-select t.fails($$update public.at_challenge_members set role = 'owner'$$, '42501', 'members cannot promote themselves');
 
 insert into public.at_activities (activity_date, activity_type, actual_miles, notes) values (current_date, 'running', 2, 'bob run');
 insert into public.at_activities (activity_date, activity_type, actual_miles, notes) values (current_date - 2, 'other', 4, 'bob yoga walk');
-
--- Leaderboard: aggregates only, window respected, ordering stable
-select t.ok(t.count($$select 1 from public.at_leaderboard('$$ || :'chal' || $$')$$) = 2, 'leaderboard lists both members');
-select t.ok((select total_credited_miles from public.at_leaderboard(:'chal') where display_name = 'Alice') = 8, 'alice total = 3 + 5 (old hike excluded by challenge window)');
-select t.ok((select total_credited_miles from public.at_leaderboard(:'chal') where display_name = 'Bob b') = 4, 'bob total = 2 + 2');
-select t.ok((select activity_count from public.at_leaderboard(:'chal') where display_name = 'Alice') = 2, 'activity counts');
-select t.ok((select display_name from public.at_leaderboard(:'chal') limit 1) = 'Alice', 'ordered by miles desc');
-select t.ok((select week_credited_miles from public.at_leaderboard(:'chal') where display_name = 'Alice') <= 8, 'weekly miles never exceed totals');
-select t.ok(not exists (select 1 from public.at_leaderboard(:'chal') l where to_jsonb(l) ?| array['notes', 'activity_type', 'weekly_goal_miles', 'actual_miles', 'email']), 'leaderboard exposes no private fields');
-select t.ok((select total_credited_miles from public.at_challenge_summary(:'chal')) = 12, 'group total = 12');
-select t.ok((select member_count from public.at_challenge_summary(:'chal')) = 2, 'group member count');
 select t.ok(t.count('select 1 from public.at_activities') = 2, 'bob still sees only his own activities');
-select t.ok((select total_credited_miles from public.at_my_summary()) = 4, 'bob summary excludes other users');
-
--- Bob leaves: access ends, activities remain his
-select public.at_leave_challenge(:'chal');
-select t.fails($$select * from public.at_leaderboard('$$ || :'chal' || $$')$$, '42501', 'after leaving, no leaderboard access');
-select t.ok(t.count('select 1 from public.at_activities') = 2, 'leaving does not delete activities');
+select t.ok((select total_credited_miles from public.at_my_summary()) = 4, 'bob summary excludes other users (2 + 2)');
 select t.ok(t.rows($$delete from public.at_activities where notes = 'bob run'$$) = 1, 'bob can delete his own activity');
 reset role;
 
--- Carol (no activities, never a member) -------------------------------------------------------------------
+-- Carol (no activities yet) -----------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003', false) \gset
 set role authenticated;
-select t.fails($$select * from public.at_leaderboard('$$ || :'chal' || $$')$$, '42501', 'outsiders cannot read the leaderboard');
-select public.at_ensure_profile();
 select t.ok(t.count('select 1 from public.at_activities') = 0, 'carol sees nothing');
 reset role;
 
--- Owner deleting a challenge removes memberships but not activities --------------------------------------------
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', false) \gset
 set role authenticated;
-select t.ok(t.rows($$delete from public.at_challenges where id = '$$ || :'chal' || $$'$$) = 1, 'owner can delete the challenge');
-select t.ok(t.count('select 1 from public.at_activities') = 3, 'activities survive challenge deletion');
+select t.ok(t.count('select 1 from public.at_activities') = 3, 'alice''s activities are untouched by other devices');
 reset role;
 
 
@@ -254,7 +208,6 @@ select t.ok(not exists (
      and column_name = 'created_by' and privilege_type in ('SELECT', 'INSERT', 'UPDATE')
 ), 'the author user id of a dispatch is never exposed or client-settable');
 select t.ok(not has_function_privilege('anon', 'public.at_is_organizer()', 'execute'), 'anon cannot call at_is_organizer');
-select t.ok(not has_function_privilege('anon', 'public.at_camp_supplies(uuid)', 'execute'), 'anon cannot call at_camp_supplies');
 
 -- Alice is the organizer (added from the dashboard, i.e. as the table owner).
 insert into public.at_organizers (user_id, note) values ('aaaaaaaa-0000-4000-8000-000000000001', 'Kevin');
@@ -263,21 +216,19 @@ select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001
 set role authenticated;
 select t.ok(public.at_is_organizer(), 'alice is an organizer');
 select t.fails($$insert into public.at_organizers (user_id) values ('bbbbbbbb-0000-4000-8000-000000000002')$$, '42501', 'even organizers cannot add organizers from the app');
-select j ->> 'id' as camp_chal, j ->> 'invite_code' as camp_code from (select to_jsonb(public.at_create_challenge('Camp crew', 'nobo', current_date - 7)) as j) q \gset
-select t.ok(t.rows($$insert into public.at_dispatches (title, body, author_name, pinned) values ('Welcome, hikers!', 'First **dispatch**.', 'Kevin', true)$$) = 1, 'organizer can post a public dispatch');
-select t.ok(t.rows($$insert into public.at_dispatches (title, body, challenge_id) values ('Crew only', 'Secret plans', '$$ || :'camp_chal' || $$')$$) = 1, 'organizer can post a crew dispatch');
+select t.ok(t.rows($$insert into public.at_dispatches (title, body, author_name, pinned) values ('Welcome, hikers!', 'First **dispatch**.', 'Kevin', true)$$) = 1, 'organizer can post a dispatch');
+select t.fails($$insert into public.at_dispatches (title, body, challenge_id) values ('Crew only', 'Secret plans', gen_random_uuid())$$, '42703', 'there are no crew-only dispatches any more');
 select t.ok(t.rows($$insert into public.at_dispatches (title, body, published_at) values ('Tomorrow', 'Scheduled', now() + interval '1 day')$$) = 1, 'organizer can schedule a dispatch');
-select t.ok(t.count('select 1 from public.at_dispatches') = 3, 'organizer sees scheduled dispatches too');
+select t.ok(t.count('select 1 from public.at_dispatches') = 2, 'organizer sees scheduled dispatches too');
 select t.fails($$select created_by from public.at_dispatches$$, '42501', 'created_by is not readable by API roles');
 reset role;
 select t.ok((select created_by from public.at_dispatches where title = 'Welcome, hikers!') = 'aaaaaaaa-0000-4000-8000-000000000001', 'created_by is forced to the poster');
-select t.ok((select title from public.at_dispatches where body = 'Secret plans') = 'Crew only', 'dispatch stored');
 
--- Bob: ordinary hiker, joins the crew later
+-- Bob: ordinary hiker
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
 set role authenticated;
 select t.ok(not public.at_is_organizer(), 'bob is not an organizer');
-select t.ok(t.count('select 1 from public.at_dispatches') = 1, 'non-members see only published public dispatches');
+select t.ok(t.count('select 1 from public.at_dispatches') = 1, 'hikers see only published dispatches');
 select t.fails($$insert into public.at_dispatches (title, body) values ('Hacked', 'nope')$$, '42501', 'hikers cannot post dispatches');
 select t.ok(t.rows($$update public.at_dispatches set title = 'Hacked'$$) = 0, 'hikers cannot edit dispatches');
 select t.ok(t.rows($$delete from public.at_dispatches$$) = 0, 'hikers cannot delete dispatches');
@@ -285,7 +236,7 @@ select t.fails($$update public.at_dispatches set created_by = null$$, '42501', '
 reset role;
 select t.ok((select count(*) from public.at_dispatches where title = 'Hacked') = 0, 'no dispatch was modified');
 
--- Expedition runs: private rows, aggregate camp totals, no trail miles
+-- Expedition runs: private rows, no trail miles
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
 set role authenticated;
 select (select total_credited_miles from public.at_my_summary()) as bob_miles_before \gset
@@ -295,10 +246,6 @@ select t.ok((select total_credited_miles from public.at_my_summary()) = :'bob_mi
 select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 5000, 1, 1)$$, '23514', 'scores are capped');
 select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 10, 5, 1)$$, '23514', 'hits cannot exceed shots');
 select t.fails($$insert into public.at_expedition_runs (user_id, theme, score) values ('aaaaaaaa-0000-4000-8000-000000000001', 'hunt', 10)$$, '42501', 'user_id cannot be set by the client');
-select t.ok((select my_score from public.at_camp_supplies() where theme = 'hunt') = 120, 'my camp supplies without a crew');
-select t.fails($$select * from public.at_camp_supplies('$$ || :'camp_chal' || $$')$$, '42501', 'non-members cannot read crew supplies');
-select public.at_join_challenge(:'camp_code');
-select t.ok(t.count('select 1 from public.at_dispatches') = 2, 'members see crew dispatches');
 select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 3');
 select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 4');
 select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 1, 1, 1)$$) = 1, 'run 5');
@@ -315,18 +262,6 @@ select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001
 set role authenticated;
 select t.ok(t.count('select 1 from public.at_expedition_runs') = 0, 'other hikers runs are private');
 select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots) values ('hunt', 30, 1, 2)$$) = 1, 'alice records a hunt');
-select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 158, 'crew pantry sums members runs');
-select t.ok((select my_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 30, 'my share is reported separately');
-select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'wildlife') = 40, 'themes are kept apart');
-select t.ok(not exists (select 1 from public.at_camp_supplies(:'camp_chal') s where to_jsonb(s) ?| array['user_id', 'hits', 'shots']), 'camp supplies expose aggregates only');
-reset role;
-update public.at_challenges set start_date = current_date + 1 where id = :'camp_chal';
-set role authenticated;
-select t.ok((select crew_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 0, 'my runs from before the crew started are not crew supplies');
-select t.ok((select my_score from public.at_camp_supplies(:'camp_chal') where theme = 'hunt') = 30, 'but they still count as mine');
-reset role;
-update public.at_challenges set start_date = current_date - 7 where id = :'camp_chal';
-set role authenticated;
 select t.ok(t.rows($$update public.at_dispatches set pinned = false where title = 'Welcome, hikers!'$$) = 1, 'organizer can edit');
 select t.ok(t.rows($$delete from public.at_dispatches where title = 'Tomorrow'$$) = 1, 'organizer can delete');
 reset role;

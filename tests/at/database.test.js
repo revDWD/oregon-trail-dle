@@ -48,4 +48,6 @@ test("RLS and privilege tests pass against a real PostgreSQL (skipped when Postg
   }
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /RLS TESTS PASSED/);
+  assert.match(result.stdout, /RESET TESTS PASSED/);
+  assert.match(result.stdout, /UPGRADE TESTS PASSED/);
 });

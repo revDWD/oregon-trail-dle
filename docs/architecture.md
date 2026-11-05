@@ -49,7 +49,7 @@ assets/js/at/
   config.js           public Supabase URL + publishable key (no secrets)
   trail/              DATA ONLY: appalachian-trail.js (route, landmarks, milestones, sources)
   engine/             PURE logic, no DOM/network: activities, progress, achievements, leaderboard
-  data/               ONLY place that calls Supabase: auth, activities, challenges, leaderboard
+  data/               ONLY place that calls Supabase: auth, rules, activities, dispatches, expeditions (roster, marks, field guide)
   ui/                 DOM rendering + event wiring; calls engine + data, never Supabase directly
 supabase/migrations/  versioned SQL (+ tests/rls/ SQL tests run against real Postgres)
 docs/                 this file, deployment guide, data sources
@@ -60,6 +60,8 @@ Rules: trail data is separate from UI; `engine` is pure; `ui` never imports the 
 Authority: Postgres owns activities, challenge membership, conversion rules and credited miles. The browser may cache preferences/drafts in `localStorage` only.
 
 ## 4. Supabase schema (tables are prefixed `at_` because the project already hosts Oregon Trail tables)
+
+> **Since `20261108000000_at_cleanup.sql`:** `at_profiles`, `at_challenges`, `at_challenge_members`, their RPCs (incl. `at_leaderboard`, `at_challenge_summary`, `at_camp_supplies`) and `at_dispatches.challenge_id` are gone; the old Oregon tables live in the private `archive` schema. The challenge design below is kept as history. The live model is the hiker roster (§ Phase 8) with aggregate-only RPCs.
 
 - `at_profiles(id → auth.users, display_name 1–24, weekly_goal_miles, created_at)`; created by trigger on sign-up. Own row readable/editable; `display_name` of people who share a challenge with you is readable. `weekly_goal_miles` stays private.
 - `at_conversion_rules(activity_type, factor, max_actual_miles, effective_from)`: read-only for clients. Initial: walking/hiking/running 1.0, cycling 0.25, other 0.5.
@@ -150,5 +152,5 @@ supabase/migrations/20261104000000_at_hikers.sql
 - **Schema:** `at_hikers` (roster, no API access) and `hiker_id` on `at_activities` / `at_expedition_runs` (the invite-code and membership tables were dropped in 20261105). The `at_check_hiker` trigger allows a hiker only for signed-in devices (42501) and only active roster hikers (23503); an unchanged hiker on an old row is always allowed.
 - **Reads are aggregates only:** `at_expedition_hikers(week_start)` (per hiker: total/week miles, counts, first/last dates, distinct active dates, photo points, first wildlife date) and `at_expedition_marks(group[], personal[])` (who crossed each mile mark, and when, max 100 marks). Both are `SECURITY DEFINER` with `search_path = ''`, signed-in only. No notes, device IDs or per-activity rows leave a device.
 - **Badges are derived, not stored:** mileage badges from per-hiker totals and personal marks; "Landmark Reached" and "Milestone Participation" from group marks; rhythm from active dates with one rest day allowed. They can't be lost (dates are all-time), so there's nothing punitive. New badges are celebrated once, after logging (`newlyEarned` in `app.js`).
-- **Removed from the UI:** crews (join/start), "Your spot at camp" (trail name, weekly goal), the About card, the manual day/night buttons, the Badges tab, and the Trail welcome and friends cards. The challenge tables and RPCs stay in the database (dispatches can still target a crew).
+- **Removed from the UI:** crews (join/start), "Your spot at camp" (trail name, weekly goal), the About card, the manual day/night buttons, the Badges tab, and the Trail welcome and friends cards. The challenge tables and RPCs were later removed by the cleanup migration (see `docs/review-and-roadmap.md` §16).
 - **Fail-soft:** before the migration, the roster RPCs fail with a non-network error, so `expeditionUnavailable` hides the join card and hiker field, and logging works as before.

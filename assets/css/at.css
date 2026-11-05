@@ -339,3 +339,14 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .journal-text strong { font-weight: 700; overflow-wrap: anywhere; }
 .journal-entry.is-rare .journal-icon, .journal-entry.is-legend .journal-icon { border-radius: 50%; background: #fff3cf; box-shadow: 0 0 0 2px var(--amber); }
 .journal-card .timeline-wrap { margin-top: .5rem; }
+.collection-label { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .25rem .75rem; margin: 1rem 0 .3rem; }
+.collection-label strong { color: var(--forest-dark); }
+.collection-label span { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.species-grid { grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); margin-top: .5rem; }
+.species-medal { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: #e7e2d8; border: 2px solid #a69c8c; overflow: hidden; }
+.species-medal .species-art { width: 42px; height: 42px; }
+.species-badge.earned .species-medal { background: #f4e3b5; border-color: #7a5a3c; animation: pop .5s steps(3) 1; }
+.species-badge.rare .species-medal { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2b7a8a; }
+.species-badge.prestige .species-medal { background: #ffe9a8; border-color: #b8860b; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #b8860b; }
+.species-badge .tag { font-size: .72rem; padding: .05rem .5rem; text-transform: uppercase; letter-spacing: .05em; background: #1d5560; }
+.species-badge.prestige .tag { background: #7a4a10; }

@@ -6,13 +6,10 @@
 
 import {
   DataError, toDataError, activityFromRow, activityToInsert, activityToUpdate,
-  profileFromRow, challengeFromRow, leaderboardFromRows, ruleFromRow,
-  dispatchFromRow, dispatchToRow, suppliesFromRows, hikerFromRow, markFromRow,
+  ruleFromRow, dispatchFromRow, dispatchToRow, hikerFromRow, markFromRow,
   sightingFromRow, isMissingColumn
 } from "./mappers.js";
 import { DEFAULT_RULES } from "../engine/activities.js";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createClientFromGlobal(config, globalObject = globalThis) {
   const lib = globalObject.supabase;
@@ -66,26 +63,6 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
     onChange(callback) {
       const { data } = client.auth.onAuthStateChange((event, session) => callback(event, session ? session.user : null));
       return () => data.subscription.unsubscribe();
-    }
-  };
-
-  const profile = {
-    async get() {
-      const user = await requireUser();
-      let row = await run(client.from("at_profiles").select("id, display_name, weekly_goal_miles").eq("id", user.id).maybeSingle());
-      if (!row) {
-        await run(client.rpc("at_ensure_profile"));
-        row = await run(client.from("at_profiles").select("id, display_name, weekly_goal_miles").eq("id", user.id).maybeSingle());
-      }
-      return row ? profileFromRow(row) : null;
-    },
-    async update({ displayName, weeklyGoalMiles }) {
-      const user = await requireUser();
-      const changes = {};
-      if (displayName !== undefined) changes.display_name = String(displayName).trim();
-      if (weeklyGoalMiles !== undefined) changes.weekly_goal_miles = weeklyGoalMiles;
-      const row = await run(client.from("at_profiles").update(changes).eq("id", user.id).select("id, display_name, weekly_goal_miles").single());
-      return profileFromRow(row);
     }
   };
 
@@ -147,65 +124,17 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
     }
   };
 
-  const challenges = {
-    async listMine() {
-      await requireUser();
-      const rows = await run(client.from("at_challenges")
-        .select("id, name, trail_id, direction, start_date, end_date, owner_id").order("created_at", { ascending: true }));
-      return rows.map(challengeFromRow);
-    },
-    async create({ name, direction = "nobo", startDate }) {
-      await requireUser();
-      const args = { p_name: name, p_direction: direction };
-      if (startDate) args.p_start_date = startDate;
-      const row = await run(client.rpc("at_create_challenge", args));
-      return { id: row.id, name: row.name, direction: row.direction, startDate: row.start_date, inviteCode: row.invite_code };
-    },
-    async join(code) {
-      await requireUser();
-      return run(client.rpc("at_join_challenge", { p_code: code }));
-    },
-    async leave(challengeId) {
-      await requireUser();
-      await run(client.rpc("at_leave_challenge", { p_challenge: challengeId }));
-    },
-    async remove(challengeId) {
-      await requireUser();
-      const rows = await run(client.from("at_challenges").delete().eq("id", challengeId).select("id"));
-      if (!rows.length) throw new DataError("Only the owner can delete a challenge.", "forbidden");
-    },
-    async inviteCode(challengeId) {
-      await requireUser();
-      return run(client.rpc("at_get_invite_code", { p_challenge: challengeId }));
-    },
-    async leaderboard(challengeId, weekStart) {
-      await requireUser();
-      const args = { p_challenge: challengeId };
-      if (weekStart) args.p_week_start = weekStart;
-      return leaderboardFromRows(await run(client.rpc("at_leaderboard", args)));
-    },
-    async summary(challengeId) {
-      await requireUser();
-      const rows = await run(client.rpc("at_challenge_summary", { p_challenge: challengeId }));
-      const row = rows[0];
-      return { memberCount: Number(row.member_count), totalCreditedMiles: Number(row.total_credited_miles), activityCount: Number(row.activity_count) };
-    }
-  };
+  const DISPATCH_COLUMNS = "id, title, body, author_name, pinned, published_at, updated_at";
 
-  const DISPATCH_COLUMNS = "id, challenge_id, title, body, author_name, pinned, published_at, updated_at";
-
-  // Trail Dispatches. RLS decides what a hiker may read (public + their crews) and who may write
-  // (organizers only). The query only asks for public dispatches plus this crew's, so other crews'
-  // dispatches never use up the page limit.
+  // Trail Dispatches. RLS decides what a hiker may read (published dispatches) and who may write
+  // (organizers only).
   const dispatches = {
-    async list({ challengeId = null, limit = 20 } = {}) {
+    async list({ limit = 20 } = {}) {
       await requireUser();
       const capped = Math.min(Math.max(Math.trunc(limit) || 20, 1), 100);
-      const crew = challengeId && UUID_RE.test(challengeId) ? challengeId : null;
       const rows = await run(client.from("at_dispatches").select(DISPATCH_COLUMNS)
-        .or(crew ? `challenge_id.is.null,challenge_id.eq.${crew}` : "challenge_id.is.null")
         .order("pinned", { ascending: false }).order("published_at", { ascending: false }).range(0, capped - 1));
-      return rows.map(dispatchFromRow).filter((d) => !d.challengeId || d.challengeId === challengeId);
+      return rows.map(dispatchFromRow);
     },
     async create(value) {
       await requireUser();
@@ -249,10 +178,6 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
         if (!isMissingColumn(error)) throw error;
         return insert(payload);
       }
-    },
-    async supplies(challengeId = null) {
-      await requireUser();
-      return suppliesFromRows(await run(client.rpc("at_camp_supplies", challengeId ? { p_challenge: challengeId } : {})));
     }
   };
 
@@ -276,5 +201,5 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
     }
   };
 
-  return { auth, profile, rules, activities, challenges, dispatches, expeditions, expedition };
+  return { auth, rules, activities, dispatches, expeditions, expedition };
 }

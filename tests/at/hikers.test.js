@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
+import { speciesBadges } from "../../assets/js/at/engine/field-guide.js";
 import {
   MILE_BADGES, PERSONAL_MARKS, groupMarks, expeditionTotals, hikerShare, rhythmReachedOn, trailRegister,
-  hikerMilestones, hikerBadges, nextMileBadge, hikerTimeline
+  hikerMilestones, hikerBadges, nextMileBadge, hikerTimeline, badgeCollection
 } from "../../assets/js/at/engine/hikers.js";
 
 const david = {
@@ -132,4 +133,40 @@ test("locked badges are silhouettes; their names and descriptions stay hidden un
   assert.doesNotMatch(views, /: b\.description\)/, "no description for locked badges");
   assert.doesNotMatch(views, /to the \$\{next\.title\} badge/, "the next badge's name stays a surprise");
   assert.match(art, /pixels\(rows, earned \? null : "#[0-9a-f]{6}"\)/, "locked art is a one-colour silhouette");
+});
+
+test("the mileage bar measures from the last mileage badge to the next", () => {
+  assert.equal(nextMileBadge({ totalMiles: 5 }).percent, 50);
+  const after = nextMileBadge({ totalMiles: MILE_BADGES[0].miles });
+  assert.equal(after.id, MILE_BADGES[1].id);
+  assert.equal(after.percent, 0, "a new mileage badge starts the next bar from empty");
+});
+
+test("badge collection counts exactly the achievement and species badges shown at Camp", () => {
+  const badges = [{ earned: true }, { earned: false }, { earned: true }, { earned: false }];
+  const sightings = [{ hikerId: "h1", species: "deer", habitat: "blue-ridge", firstSeen: "2026-11-03", sightings: 3 },
+    { hikerId: "h1", species: "bigfoot", habitat: "blue-ridge", firstSeen: "2026-11-04", sightings: 1 }];
+  const species = speciesBadges(sightings, { hikerId: "h1" });
+  const regular = species.filter((b) => !b.bonus).length;
+  const all = badgeCollection(badges, species);
+  assert.deepEqual(all.badges, { earned: 2, total: 4 });
+  assert.deepEqual(all.species, { earned: 1, total: regular });
+  assert.equal(all.legends, 1, "legends are a bonus outside the total");
+  assert.equal(all.earned, 3);
+  assert.equal(all.total, 4 + regular);
+  assert.equal(all.percent, Math.floor((3 / (4 + regular)) * 100));
+  assert.deepEqual(badgeCollection([], []), { earned: 0, total: 0, percent: 0, badges: { earned: 0, total: 0 }, species: { earned: 0, total: 0 }, legends: 0 });
+  const done = badgeCollection(badges.map(() => ({ earned: true })), species.filter((b) => !b.bonus).map((b) => ({ ...b, earned: true })));
+  assert.equal(done.percent, 100, "a full collection is reachable without the legends");
+});
+
+test("a hiker's timeline groups same-day species badges into one line", () => {
+  const sightings = [{ hikerId: "h-david", species: "elk", habitat: "blue-ridge", firstSeen: "2026-11-03", sightings: 1 },
+    { hikerId: "h-david", species: "bear", habitat: "blue-ridge", firstSeen: "2026-11-03", sightings: 2 }];
+  const register = trailRegister(TRAIL, "nobo", marks, [david, kevin]);
+  const timeline = hikerTimeline(hikerBadges(david, { marks, register, today: "2026-11-20", sightings }), hikerMilestones(david, register),
+    speciesBadges(sightings, { hikerId: "h-david" }));
+  const lines = timeline.filter((t) => t.kind === "species");
+  assert.deepEqual(lines.map((t) => t.text), ["Species badges: Black Bear and Elk"]);
+  assert.deepEqual(timeline.map((t) => t.date), [...timeline.map((t) => t.date)].sort());
 });

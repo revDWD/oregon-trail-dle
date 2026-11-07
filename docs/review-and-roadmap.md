@@ -554,3 +554,18 @@ Safety: everything is in one idempotent migration (`20261108000000_at_cleanup.sq
 ### 17.4 Next
 
 Regional field guides and expedition wildlife reports (`this_expedition`, `habitat`), rare-find dispatches, community leaderboards from `at_wildlife_discoveries`, and sighting timelines from observations.
+## 18. Field Guide diagnosis and a scalable species catalogue
+
+**Finding: the guide emptied itself.** Changing the guide's "Show" menu, or finishing an outing, re-rendered the guide by spreading its parts into `replaceChildren()`. The species groups were a nested array, so they were turned into a line of text and every group vanished; only Trail Sections stayed. A new `fill()` in `ui/dom.js` flattens children the way `h()` does, and a static test bans spreading into `replaceChildren()`.
+
+**Finding: the guide contradicted the game.** Scoring and "NEW ×2" are judged against the chosen spotter's guide, but the Field Guide opened on "The whole expedition". A species could show as found in the guide yet score double, or the reverse. The RPC also returned data the guide never showed: last seen, outings, every finder (only the first was named) and `this_expedition`. Uncommon species had no tag, and season and photo points weren't shown.
+
+**Fixes (no SQL).** The guide now follows the spotter (its own menu can still pick another hiker or the whole expedition). Found entries show rarity (Uncommon / Rare find / Legend), first and last photographed, photos and outings, every finder in the whole-expedition view, season and photo points. `buildFieldGuide` adds `finders`, `thisExpedition` and `foundThisExpedition`; a "This expedition: N species" line shows when it differs from the lifetime count.
+
+**Finding: adding a species touched five places.** The species object, a weight in each habitat's `animals`, the habitat `rare`/`legends` lists, `CLASSIC_INFO` (for the original nine) and hand-set `skittish`/`value`. Forgetting a habitat weight made a species silently unspawnable; a stale `skittish` contradicted its behaviour class. A test also claimed a 40-species catalogue cap that the database never had (it caps species *per outing*).
+
+**Refactor.** Each species is one object with `where` (spawn weights, or a habitat list for rare and legend). `habitatsFrom()` derives every habitat's spawn tables, `defineSpecies()` derives `skittish` and rare/legend `value`. A snapshot of all 37 species and 8 habitat tables was identical before and after. `tests/at/species-catalogue.test.js` validates every species (ids, group, rarity, behaviour, colours, fact length, known habitats, weights) and proves each can spawn, fills a guide entry and earns a badge. How-to: `docs/adding-species.md`.
+
+**First expansion wave: 37 → 56 species (50 regular plus 6 legends).** Common: eastern chipmunk, eastern gray squirrel, black-capped chickadee, eastern garter snake, American toad, eastern tiger swallowtail. Uncommon: pileated woodpecker, luna moth, North American porcupine, bobcat, peregrine falcon, timber rattlesnake, snowshoe hare, spruce grouse. Rare: Bicknell's thrush (alpine), fisher (lakes to Maine), Carolina northern flying squirrel (high balds). Legends: Specter Moose (Maine), Mothman (West Virginia). The Badge Collection is now out of 24 + 50.
+
+**Next.** Seasonal and event windows (`months: [..]` or an `event` id alongside `season`), a species of the week, per-section field guide views, community leaderboards from `at_wildlife_discoveries`, and an auto-dispatch for rare finds.

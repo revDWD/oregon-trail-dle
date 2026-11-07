@@ -32,6 +32,27 @@ test("field guide aggregates sightings across habitats and hikers", () => {
   assert.equal(buildFieldGuide([]).found, 0);
 });
 
+test("field guide lists every finder and what was found this expedition", () => {
+  const rows = [
+    { ...row("h2", "deer", "lakes", "2026-11-03"), lastSeen: "2026-11-08", photos: 4, thisExpedition: false },
+    { ...row("h1", "deer", "blue-ridge", "2026-11-05", 2), lastSeen: "2026-11-05", photos: 2, thisExpedition: true },
+    { ...row("h1", "monarch", "blue-ridge", "2026-11-04"), thisExpedition: false }
+  ];
+  const guide = buildFieldGuide(rows);
+  const deer = guide.entries.find((e) => e.spec.id === "deer");
+  assert.deepEqual(deer.finders, ["h2", "h1"], "first finder first");
+  assert.equal(deer.firstBy, "h2");
+  assert.equal(deer.lastSeen, "2026-11-08");
+  assert.deepEqual([deer.photos, deer.sightings], [6, 3]);
+  assert.equal(deer.thisExpedition, true);
+  assert.equal(guide.entries.find((e) => e.spec.id === "monarch").thisExpedition, false);
+  assert.deepEqual([guide.found, guide.foundThisExpedition], [2, 1], "lifetime finds stay; this expedition counts afresh");
+  const h2 = buildFieldGuide(rows, { hikerId: "h2" });
+  assert.deepEqual(h2.entries.find((e) => e.spec.id === "deer").finders, ["h2"]);
+  assert.equal(h2.foundThisExpedition, 0);
+  assert.deepEqual(buildFieldGuide([]).entries[0].finders, []);
+});
+
 test("undiscovered species get a where-to-look hint from the habitat weights", () => {
   const loon = whereToLook(theme.species.find((sp) => sp.id === "loon"));
   assert.equal(loon.places[0].id, "north-woods");

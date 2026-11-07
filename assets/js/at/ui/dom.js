@@ -39,6 +39,13 @@ export function clear(el) {
   return el;
 }
 
+// Replace an element's children, flattening nested arrays and skipping empty values like h() does.
+export function fill(el, ...children) {
+  el.replaceChildren();
+  append(el, children);
+  return el;
+}
+
 export function formatMiles(value) {
   const n = Number(value) || 0;
   return `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} mi`;

@@ -1,5 +1,5 @@
 // Views: pure functions of (state, actions) that return DOM nodes.
-import { h, svg, formatMiles } from "./dom.js";
+import { h, svg, fill, formatMiles } from "./dom.js";
 import { renderTrailMap } from "./map.js";
 import { renderMarkdown } from "./markdown-view.js";
 import { renderCampScene, markSelectedHiker } from "./camp-scene.js";
@@ -405,54 +405,73 @@ function speciesArt(spec, found) {
 }
 
 const titleCase = speciesTitle;
-const RARITY_TAG = { rare: "Rare find", legend: "Legend" };
-let guideFilter = ""; // "" = whole expedition, or a hiker id; kept while the app is open
+const RARITY_TAG = { uncommon: "Uncommon", rare: "Rare find", legend: "Legend" };
+const SEASON_TEXT = { warm: "Warm months; scarce from November to March", cold: "Winter only" };
+// null = follow whoever is spotting (scores and "NEW ×2" are judged against their guide); "" = the whole
+// expedition; or a hiker id picked from the guide's own menu. Kept while the app is open.
+let guideFilter = null;
 const openGroups = new Set(); // field guide sections the hiker has opened
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function guideEntry(s, theme, e) {
+function guideEntry(s, theme, e, filtered) {
   const sp = e.spec;
   if (!e.found) {
     return h("li", { class: "guide-entry locked" }, speciesArt(sp, false),
       h("strong", {}, "???", h("span", { class: "sr-only" }, " Not yet photographed.")),
       h("span", { class: "hint" }, whereToLook(sp, theme).text));
   }
-  const by = (s.hikers || []).find((x) => x.id === e.firstBy);
+  const name = (id) => (s.hikers || []).find((x) => x.id === id)?.name;
+  const by = filtered ? null : name(e.firstBy);
+  const finders = e.finders.map(name).filter(Boolean);
   const places = e.habitats.map((id) => theme.habitats[id].label).join(", ");
   return h("li", { class: `guide-entry found${sp.rarity === "rare" || sp.rarity === "legend" ? ` ${sp.rarity}` : ""}` },
     h("details", {},
       h("summary", {}, speciesArt(sp, true), h("strong", {}, titleCase(sp.name)),
-        RARITY_TAG[sp.rarity] ? h("span", { class: "tag" }, RARITY_TAG[sp.rarity]) : null),
+        RARITY_TAG[sp.rarity] ? h("span", { class: `tag${sp.rarity === "uncommon" ? " uncommon" : ""}` }, RARITY_TAG[sp.rarity]) : null),
       h("p", {}, sp.fact),
       h("dl", { class: "guide-facts" },
-        h("dt", {}, "First photographed"), h("dd", {}, `${e.firstSeen ? day(e.firstSeen) : "Unknown"}${by ? ` by ${by.name}` : ""}`),
+        h("dt", {}, "First photographed"), h("dd", {}, `${e.firstSeen ? day(e.firstSeen) : "Unknown"}${by ? ` by ${by}` : ""}`),
+        e.lastSeen && e.lastSeen !== e.firstSeen ? [h("dt", {}, "Last photographed"), h("dd", {}, day(e.lastSeen))] : null,
+        h("dt", {}, "Photos"), h("dd", {}, e.sightings ? `${plural(e.photos, "photo")} on ${plural(e.sightings, "outing")}` : String(e.photos)),
+        !filtered && finders.length > 1 ? [h("dt", {}, "Found by"), h("dd", {}, `${finders.length} hikers: ${finders.join(", ")}`)] : null,
         h("dt", {}, "Range"), h("dd", {}, sp.range),
+        SEASON_TEXT[sp.season] ? [h("dt", {}, "Season"), h("dd", {}, SEASON_TEXT[sp.season])] : null,
         sp.behavior?.habit ? [h("dt", {}, "How it moves"), h("dd", {}, `${sp.behavior.label}. ${sp.behavior.habit}`)] : null,
         places ? [h("dt", {}, "Spotted in"), h("dd", {}, places)] : null,
-        h("dt", {}, "Photos"), h("dd", {}, String(e.photos)))));
+        h("dt", {}, "Photo points"), h("dd", {}, `${sp.value} ${theme.unit}, doubled when it's new to the spotter's field guide`))));
+}
+
+// Whose finds the guide shows: the spotter's while it follows them, otherwise the guide's own choice.
+function guideTarget(s) {
+  if (guideFilter !== null) return guideFilter;
+  return (s.hikers || []).some((x) => x.id === s.lastHiker) ? s.lastHiker : "";
 }
 
 function fieldGuideBody(s, theme, here) {
-  const guide = buildFieldGuide(s.fieldGuide, { hikerId: guideFilter || null, theme });
-  const regions = regionProgress(s.fieldGuide, { hikerId: guideFilter || null, theme });
+  const target = guideTarget(s);
+  const guide = buildFieldGuide(s.fieldGuide, { hikerId: target || null, theme });
+  const regions = regionProgress(s.fieldGuide, { hikerId: target || null, theme });
   const left = guide.total - guide.found;
-  const who = (s.hikers || []).find((x) => x.id === guideFilter);
+  const who = (s.hikers || []).find((x) => x.id === target);
   const percent = guide.total ? Math.floor((guide.found / guide.total) * 100) : 0;
   // Each group is a collapsible section so the guide stays short on a phone.
   const section = (g, count, ...content) => h("details", { class: "guide-group", open: openGroups.has(g.id),
     onToggle: (ev) => { if (ev.target.open) openGroups.add(g.id); else openGroups.delete(g.id); } },
   h("summary", {}, h("span", {}, g.label), h("span", { class: "guide-tally" }, count)), ...content);
+  const entry = (e) => guideEntry(s, theme, e, Boolean(who));
   return [
     h("p", { class: "guide-count" }, h("strong", {}, `${guide.found} of ${guide.total}`), ` species photographed${who ? ` by ${who.name}` : ""}.`,
       left ? ` ${left} to go.` : " The field guide is complete. Master Naturalist!"),
     bar(percent, "Field guide progress"),
+    guide.foundThisExpedition !== guide.found ? h("p", { class: "hint" }, `This expedition: ${guide.foundThisExpedition} species so far. Earlier finds stay in the guide for good.`) : null,
     guide.latest ? h("p", { class: "hint" }, `Latest find: ${titleCase(guide.latest.spec.name)}, ${day(guide.latest.firstSeen)}.`) : null,
     guide.groups.map((g) => {
       const found = g.entries.filter((e) => e.found);
       if (g.id === "legend") {
         if (!found.length) return h("p", { class: "hint guide-rumour" }, "Campfire stories tell of strange creatures on the trail. Keep your camera ready…");
-        return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, found.map((e) => guideEntry(s, theme, e))));
+        return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, found.map(entry)));
       }
-      return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, g.entries.map((e) => guideEntry(s, theme, e))));
+      return section(g, `${found.length} of ${g.entries.length}`, h("ul", { class: "guide-grid" }, g.entries.map(entry)));
     }),
     // Regional completion: local species photographed in their own trail section.
     section({ id: "regions", label: "Trail Sections" }, `${regions.filter((r) => r.completedOn).length} of ${regions.length} complete`,
@@ -471,14 +490,22 @@ function fieldGuideCard(s, theme, here) {
   }
   const body = h("div", {}, fieldGuideBody(s, theme, here));
   const hikers = (s.hikers || []).filter((x) => x.active || x.wildlifeRuns);
-  if (guideFilter && !hikers.some((x) => x.id === guideFilter)) guideFilter = "";
-  const filter = hikers.length > 1 ? field("guide-who", "Show", h("select", { id: "guide-who", onChange: (ev) => { guideFilter = ev.target.value; body.replaceChildren(...fieldGuideBody(s, theme, here)); } },
-    h("option", { value: "", selected: !guideFilter }, "The whole expedition"),
-    hikers.map((x) => h("option", { value: x.id, selected: x.id === guideFilter }, `${x.name}'s finds`)))) : null;
+  if (guideFilter && !hikers.some((x) => x.id === guideFilter)) guideFilter = null;
+  const target = guideTarget(s);
+  const select = hikers.length > 1 ? h("select", { id: "guide-who", "aria-describedby": "guide-who-hint", onChange: (ev) => { guideFilter = ev.target.value; card.refresh(); } },
+    h("option", { value: "", selected: !target }, "The whole expedition"),
+    hikers.map((x) => h("option", { value: x.id, selected: x.id === target }, `${x.name}'s finds`))) : null;
   const card = h("div", { class: "card field-guide" }, h("h2", {}, "Field Guide"),
     h("p", { class: "hint" }, "Every species you photograph is added here with a fact and where it lives. Wildlife changes as the expedition heads north, and with the seasons."),
-    filter, body);
-  card.refresh = () => body.replaceChildren(...fieldGuideBody(s, theme, here));
+    select ? field("guide-who", "Show", select, "Follows whoever is spotting. Pick another hiker or the whole expedition to compare.") : null, body);
+  // fill() flattens the nested group list; spreading it into replaceChildren turned groups into text.
+  card.refresh = () => fill(body, fieldGuideBody(s, theme, here));
+  // Choosing a spotter opens their field guide, so the guide matches what scores "NEW ×2".
+  card.follow = (hikerId) => {
+    guideFilter = hikerId ? null : "";
+    if (select) select.value = guideTarget(s);
+    card.refresh();
+  };
   return card;
 }
 
@@ -500,10 +527,11 @@ export function wildlifeView(s, a) {
   const saved = h("p", { class: "status", role: "status" });
   const board = h("div", {}, photoBoard(s, theme));
   const roster = activeHikers(s);
-  const who = roster.length ? h("select", { id: "spotter", name: "spotter", "aria-describedby": "spotter-hint", onChange: (e) => a.rememberHiker(e.target.value) },
+  const guideCard = fieldGuideCard(s, theme, region ? region.scene : null);
+  const who = roster.length ? h("select", { id: "spotter", name: "spotter", "aria-describedby": "spotter-hint",
+    onChange: (e) => { a.rememberHiker(e.target.value); if (guideCard.follow) guideCard.follow(e.target.value); } },
     h("option", { value: "", selected: !roster.some((x) => x.id === s.lastHiker) }, "Choose a hiker"),
     roster.map((x) => h("option", { value: x.id, selected: x.id === s.lastHiker }, x.name))) : null;
-  const guideCard = fieldGuideCard(s, theme, region ? region.scene : null);
   // Every outing belongs to one hiker, chosen before it starts (no anonymous discoveries).
   let spotter = null;
   const beforeStart = () => {
@@ -522,7 +550,7 @@ export function wildlifeView(s, a) {
       if (!spotter) return;
       saved.textContent = "Saving your photos to the field guide…";
       saved.textContent = await a.recordExpedition({ ...summary, hikerId: spotter });
-      board.replaceChildren(...[].concat(photoBoard(s, theme)));
+      fill(board, photoBoard(s, theme));
       if (guideCard.refresh) guideCard.refresh();
     } });
   a.registerGame(game);

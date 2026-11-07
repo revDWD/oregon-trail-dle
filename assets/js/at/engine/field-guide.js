@@ -44,6 +44,7 @@ export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES
     const mine = rows.filter((r) => r.species === spec.id);
     const byHiker = new Map();
     mine.forEach((r) => { if (r.hikerId && (!byHiker.has(r.hikerId) || r.firstSeen < byHiker.get(r.hikerId))) byHiker.set(r.hikerId, r.firstSeen); });
+    const finders = [...byHiker].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)).map(([id]) => id);
     return {
       spec,
       found: mine.length > 0,
@@ -52,7 +53,11 @@ export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES
       sightings: mine.reduce((sum, r) => sum + (Number(r.sightings) || 0), 0),
       photos: mine.reduce((sum, r) => sum + (Number(r.photos ?? r.sightings) || 0), 0),
       habitats: [...new Set(mine.map((r) => r.habitat).filter((id) => theme.habitats[id]))],
-      firstBy: [...byHiker].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)).map(([id]) => id)[0] || null
+      // Hikers who have photographed it, first finder first.
+      finders,
+      firstBy: finders[0] || null,
+      // Photographed during the current expedition (an expedition reset starts this afresh).
+      thisExpedition: mine.some((r) => r.thisExpedition)
     };
   });
   const regular = entries.filter((e) => !isLegend(e.spec));
@@ -61,6 +66,7 @@ export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES
     entries,
     groups: GROUPS.map((g) => ({ ...g, entries: entries.filter((e) => e.spec.group === g.id) })),
     found: regular.filter((e) => e.found).length,
+    foundThisExpedition: regular.filter((e) => e.thisExpedition).length,
     total: regular.length,
     legendsFound: legends.filter((e) => e.found).length,
     legendsTotal: legends.length,

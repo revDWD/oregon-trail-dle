@@ -303,6 +303,7 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .guide-entry p { font-size: .85rem; line-height: 1.35; margin: .4rem 0; text-align: left; }
 .guide-entry .tag { font-size: .72rem; padding: .05rem .5rem; text-transform: uppercase; letter-spacing: .05em; background: #1d5560; }
 .guide-entry.legend .tag { background: #7a4a10; }
+.guide-entry .tag.uncommon { background: #4a5a2a; }
 .guide-facts { display: grid; grid-template-columns: auto 1fr; gap: .1rem .5rem; font-size: .8rem; text-align: left; margin: 0; }
 .guide-facts dt { color: var(--muted); }
 .guide-facts dd { margin: 0; }

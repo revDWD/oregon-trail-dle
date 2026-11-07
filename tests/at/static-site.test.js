@@ -44,6 +44,12 @@ test("app code never writes HTML strings or evaluates code", () => {
   appJs.forEach((file) => assert.doesNotMatch(read(file), banned, `${file} uses an unsafe DOM/eval API`));
 });
 
+// A spread into replaceChildren() turns nested arrays and nulls into stray text (it once emptied the
+// Field Guide after a filter change). fill() from dom.js flattens them the way h() does.
+test("views re-render lists with fill(), never a spread into replaceChildren()", () => {
+  appJs.forEach((file) => assert.doesNotMatch(read(file), /replaceChildren\(\s*\.\.\./, `${file} spreads into replaceChildren`));
+});
+
 test("Supabase tables and RPCs are only called from the data layer", () => {
   appJs.filter((f) => !f.endsWith("data/layer.js")).forEach((file) => {
     assert.doesNotMatch(read(file), /\.from\(\s*["']at_|\.rpc\(|\bclient\.auth\b|supabase\.createClient/, `${file} bypasses the data layer`);

@@ -259,7 +259,9 @@ test("the field guide has birds, insects, reptiles and amphibians, each with a f
     hab.rare.forEach((sp) => assert.equal(speciesOf(theme, sp).rarity, "rare"));
     hab.legends.forEach((sp) => assert.equal(speciesOf(theme, sp).rarity, "legend"));
   });
-  assert.ok(theme.species.length <= 40, "a run can record every species (database cap is 40)");
+  // The database limits species per outing (at most 40, and never more than the photos taken), not the
+  // size of the catalogue, so the field guide can keep growing.
+  assert.ok(theme.rounds.ammo <= 40, "an outing can always record every species it photographed");
 });
 
 test("regional wildlife: the ecosystem changes along the trail", () => {
@@ -289,7 +291,7 @@ test("rare and legendary finds: rolled once per outing, very rarely, from the lo
   assert.equal(rollSpecial(theme, "north-woods", { random: seq(0.5) }), null);
   assert.equal(rollSpecial(theme, "north-woods", { random: seq(LEGEND_CHANCE + RARE_CHANCE + 0.001) }), null);
   const rare = rollSpecial(theme, "north-woods", { random: seq(LEGEND_CHANCE + 0.001, 0, 0.5) });
-  assert.equal(rare.id, "lynx");
+  assert.equal(rare.id, theme.habitats["north-woods"].rare[0], "drawn from the local rare list");
   assert.ok(rare.at >= 4 && rare.at <= theme.rounds.seconds - 8);
   assert.equal(speciesOf(theme, rollSpecial(theme, "rocky-ridges", { random: seq(0, 0.99, 0) }).id).rarity, "legend");
   // Out-of-season rare species are skipped: no snowy owl in July.

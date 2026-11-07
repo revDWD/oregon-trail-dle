@@ -1,6 +1,7 @@
--- Upgrade test for 20261108000000_at_cleanup.sql. run-rls-tests.sh builds a database with every
--- earlier migration, then this file seeds what the live project could hold, applies the cleanup
--- twice and checks that only dead objects went away and nothing worth keeping was lost.
+-- Upgrade test for 20261108000000_at_cleanup.sql and 20261109000000_at_wildlife_discoveries.sql.
+-- run-rls-tests.sh builds a database with every migration before the cleanup, then this file seeds
+-- what the live project could hold, applies the cleanup and the wildlife migration twice each and
+-- checks that only dead objects went away and nothing worth keeping was lost.
 \set ON_ERROR_STOP on
 \set QUIET on
 \o /dev/null
@@ -56,6 +57,16 @@ set role authenticated;
 select pg_temp.ok((select total_credited_miles from public.at_expedition_hikers() where name = 'David') = 3, 'hiker totals still work');
 select pg_temp.ok((select count(*) from public.at_field_guide()) = 2, 'field guide still works');
 select pg_temp.ok((select count(*) from public.at_dispatches) = 1, 'dispatches readable without the crew clause');
+reset role;
+
+-- Then the wildlife discoveries migration, twice: outings that already recorded species become discoveries
+\ir 20261109000000_at_wildlife_discoveries.sql
+\ir 20261109000000_at_wildlife_discoveries.sql
+select pg_temp.ok((select photos from public.at_expedition_runs) = '{1,1}', 'older outings count one photo per species');
+select pg_temp.ok((select count(*) from public.at_wildlife_observations where hiker_id = :'david' and is_first) = 2, 'their species become first discoveries, once');
+select pg_temp.ok((select count(*) from public.at_expeditions) = 1, 'one expedition, created once');
+set role authenticated;
+select pg_temp.ok((select count(*) from public.at_field_guide() where this_expedition and photos = 1 and sightings = 1) = 2, 'the field guide reads the discoveries');
 reset role;
 
 \o

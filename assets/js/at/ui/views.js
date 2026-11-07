@@ -11,7 +11,7 @@ import { regionAtMarker } from "../engine/progress.js";
 import { APPALACHIAN_TRAIL as TRAIL } from "../trail/appalachian-trail.js";
 import { ACTIVITY_TYPES, ACTIVITY_LABELS, MAX_NOTES_LENGTH, validateActivity, ruleFor, localDateString } from "../engine/activities.js";
 import { groupMilestoneStatus, pickTip } from "../engine/game.js";
-import { buildFieldGuide, regionProgress, speciesBadges, speciesTitle, whereToLook } from "../engine/field-guide.js";
+import { buildFieldGuide, regionProgress, speciesBadges, speciesTitle, whereToLook, wildlifeCollection } from "../engine/field-guide.js";
 import { expeditionJournal } from "../engine/journal.js";
 import { badgeCollection, expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
 
@@ -200,14 +200,28 @@ function journalSection(s) {
     body);
 }
 
-// A species badge: the species sprite in a medallion. Locked badges stay a silhouette, like the guide.
+// A species badge: the species sprite in a medallion. Locked badges stay a silhouette with a hidden
+// name and a where-to-look hint; unlocked ones show when it was first photographed and how often.
+const photoCount = (n) => `${n} ${n === 1 ? "photo" : "photos"}`;
 const speciesBadge = (b) => (b.earned
   ? h("li", { class: `badge species-badge earned${b.bonus ? " prestige" : b.rarity === "rare" ? " rare" : ""}` },
     h("span", { class: "species-medal" }, speciesArt(b.spec, true)), h("strong", {}, b.title),
     b.bonus ? h("span", { class: "tag" }, "Legend") : b.rarity === "rare" ? h("span", { class: "tag" }, "Rare find") : null,
-    h("span", { class: "hint" }, b.earnedOn ? `Earned ${day(b.earnedOn)}` : "Earned"))
+    h("span", { class: "hint" }, `${b.earnedOn ? `Found ${day(b.earnedOn)}` : "Found"}${b.photos ? ` · ${photoCount(b.photos)}` : ""}`))
   : h("li", { class: "badge species-badge locked" }, h("span", { class: "species-medal" }, speciesArt(b.spec, false)), h("strong", {}, "???"),
+    h("span", { class: "hint" }, b.hint || "Still out there somewhere."),
     h("span", { class: "sr-only" }, "Not yet photographed. Find it in Wildlife Spotting.")));
+
+// Collector stats for one hiker's lifetime wildlife collection.
+function collectionStats(c) {
+  if (!c.found && !c.legendsFound) return h("p", { class: "hint" }, "No species photographed yet. Choose this hiker in Wildlife Spotting to start their collection.");
+  return h("dl", { class: "stats collection-stats" },
+    stat("Species found", `${c.found} of ${c.total} · ${c.percent}%`),
+    stat("Rare species", `${c.rareFound} of ${c.rareTotal}`),
+    stat("Photos taken", String(c.photos)),
+    c.mostPhotographed ? stat("Most photographed", `${c.mostPhotographed.title} (${photoCount(c.mostPhotographed.photos)})`) : null,
+    c.recent.length ? stat("Recent finds", c.recent.map((r) => r.title).join(", ")) : null);
+}
 
 // One hiker's page at Camp: contribution, badges, milestones and their story so far.
 function hikerPanel(s, hk) {
@@ -241,7 +255,8 @@ function hikerPanel(s, hk) {
         h("span", { class: "sr-only" }, "Not yet earned. Keep hiking to discover it.")))),
     h("details", { class: "timeline-wrap species-badges" },
       h("summary", {}, `Species Badges (${all.species.earned} of ${all.species.total})`),
-      h("p", { class: "hint" }, "Photograph a species for the first time in Wildlife Spotting to earn its badge."),
+      collectionStats(wildlifeCollection(s.fieldGuide, { hikerId: hk.id })),
+      h("p", { class: "hint" }, "Photograph a species for the first time in Wildlife Spotting to earn its badge. Finds are saved for good, across expeditions."),
       h("ul", { class: "badge-grid species-grid" }, species.map(speciesBadge))),
     h("h4", {}, "Milestones Reached"),
     ms.landmarks.length || ms.groupMilestones.length
@@ -413,7 +428,7 @@ function guideEntry(s, theme, e) {
         h("dt", {}, "Range"), h("dd", {}, sp.range),
         sp.behavior?.habit ? [h("dt", {}, "How it moves"), h("dd", {}, `${sp.behavior.label}. ${sp.behavior.habit}`)] : null,
         places ? [h("dt", {}, "Spotted in"), h("dd", {}, places)] : null,
-        h("dt", {}, "Photos"), h("dd", {}, String(e.sightings)))));
+        h("dt", {}, "Photos"), h("dd", {}, String(e.photos)))));
 }
 
 function fieldGuideBody(s, theme, here) {
@@ -489,16 +504,24 @@ export function wildlifeView(s, a) {
     h("option", { value: "", selected: !roster.some((x) => x.id === s.lastHiker) }, "Choose a hiker"),
     roster.map((x) => h("option", { value: x.id, selected: x.id === s.lastHiker }, x.name))) : null;
   const guideCard = fieldGuideCard(s, theme, region ? region.scene : null);
-  // Species already in the guide (the chosen spotter's, or everyone's): anything else scores double.
+  // Every outing belongs to one hiker, chosen before it starts (no anonymous discoveries).
+  let spotter = null;
+  const beforeStart = () => {
+    if (!roster.length) return "Wildlife Spotting needs the hiker roster, which hasn't loaded. Please reload the page and try again.";
+    if (!who.value) { who.focus(); return "Choose who's spotting first, so every photo goes into the right hiker's field guide."; }
+    spotter = who.value;
+    return null;
+  };
+  // Species already in the spotter's field guide: anything else is a discovery and scores double.
   const known = () => (s.fieldGuideUnavailable ? null
-    : (s.fieldGuide || []).filter((r) => !(who && who.value) || r.hikerId === who.value).map((r) => r.species));
-  const game = createExpedition(theme, { localHabitat: region ? region.scene : undefined, reducedMotion, known,
+    : (s.fieldGuide || []).filter((r) => r.hikerId === who.value).map((r) => r.species));
+  const game = createExpedition(theme, { localHabitat: region ? region.scene : undefined, reducedMotion, known, beforeStart,
     onFinish: async (summary) => {
       // Empty outings aren't saved, so they never use up the 10-a-day allowance.
       if (!summary.score) { saved.textContent = summary.shots ? "Nothing to pin up this time. Spot again?" : "No photos taken, so nothing to pin up this time."; return; }
-      const hikerId = who && who.value ? who.value : null;
-      saved.textContent = "Pinning your photos to the board at Camp…";
-      saved.textContent = await a.recordExpedition({ ...summary, hikerId });
+      if (!spotter) return;
+      saved.textContent = "Saving your photos to the field guide…";
+      saved.textContent = await a.recordExpedition({ ...summary, hikerId: spotter });
       board.replaceChildren(...[].concat(photoBoard(s, theme)));
       if (guideCard.refresh) guideCard.refresh();
     } });
@@ -506,7 +529,7 @@ export function wildlifeView(s, a) {
   return h("section", { "aria-labelledby": "page-title", class: "wildlife-page" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, theme.title),
     h("p", {}, theme.intro),
-    who ? h("div", { class: "card spotter" }, field("spotter", "Who's spotting?", who, "Photos are pinned to this hiker's board at Camp.")) : null,
+    who ? h("div", { class: "card spotter" }, field("spotter", "Who's spotting?", who, "Choose a hiker before you start. Every photo is saved to their field guide and species badges at Camp, for good.")) : null,
     h("div", { class: "card" }, game.element, saved),
     guideCard,
     h("div", { class: "card" }, h("h2", {}, "The Photo Board"), board,

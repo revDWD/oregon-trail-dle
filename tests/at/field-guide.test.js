@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { THEMES } from "../../assets/js/at/engine/expedition-themes.js";
-import { buildFieldGuide, regionProgress, whereToLook, wildlifeBadges, WILDLIFE_BADGES, GROUPS, speciesBadges, speciesBadgeDays, speciesTitle, listTitles } from "../../assets/js/at/engine/field-guide.js";
+import { buildFieldGuide, regionProgress, whereToLook, wildlifeBadges, WILDLIFE_BADGES, GROUPS, speciesBadges, speciesBadgeDays, speciesTitle, listTitles, wildlifeCollection } from "../../assets/js/at/engine/field-guide.js";
 import { hikerBadges } from "../../assets/js/at/engine/hikers.js";
 import { SPRITES } from "../../assets/js/at/ui/badge-art.js";
 
@@ -147,6 +147,49 @@ test("a species badge is earned with the hiker's own first photo; repeats and ot
   assert.ok(legend.earned && legend.bonus, "a legend badge is a bonus");
   assert.equal(mine.length, theme.species.filter((sp) => sp.rarity !== "legend").length + 1);
   assert.equal(speciesBadges(rows, { hikerId: "h2" }).filter((b) => b.earned).length, 1);
+});
+
+test("unlocked species badges show total photos; locked ones keep the name secret but say where to look", () => {
+  const rows = [
+    { ...row("h1", "deer", "southern-ridges", "2026-11-05", 2), photos: 5, lastSeen: "2026-11-09" },
+    { ...row("h1", "deer", "blue-ridge", "2026-11-03"), photos: 1, lastSeen: "2026-11-03" },
+    row("h1", "bear", "blue-ridge", "2026-11-04", 2) // an older row without photos: one per sighting
+  ];
+  const mine = speciesBadges(rows, { hikerId: "h1" });
+  const deer = mine.find((b) => b.id === "species-deer");
+  assert.deepEqual([deer.photos, deer.earnedOn, deer.lastSeen, deer.hint], [6, "2026-11-03", "2026-11-09", null]);
+  assert.equal(mine.find((b) => b.id === "species-bear").photos, 2);
+  const elk = mine.find((b) => b.id === "species-elk");
+  assert.equal(elk.earned, false);
+  assert.equal(elk.hint, `Look in: ${whereToLook(elk.spec).places[0].label}.`, "only the best place, to keep the grid compact");
+});
+
+test("collector stats: found, completion, rare finds, most photographed and recent finds, per hiker", () => {
+  const rare = theme.species.find((sp) => sp.rarity === "rare");
+  const legend = theme.species.find((sp) => sp.rarity === "legend");
+  const rows = [
+    { ...row("h1", "deer", "blue-ridge", "2026-11-01"), photos: 7 },
+    { ...row("h1", "bear", "blue-ridge", "2026-11-03"), photos: 2 },
+    { ...row("h1", "elk", "blue-ridge", "2026-11-03"), photos: 7 },
+    { ...row("h1", rare.id, "blue-ridge", "2026-11-04"), photos: 1 },
+    { ...row("h1", legend.id, "blue-ridge", "2026-11-05"), photos: 1 },
+    { ...row("h2", "moose", "north-woods", "2026-11-06"), photos: 40 }
+  ];
+  const c = wildlifeCollection(rows, { hikerId: "h1" });
+  const regular = theme.species.filter((sp) => sp.rarity !== "legend").length;
+  assert.equal(c.found, 4, "legends are a bonus, outside the total");
+  assert.equal(c.total, regular);
+  assert.equal(c.percent, Math.floor((4 / regular) * 100));
+  assert.equal(c.rareFound, 1);
+  assert.equal(c.rareTotal, theme.species.filter((sp) => sp.rarity === "rare").length);
+  assert.equal(c.legendsFound, 1);
+  assert.equal(c.photos, 18);
+  assert.deepEqual(c.mostPhotographed && [c.mostPhotographed.title, c.mostPhotographed.photos], ["White-tailed Deer", 7], "ties go to the earlier find");
+  assert.deepEqual(c.recent.map((r) => r.spec.id), [legend.id, rare.id, "elk"]);
+  const other = wildlifeCollection(rows, { hikerId: "h2" });
+  assert.deepEqual([other.found, other.photos, other.mostPhotographed.spec.id], [1, 40, "moose"], "hiker A's finds never show for hiker B");
+  const none = wildlifeCollection([], { hikerId: "h1" });
+  assert.deepEqual([none.found, none.percent, none.photos, none.mostPhotographed, none.recent], [0, 0, 0, null, []]);
 });
 
 test("species badges earned the same day are grouped into one story line", () => {

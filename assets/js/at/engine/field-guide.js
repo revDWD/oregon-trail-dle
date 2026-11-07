@@ -1,7 +1,8 @@
 // Wildlife field guide: which species the expedition (or one hiker) has photographed, where and when,
 // plus the wildlife photography badges. Pure and DOM-free.
-// Input rows come from the at_field_guide() RPC: { hikerId, species, habitat, firstSeen, sightings },
-// one row per hiker x species x habitat.
+// Input rows come from the at_field_guide() RPC: { hikerId, species, habitat, firstSeen, lastSeen,
+// sightings, photos, thisExpedition }, one row per hiker x species x habitat x (this or an earlier
+// expedition). The collection is lifetime: an expedition reset never removes a hiker's finds.
 import { THEMES } from "./expedition-themes.js";
 
 export const GROUPS = Object.freeze([
@@ -30,6 +31,12 @@ export function whereToLook(spec, theme = THEMES.wildlife) {
   return { places, season, text: places.length ? `Look in: ${places.map((p) => p.label).join(", ")}.${season ? ` ${season}` : ""}` : "Nobody knows where to look." };
 }
 
+// A short locked-badge hint: "Look in: Georgia hardwood ridge." (or a gentle nudge when nowhere fits).
+export function lookHint(spec, theme = THEMES.wildlife) {
+  const best = whereToLook(spec, theme).places[0];
+  return best ? `Look in: ${best.label}.` : "Still out there somewhere.";
+}
+
 export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES.wildlife } = {}) {
   const known = new Set(theme.species.map((sp) => sp.id));
   const rows = sightings.filter((r) => known.has(r.species) && (!hikerId || r.hikerId === hikerId));
@@ -41,7 +48,9 @@ export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES
       spec,
       found: mine.length > 0,
       firstSeen: earliest(mine.map((r) => r.firstSeen)),
+      lastSeen: mine.map((r) => r.lastSeen || r.firstSeen).filter(Boolean).sort().at(-1) || null,
       sightings: mine.reduce((sum, r) => sum + (Number(r.sightings) || 0), 0),
+      photos: mine.reduce((sum, r) => sum + (Number(r.photos ?? r.sightings) || 0), 0),
       habitats: [...new Set(mine.map((r) => r.habitat).filter((id) => theme.habitats[id]))],
       firstBy: [...byHiker].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)).map(([id]) => id)[0] || null
     };
@@ -130,8 +139,34 @@ export function speciesBadges(sightings = [], { hikerId = null, theme = THEMES.w
       bonus: isLegend(e.spec), title: speciesTitle(e.spec.name),
       description: isLegend(e.spec) ? "A Trail Legend, caught on camera. Nobody will believe it."
         : `Photograph ${withArticle(e.spec.name)} in Wildlife Spotting.`,
-      earned: e.found, earnedOn: e.found ? e.firstSeen : null
+      // Locked badges keep the name secret but say where to look (the best place only, to stay compact).
+      hint: e.found ? null : lookHint(e.spec, theme),
+      earned: e.found, earnedOn: e.found ? e.firstSeen : null,
+      photos: e.photos, lastSeen: e.lastSeen
     }));
+}
+
+// A hiker's lifetime wildlife collection, for the collector stats at Camp. Legends stay a bonus,
+// outside every total. mostPhotographed breaks ties by the earlier find; recent is newest first.
+export function wildlifeCollection(sightings = [], { hikerId = null, theme = THEMES.wildlife, recentCount = 3 } = {}) {
+  const guide = buildFieldGuide(sightings, { hikerId, theme });
+  const found = guide.entries.filter((e) => e.found);
+  const rare = guide.entries.filter((e) => e.spec.rarity === "rare");
+  const byDate = (a, b) => (a.firstSeen < b.firstSeen ? -1 : a.firstSeen > b.firstSeen ? 1 : a.spec.name.localeCompare(b.spec.name));
+  const most = [...found].sort((a, b) => (b.photos - a.photos) || byDate(a, b))[0] || null;
+  const recent = [...found].sort((a, b) => -byDate(a, b)).slice(0, recentCount);
+  const photos = found.reduce((sum, e) => sum + e.photos, 0);
+  return {
+    found: guide.found,
+    total: guide.total,
+    percent: guide.total ? Math.floor((guide.found / guide.total) * 100) : 0,
+    rareFound: rare.filter((e) => e.found).length,
+    rareTotal: rare.length,
+    legendsFound: guide.legendsFound,
+    photos,
+    mostPhotographed: most ? { spec: most.spec, title: speciesTitle(most.spec.name), photos: most.photos } : null,
+    recent: recent.map((e) => ({ spec: e.spec, title: speciesTitle(e.spec.name), firstSeen: e.firstSeen }))
+  };
 }
 
 // Species badges earned on the same day, as one story line each: [{ date, badges, ids, titles }],

@@ -36,14 +36,20 @@ export function isMissingFunction(error) {
   return code === "PGRST202" || code === "42883" || /could not find the function/i.test(String((raw && raw.message) || ""));
 }
 
-// One at_field_guide() row: a hiker's sightings of one species in one habitat.
+// One at_field_guide() row: a hiker's saved observations of one species in one habitat, during this
+// expedition or an earlier one. photos/lastSeen/thisExpedition arrive with 20261109; before that a
+// sighting is one photo and everything belongs to the current expedition.
 export function sightingFromRow(row) {
+  const sightings = Number(row.sightings) || 0;
   return {
     hikerId: row.hiker_id || null,
     species: row.species,
     habitat: row.habitat || "",
     firstSeen: row.first_seen,
-    sightings: Number(row.sightings) || 0
+    lastSeen: row.last_seen || row.first_seen || null,
+    sightings,
+    photos: row.photos === undefined || row.photos === null ? sightings : Number(row.photos) || 0,
+    thisExpedition: row.this_expedition !== false
   };
 }
 

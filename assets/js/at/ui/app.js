@@ -244,15 +244,16 @@ const actions = {
   },
   // Returns a message for the expedition page; does not re-render (the finished round stays on screen).
   async recordExpedition(summary) {
+    if (!summary.hikerId) return "Choose who's spotting first, so these photos go into the right hiker's field guide.";
     try {
       const before = earnedSnapshot();
-      await layer.expeditions.record(summary);
+      const saved = await layer.expeditions.record(summary);
       actions.rememberHiker(summary.hikerId);
       await loadExpedition(false);
       const unlocked = before.size ? newlyEarned(before) : [];
-      const who = (state.hikers.find((x) => x.id === summary.hikerId) || {}).name;
-      if (who) return `Pinned to ${who}'s spot on the photo board at Camp: ${summary.score} photo points.${unlocked.length ? ` 🎉 ${unlocked.join(" ")}` : ""}`;
-      return state.hikers.length ? `Saved ${summary.score} photo points. Choose who's spotting to pin the next outing to a hiker.` : `Saved ${summary.score} photo points.`;
+      const who = (state.hikers.find((x) => x.id === summary.hikerId) || {}).name || "the hiker";
+      const note = saved && saved.discoveriesSaved === false ? " The field guide fills in once the latest database update is applied." : "";
+      return `Saved to ${who}'s field guide and the photo board at Camp: ${summary.score} photo points.${unlocked.length ? ` 🎉 ${unlocked.join(" ")}` : ""}${note}`;
     } catch (e) { return friendly(e); }
   }
 };

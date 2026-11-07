@@ -242,28 +242,44 @@ test("wildlife outings can be pinned for a hiker", async () => {
   assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 1, shots: 2, hiker_id: "h2" });
 });
 
-test("field guide: outings save the species seen; the guide maps from the aggregate RPC", async () => {
+test("field guide: outings save each species with its photo count; the guide maps from the aggregate RPC", async () => {
   const client = createFakeClient({ session: signedIn, respond: (call) => call.name === "at_field_guide"
-    ? { data: [{ hiker_id: "h1", species: "deer", habitat: "blue-ridge", first_seen: "2026-11-02", sightings: "3" }], error: null }
-    : { data: [{ id: "r1" }], error: null } });
+    ? { data: [{ hiker_id: "h1", species: "deer", habitat: "blue-ridge", first_seen: "2026-11-02", sightings: "3", photos: "5", last_seen: "2026-11-09", this_expedition: false }], error: null }
+    : { data: { id: "r1" }, error: null } });
   const data = createDataLayer(client);
-  await data.expeditions.record({ theme: "wildlife", score: 10, hits: 2, shots: 2, hikerId: "h1", species: ["deer", "Bad id", "deer", "turkey"], habitat: "blue-ridge" });
-  assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 2, shots: 2, hiker_id: "h1", species: ["deer", "turkey"], habitat: "blue-ridge" });
-  assert.deepEqual(await data.expedition.fieldGuide(), [{ hikerId: "h1", species: "deer", habitat: "blue-ridge", firstSeen: "2026-11-02", sightings: 3 }]);
+  const saved = await data.expeditions.record({ theme: "wildlife", score: 10, hits: 3, shots: 3, hikerId: "h1", species: ["turkey", "Bad id", "deer"], caught: { turkey: 1, deer: 2, "Bad id": 1 }, habitat: "blue-ridge" });
+  assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 3, shots: 3, hiker_id: "h1", species: ["deer", "turkey"], habitat: "blue-ridge", photos: [2, 1] });
+  assert.equal(saved.discoveriesSaved, true);
+  assert.deepEqual(await data.expedition.fieldGuide(), [{ hikerId: "h1", species: "deer", habitat: "blue-ridge", firstSeen: "2026-11-02", lastSeen: "2026-11-09", sightings: 3, photos: 5, thisExpedition: false }]);
   assert.equal(client.calls.at(-1).name, "at_field_guide");
 });
 
-test("field guide: without the migration, outings still save (minus species)", async () => {
+test("field guide: older at_field_guide rows count one photo per sighting, all this expedition", async () => {
+  const { sightingFromRow } = await import("../../assets/js/at/data/mappers.js");
+  assert.deepEqual(sightingFromRow({ hiker_id: "h1", species: "deer", habitat: "lakes", first_seen: "2026-11-02", sightings: "2" }),
+    { hikerId: "h1", species: "deer", habitat: "lakes", firstSeen: "2026-11-02", lastSeen: "2026-11-02", sightings: 2, photos: 2, thisExpedition: true });
+});
+
+test("field guide: species without a photo count are one photo each", async () => {
+  const client = createFakeClient({ session: signedIn, respond: () => ({ data: { id: "r1" }, error: null }) });
+  await createDataLayer(client).expeditions.record({ theme: "wildlife", score: 10, hits: 2, shots: 2, hikerId: "h1", species: ["deer", "deer", "turkey"], habitat: "lakes" });
+  assert.deepEqual(client.calls[0].payload.photos, [1, 1]);
+});
+
+test("field guide: without the migrations, outings still save, saying discoveries weren't", async () => {
   let inserts = 0;
   const client = createFakeClient({ session: signedIn, respond: (call) => {
     if (call.op !== "insert") return { data: null, error: null };
     inserts += 1;
-    return inserts === 1 ? { data: null, error: { code: "PGRST204", message: "Could not find the 'species' column" } } : { data: { id: "r1" }, error: null };
+    return inserts === 1 ? { data: null, error: { code: "PGRST204", message: "Could not find the 'photos' column" } }
+      : inserts === 2 ? { data: null, error: { code: "PGRST204", message: "Could not find the 'species' column" } } : { data: { id: "r1" }, error: null };
   } });
-  await createDataLayer(client).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 1, species: ["deer"], habitat: "lakes" });
+  const saved = await createDataLayer(client).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 1, hikerId: "h1", species: ["deer"], caught: { deer: 1 }, habitat: "lakes" });
   const sent = client.calls.filter((c) => c.op === "insert").map((c) => c.payload);
-  assert.equal(sent.length, 2);
-  assert.deepEqual(sent[1], { theme: "wildlife", score: 10, hits: 1, shots: 1 });
+  assert.equal(sent.length, 3);
+  assert.deepEqual(sent[1], { theme: "wildlife", score: 10, hits: 1, shots: 1, hiker_id: "h1", species: ["deer"], habitat: "lakes" }, "20261106 without 20261109: species, no photo counts");
+  assert.deepEqual(sent[2], { theme: "wildlife", score: 10, hits: 1, shots: 1, hiker_id: "h1" });
+  assert.equal(saved.discoveriesSaved, false);
   // Other errors are not retried.
   const strict = createFakeClient({ session: signedIn, respond: () => ({ data: null, error: { code: "23514", message: "check" } }) });
   await assert.rejects(() => createDataLayer(strict).expeditions.record({ theme: "wildlife", score: 10, hits: 1, shots: 1, species: ["deer"] }), (e) => e.code === "validation");

@@ -522,3 +522,35 @@ Safety: everything is in one idempotent migration (`20261108000000_at_cleanup.sq
 ### 16.4 Fresh start
 
 `supabase/expedition-reset.sql` (not a migration) backs up and clears `at_activities` and `at_expedition_runs` in one transaction. Everything else that looks like progress is computed from those two tables, so this is the whole reset. Hikers, conversion rules, dispatches, organizers and all app-defined content (trail, landmarks, species, badges) are untouched. `supabase/tests/reset.test.sql` checks the reset, the backups, that everything can be earned again (logging, marks, field guide, first dates, daily outing caps), and the documented undo.
+
+> Since §17 the reset keeps wildlife observations, so collections survive it.
+
+## 17. Wildlife discovery persistence
+
+**Finding.** `20261106000000_at_field_guide.sql` was never applied to the live project. The client fell back (fail-soft) to saving outings with score, hits and shots only, so no species was ever stored and Camp's species badges could not unlock. Those early outings cannot be recovered.
+
+**Goal.** Each hiker builds a permanent field guide: choose a hiker, photograph animals, and the finds are saved for good, on every device and across expeditions.
+
+### 17.1 Data model (`20261109000000_at_wildlife_discoveries.sql`)
+
+- `at_expedition_runs` gains `species`, `habitat` and `photos` (photos per species). A trigger dedupes and sorts species (summing photos) and refuses more photos than hits.
+- `at_expeditions`: one row per expedition, exactly one open (unique partial index). Seeded as "Expedition 1".
+- `at_wildlife_observations`: hiker, species, outing (`run_id`), expedition, habitat, photos, date, `is_first`. Filled only by an AFTER INSERT trigger on runs, so the 10-a-day cap and every check still apply; a per-hiker advisory lock plus a unique partial index on `(hiker_id, species) where is_first` give exactly one first discovery. `run_id`/`user_id` become null if the run or device is deleted, so finds survive. No API grants; reads go through `at_field_guide()`.
+- `at_wildlife_discoveries`: owner-only view (hiker, species, first/last seen, outings, photos) for the SQL editor and future statistics pages. Counts are computed, never stored, so they cannot drift.
+- `at_field_guide()` now reads observations and adds `photos`, `last_seen` and `this_expedition`.
+- **No `animals` table.** The species catalogue (sprites, behaviour, habitats, rarity, facts) already lives in `expedition-themes.js` and is test-checked; copying it into the database would create two sources of truth. **No `best_score`**: points are fixed by rarity, so it would add nothing.
+
+### 17.2 Client
+
+- Wildlife Spotting requires a hiker before the round starts (friendly message, focus moves to the picker). The spotter is fixed for the round.
+- `layer.expeditions.record` sends species and photos per species; on a database without the new columns it falls back step by step and reports `discoveriesSaved: false`.
+- Camp's Species Badges: unlocked badges show the find date and photo count; locked badges show "???" and where to look. Collector stats above the grid: species found (with %), rare species, photos taken, most photographed, recent finds.
+- The Expedition Journal tells only the current expedition's wildlife stories (`wildlifeSince`); collections are lifetime.
+
+### 17.3 Tests
+
+`rls.test.sql` (observations, first discovery, isolation between hikers, no API access, photos validation), `reset.test.sql` (observations survive, new expedition opens), `upgrade.test.sql` and a new `wildlife-upgrade.test.sql` (a database with 20261106 applied and existing species is backfilled once, idempotently). JS tests for the payload, mapping, collector stats, hints and journal filtering.
+
+### 17.4 Next
+
+Regional field guides and expedition wildlife reports (`this_expedition`, `habitat`), rare-find dispatches, community leaderboards from `at_wildlife_discoveries`, and sighting timelines from observations.

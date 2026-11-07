@@ -40,6 +40,20 @@ test("no service-role key or other credential-looking value in the migration", (
   assert.doesNotMatch(migration, /service_role|eyJ[A-Za-z0-9_-]{20,}|sb_secret_/);
 });
 
+test("the wildlife discoveries migration is pasteable, private and never duplicates a discovery", async () => {
+  const sql = await readFile(`${root}supabase/migrations/20261109000000_at_wildlife_discoveries.sql`, "utf8");
+  const code = sql.replace(/--.*$/gm, "");
+  assert.doesNotMatch(code, /\$\$|\$[A-Za-z_]+\$/, "no dollar quoting: the owner pastes this into the SQL Editor via chat");
+  for (const table of ["at_expeditions", "at_wildlife_observations"]) {
+    assert.match(code, new RegExp(`alter table public\\.${table} enable row level security`), table);
+    assert.match(code, new RegExp(`revoke all on (table )?public\\.${table}[^;]*from[^;]*anon`, "i"), `${table} is never readable directly`);
+  }
+  assert.doesNotMatch(code, /grant[^;]*\bto\b[^;]*\banon\b/i);
+  assert.match(code, /unique \(run_id, species\)/, "one observation per species per outing");
+  assert.match(code, /create unique index if not exists at_wildlife_observations_first[\s\S]*?where is_first/, "one first discovery per hiker and species");
+  assert.match(code, /security_invoker/, "the discoveries view never bypasses RLS");
+});
+
 test("RLS and privilege tests pass against a real PostgreSQL (skipped when PostgreSQL is not installed)", (t) => {
   const result = spawnSync("bash", [`${root}supabase/tests/run-rls-tests.sh`], { encoding: "utf8" });
   if (result.status === 3) {

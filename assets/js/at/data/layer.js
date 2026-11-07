@@ -164,19 +164,29 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
 
   // Camp minigame results. They stock the camp; they never add trail miles.
   const expeditions = {
-    // species/habitat feed the field guide. If that migration isn't applied yet, the run is saved without them.
-    async record({ theme, score, hits, shots, hikerId = null, species = [], habitat = null }) {
+    // species/habitat/photos become the hiker's wildlife observations (a database trigger records
+    // them, marking first discoveries). caught = { speciesId: photos }. Fail-soft: if the wildlife
+    // migration isn't applied yet the run is still saved, and discoveriesSaved says so.
+    async record({ theme, score, hits, shots, hikerId = null, species = [], caught = null, habitat = null }) {
       await requireUser();
       const payload = { theme, score: Math.round(score), hits: Math.round(hits), shots: Math.round(shots) };
       if (hikerId) payload.hiker_id = hikerId;
       const insert = (row) => run(client.from("at_expedition_runs").insert(row).select("id, theme, score, played_on").single());
-      const ids = [...new Set(species)].filter((id) => /^[a-z][a-z0-9-]{1,30}$/.test(id)).slice(0, 40);
-      if (!ids.length && !habitat) return insert(payload);
-      try {
-        return await insert({ ...payload, species: ids, habitat: habitat || null });
-      } catch (error) {
-        if (!isMissingColumn(error)) throw error;
-        return insert(payload);
+      const counts = caught && typeof caught === "object" ? caught : Object.fromEntries(species.map((id) => [id, 1]));
+      const ids = [...new Set([...species, ...Object.keys(counts)])].filter((id) => /^[a-z][a-z0-9-]{1,30}$/.test(id)).sort().slice(0, 40);
+      if (!ids.length && !habitat) return { ...(await insert(payload)), discoveriesSaved: true };
+      const photos = ids.map((id) => Math.min(Math.max(Math.round(Number(counts[id]) || 1), 1), 100));
+      const attempts = [
+        { ...payload, species: ids, habitat: habitat || null, photos },
+        { ...payload, species: ids, habitat: habitat || null },
+        payload
+      ];
+      for (const [i, row] of attempts.entries()) {
+        try {
+          return { ...(await insert(row)), discoveriesSaved: i === 0 };
+        } catch (error) {
+          if (!isMissingColumn(error) || i === attempts.length - 1) throw error;
+        }
       }
     }
   };

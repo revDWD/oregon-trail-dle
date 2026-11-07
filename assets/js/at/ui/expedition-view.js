@@ -325,9 +325,10 @@ const isField = (target) => Boolean(target && target.closest && target.closest("
  * @param theme    a theme from expedition-themes.js
  * @param options  { localHabitat (region scene), month (1-12), reducedMotion, random, known (species ids
  *                  already in the field guide, or a function returning them, read at the start of each
- *                  outing; null = guide unavailable, no discovery bonus), onFinish(summary) -> Promise|void }
+ *                  outing; null = guide unavailable, no discovery bonus), onFinish(summary) -> Promise|void,
+ *                  beforeStart() -> null to start, or a friendly message explaining why not (e.g. no hiker) }
  */
-export function createExpedition(theme, { localHabitat, month = new Date().getMonth() + 1, reducedMotion = false, random, known = null, onFinish = () => {} } = {}) {
+export function createExpedition(theme, { localHabitat, month = new Date().getMonth() + 1, reducedMotion = false, random, known = null, onFinish = () => {}, beforeStart = () => null } = {}) {
   const rules = theme.rounds;
   const knownNow = () => { const list = typeof known === "function" ? known() : known; return list ? [...list] : null; };
   const pickOuting = () => chooseOuting(theme, localHabitat, { random, month });
@@ -432,7 +433,10 @@ export function createExpedition(theme, { localHabitat, month = new Date().getMo
   }
 
   function begin() {
+    const blocked = beforeStart();
+    if (blocked) { message.textContent = blocked; return; }
     if (state.over || state.shots) state = roundFor(pickOuting());
+    else { const list = knownNow(); state.known = list ? new Set(list) : null; } // the spotter may have changed
     running = true;
     startButton.hidden = true;
     message.textContent = theme.text.intro(groundText());

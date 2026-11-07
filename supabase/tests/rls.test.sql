@@ -361,5 +361,62 @@ select t.ok(t.count('select 1 from public.at_field_guide()') = 2, 'another devic
 select t.ok(t.count($$select 1 from public.at_expedition_runs where habitat = 'blue-ridge'$$) = 0, 'but not the runs themselves');
 reset role;
 
+-- Wildlife discoveries (20261109000000_at_wildlife_discoveries.sql) ------------------------------------
+select t.ok(not has_table_privilege(r, 'public.at_wildlife_observations', p)
+        and not has_table_privilege(r, 'public.at_expeditions', p)
+        and not has_table_privilege(r, 'public.at_wildlife_discoveries', p), 'observations, expeditions and discoveries are not exposed: ' || r || ' ' || p)
+  from unnest(array['anon', 'authenticated']) r, unnest(array['select', 'insert', 'update', 'delete']) p;
+select t.ok((select count(*) from public.at_expeditions where ended_on is null) = 1, 'exactly one open expedition');
+select t.fails($$insert into public.at_expeditions (name) values ('Second open')$$, '23505', 'only one expedition can be open');
+-- Carol's outing for Kevin above became one observation per species, both first discoveries.
+select t.ok((select count(*) from public.at_wildlife_observations where hiker_id = :'kevin') = 2, 'one observation per species');
+select t.ok((select bool_and(is_first and run_id is not null and habitat = 'blue-ridge'
+                     and expedition_id = (select id from public.at_expeditions where ended_on is null))
+               from public.at_wildlife_observations where hiker_id = :'kevin'), 'first discoveries, linked to the outing and the open expedition');
+select t.ok((select string_agg(species || '=' || photos, ',' order by species) from public.at_wildlife_observations where hiker_id = :'kevin') = 'deer=2,turkey=1', 'each listed photo counts');
+select t.ok((select count(*) from public.at_wildlife_observations where hiker_id = :'david') = 0, 'outings without species record no observations');
+
+select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003', false) \gset
+set role authenticated;
+select t.fails('select 1 from public.at_wildlife_observations', '42501', 'devices cannot read observations directly');
+select t.fails($$insert into public.at_wildlife_observations (hiker_id, expedition_id, species) select '$$ || :'kevin' || $$', id, 'deer' from public.at_expeditions$$, '42501', 'devices cannot write observations directly');
+select t.fails('select 1 from public.at_wildlife_discoveries', '42501', 'devices cannot read the discoveries view');
+-- Photos per species add up; a repeat species is not a new discovery.
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id, species, photos, habitat) values ('wildlife', 20, 4, 4, '$$ || :'kevin' || $$', '{turkey,deer,turkey}', '{1,2,1}', 'blue-ridge')$$) = 1, 'repeat species are recorded');
+select t.ok((select species = '{deer,turkey}' and photos = '{2,2}' from public.at_expedition_runs where score = 20 and hits = 4 and habitat = 'blue-ridge'), 'photos are summed per species and aligned with it');
+select t.ok((select sightings = 2 and photos = 4 and last_seen = current_date and this_expedition from public.at_field_guide()
+              where hiker_id = :'kevin' and species = 'deer'), 'the field guide counts outings and photos');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id, species, photos) values ('wildlife', 5, 2, 2, '$$ || :'kevin' || $$', '{deer}', '{5}')$$, '23514', 'no more photos than frames');
+select t.fails($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id, species, photos) values ('wildlife', 5, 2, 2, '$$ || :'kevin' || $$', '{deer}', '{0}')$$, '23514', 'photo counts are positive');
+-- No hiker, no discovery: the outing still saves to the device.
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots, species, habitat) values ('wildlife', 10, 1, 1, '{red-fox}', 'lakes')$$) = 1, 'an outing without a hiker still saves');
+-- Hiker A's discoveries are not Hiker B's.
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id, species, habitat) values ('wildlife', 10, 1, 1, '$$ || :'david' || $$', '{monarch}', 'lakes')$$) = 1, 'david photographs a monarch');
+select t.ok((select count(*) from public.at_field_guide() where hiker_id = :'david') = 1
+        and (select count(*) from public.at_field_guide() where hiker_id = :'david' and species in ('deer', 'turkey')) = 0
+        and (select count(*) from public.at_field_guide() where hiker_id = :'kevin' and species = 'monarch') = 0, 'each hiker keeps their own discoveries');
+reset role;
+select t.ok((select count(*) from public.at_wildlife_observations where species = 'red-fox') = 0, 'outings without a hiker record no discoveries');
+select t.ok((select count(*) from public.at_wildlife_observations where hiker_id = :'kevin' and species = 'deer' and is_first) = 1
+        and (select count(*) from public.at_wildlife_observations where hiker_id = :'kevin' and species = 'deer') = 2, 'one first discovery per hiker and species');
+select t.ok((select is_first from public.at_wildlife_observations where hiker_id = :'david' and species = 'monarch'), 'david''s monarch is his first');
+select t.fails($$insert into public.at_wildlife_observations (hiker_id, expedition_id, species, is_first) select '$$ || :'kevin' || $$', id, 'deer', true from public.at_expeditions$$, '23505', 'a second first discovery is impossible');
+select t.ok((select times_photographed = 4 and outings = 2 and first_discovered_on = current_date from public.at_wildlife_discoveries
+              where hiker_id = :'kevin' and species = 'deer'), 'the discoveries view sums photos per hiker and species');
+
+-- Discoveries belong to the hiker, not the device: losing the device keeps them.
+insert into auth.users (id, email) values ('eeeeeeee-0000-4000-8000-000000000005', null);
+select set_config('request.jwt.claim.sub', 'eeeeeeee-0000-4000-8000-000000000005', false) \gset
+set role authenticated;
+select t.ok(t.rows($$insert into public.at_expedition_runs (theme, score, hits, shots, hiker_id, species, habitat) values ('wildlife', 10, 1, 1, '$$ || :'david' || $$', '{black-bear}', 'smokies')$$) = 1, 'a new device photographs for david');
+reset role;
+delete from auth.users where id = 'eeeeeeee-0000-4000-8000-000000000005';
+select t.ok((select user_id is null and run_id is null and is_first from public.at_wildlife_observations
+              where hiker_id = :'david' and species = 'black-bear'), 'the observation outlives the device and its outing');
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
+set role authenticated;
+select t.ok((select count(*) from public.at_field_guide() where hiker_id = :'david') = 2, 'and stays in the shared field guide');
+reset role;
+
 \o
 \echo RLS TESTS PASSED

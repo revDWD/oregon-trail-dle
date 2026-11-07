@@ -34,7 +34,7 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 | `assets/js/at/data/` | The only code that talks to Supabase |
 | `assets/js/at/ui/` | DOM helpers, map, camp scene, expedition canvas, illustrations, views, app shell |
 | `supabase/migrations/` | Schema, RLS, RPCs |
-| `supabase/expedition-reset.sql` | Fresh start at mile 0 (backs up first; run by hand, not a migration) |
+| `supabase/expedition-reset.sql` | Fresh start at mile 0, keeping wildlife collections (backs up first; run by hand, not a migration) |
 | `supabase/tests/` | RLS, reset and upgrade tests run against real PostgreSQL |
 | `tests/at/` | Node tests |
 | `docs/` | Architecture, Phase 2/3 reviews and roadmap, trail data sources, deployment |

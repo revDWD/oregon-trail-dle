@@ -69,6 +69,8 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .75rem; margin: 0; }
 .stat dt { font-size: .85rem; color: var(--muted); }
 .stat dd { margin: 0; font-weight: 700; font-size: 1.1rem; }
+.collection-stats { margin: .5rem 0; }
+.collection-stats .stat:nth-child(n + 4) { grid-column: 1 / -1; } /* names (most photographed, recent finds) get a full row */
 
 /* ---- Trail map ---- */
 .map-wrap { display: grid; gap: .6rem; }

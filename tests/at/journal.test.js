@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { THEMES } from "../../assets/js/at/engine/expedition-themes.js";
 import { trailRegister } from "../../assets/js/at/engine/hikers.js";
-import { expeditionJournal } from "../../assets/js/at/engine/journal.js";
+import { expeditionJournal, wildlifeSince } from "../../assets/js/at/engine/journal.js";
 
 const theme = THEMES.wildlife;
 const david = { id: "h-david", name: "David", totalMiles: 60, weekMiles: 6, activityCount: 4, firstActivityDate: "2026-11-01",
@@ -76,6 +76,23 @@ test("an empty expedition has an empty journal, and a missing field guide just l
   const list = journal({ sightings: [] });
   assert.ok(list.length > 0);
   assert.ok(!list.some((e) => e.kind === "species" || e.kind === "guide" || e.kind === "section"));
+});
+
+test("after a reset the journal keeps only this expedition's wildlife stories; the collection stays lifetime", () => {
+  assert.equal(wildlifeSince(sightings), null, "no earlier expedition: nothing is filtered");
+  const earlier = sightings.map((r) => ({ ...r, thisExpedition: false }));
+  const now = [{ ...row("h-david", "deer", "2026-12-02"), thisExpedition: true }, { ...row("h-david", "elk", "2026-12-03", "blue-ridge"), thisExpedition: true }];
+  assert.equal(wildlifeSince([...earlier, ...now]), "2026-12-02");
+  assert.equal(wildlifeSince(earlier), "9999-12-31", "nothing photographed since the reset");
+  const list = journal({ sightings: [...earlier, ...now] });
+  const ids = list.map((e) => e.id);
+  assert.ok(ids.includes("species-elk"), "a first photo during this expedition is told");
+  assert.ok(!ids.includes("species-deer") && !ids.includes("species-white-deer"), "earlier expeditions' finds aren't retold");
+  assert.ok(!ids.includes("badge-h-david-rare-find"), "nor their wildlife badges");
+  assert.ok(ids.includes("badge-h-david-miles-50"), "non-wildlife entries are untouched");
+  assert.ok(list.every((e) => !("wild" in e)), "internal flags never leak");
+  const quiet = journal({ sightings: earlier });
+  assert.ok(!quiet.some((e) => e.kind === "species" || e.kind === "section" || e.kind === "guide"));
 });
 
 test("species badges join the journal without repeating the expedition's first photos", () => {

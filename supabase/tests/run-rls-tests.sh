@@ -56,3 +56,15 @@ for f in "$HERE"/../migrations/*.sql; do
   [[ "$m" < "$CLEANUP" ]] && run_pg "${UPSQL[@]}" -f "$WORK/$m"
 done
 run_pg "${UPSQL[@]}" -f "$WORK/upgrade.test.sql"
+
+# Live path: the project never received 20261106 (field guide), so 20261109 must stand on its own.
+WILDLIFE="20261109000000_at_wildlife_discoveries.sql"
+run_pg "${PSQL[@]}" -c "create database wildlife"
+WSQL=("$BIN/psql" -h "$WORK" -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -d wildlife)
+run_pg "${WSQL[@]}" -f "$WORK/supabase-shim.sql"
+run_pg "${WSQL[@]}" -f "$WORK/legacy-oregon-schema.sql" >/dev/null
+for f in "$HERE"/../migrations/*.sql; do
+  m="$(basename "$f")"
+  [[ "$m" < "$WILDLIFE" && "$m" != 20261106* ]] && run_pg "${WSQL[@]}" -f "$WORK/$m"
+done
+run_pg "${WSQL[@]}" -f "$WORK/wildlife-upgrade.test.sql"

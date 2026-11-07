@@ -84,8 +84,14 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Tables are prefixed `at_`. Every table in `public` is now `at_*` (test-enforced): the old Oregon Trail tables (`community_progress`, `mileage_log`) and the unused challenge/profile tables were retired by `20261108000000_at_cleanup.sql` (see `docs/review-and-roadmap.md` §16).
   - Retired data is **archived, not destroyed**: it moves to the private `archive` schema (no grants to anon/authenticated, not in Realtime). Expedition resets back up there too.
   - Migrations live in `supabase/migrations/`, one idempotent file per change.
-  - **Fresh start:** `supabase/expedition-reset.sql` backs up then clears `at_activities` and `at_expedition_runs`. Every mile, mark, badge, journal entry, field-guide find and Camp stat is derived from those two tables, so nothing else needs clearing. Hikers, rules, dispatches and organizers stay. Tested in `supabase/tests/reset.test.sql`.
-  - What other devices can see comes only from SECURITY DEFINER RPCs that return **aggregates**: `at_expedition_hikers`, `at_expedition_marks`, `at_field_guide` and `at_my_summary`.
+  - **Wildlife collection** (`20261109000000_at_wildlife_discoveries.sql`, which supersedes the never-applied `20261106`):
+    - `at_expedition_runs` stores `species`, `habitat` and `photos` (photo count per species, aligned with `species`).
+    - `at_wildlife_observations`: one row per hiker, species and outing (`is_first` marks a hiker's first ever photo; a unique partial index allows only one). Written **only** by a trigger on runs, so the daily cap and checks still apply. No API grants.
+    - `at_expeditions`: exactly one open expedition. The reset closes it and opens the next.
+    - `at_wildlife_discoveries`: owner-only view, one row per hiker and species, for the SQL editor and future stats pages.
+    - Species stay defined in `expedition-themes.js` (no `animals` table): sprites, behaviour, habitats and rarity live there, and the DB only checks the key format.
+  - **Fresh start:** `supabase/expedition-reset.sql` backs up then clears `at_activities` and `at_expedition_runs`, and opens a new `at_expeditions` row. Every mile, mark, achievement badge, journal entry and Camp stat is derived from those two tables, so nothing else needs clearing. **Wildlife observations are kept** (each hiker's field guide and species badges are for good); they are backed up too. Hikers, rules, dispatches and organizers stay. Tested in `supabase/tests/reset.test.sql`.
+  - What other devices can see comes only from SECURITY DEFINER RPCs that return **aggregates**: `at_expedition_hikers`, `at_expedition_marks`, `at_field_guide` (per hiker and species: first/last seen, sightings, photos, `this_expedition`) and `at_my_summary`.
   - Devices own, and alone can edit, the rows they logged. Credited miles and factors are set by triggers.
 - **Tooling**
   - `scripts/landmark-photos.mjs` (with `scripts/lib/commons.mjs`) fetches openly licensed landmark photos.
@@ -136,7 +142,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - 11 wildlife badges.
   - Art is original 12×12 pixel sprites: unique per badge, palette-checked by tests.
   - "Master Naturalist" (`complete-field-guide`) is the only `prestige` badge and gets a gold medallion.
-- **Species badges**, one per species, from `speciesBadges()` (`field-guide.js`). Kept apart from `hikerBadges()` (the 24 achievement badges).
+- **Species badges**, one per species, from `speciesBadges()` (`field-guide.js`). Kept apart from `hikerBadges()` (the 24 achievement badges). Unlocked badges show the find date and photo count; locked ones show "???" and a short where-to-look hint (`lookHint`). Above the grid, `wildlifeCollection()` gives collector stats (found of total, rare species, photos, most photographed, recent finds). All lifetime, across expeditions.
   - Earned with the hiker's own first photo of that species; the date is that photo's `firstSeen`. Repeat photos add nothing.
   - Art is the species sprite in a medallion; locked badges are a silhouette with "???". Rare species get a teal ring.
   - Trail Legends are secret: their badges appear only once photographed, in gold, as a bonus outside every total.
@@ -148,10 +154,11 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - **Scoring:** each species scores once per outing; repeats score 0 and show "SEEN". Species new to the field guide score ×2. "New" is judged against the chosen spotter's guide, or everyone's if nobody is chosen; with no guide there is no bonus.
   - **Density:** one spawn every 1.8 s, at most 4 animals in view, groups of at most 3.
   - **Field guide:** groups, "N to go", Trail sections completion (a species counts only when photographed *in* its section), first finder, and facts.
+  - **A hiker is required to play** (`beforeStart` in `expedition-view.js`): no anonymous outings. The spotter is fixed at the start of the round, and the outing saves for them (`recordExpedition` refuses without a hiker). Discoveries register when the outing is saved, not per photo.
   - **Behaviour classes:** every species inherits one of 14 classes in `BEHAVIOR` (`expedition-themes.js`, via `behavior: BEHAVIOR.<class>`): grazer, skittish, predator, largeMammal, groundBird, songbird, raptor, owl, swimmer, butterfly, darter, hoverer, crawler, cryptid. A class sets pace, pauses, wobble (erratic paths), hover, how wary it is, and how it reacts to the camera: `flee` (bolt away at ×`flee`), `flush` (birds burst up and fly off-screen) or `ignore` (bears, moose, crawlers carry on). `react === "ignore"` ⇔ `!skittish` (test-enforced). Grazers freeze head-up before bolting; skittish animals zigzag. The field guide shows the class as "How it moves". Reduced motion still scales every speed by 0.6.
   - Rules: at most 40 species (DB cap) and no hunting words (both test-enforced). New activities should be **new theme objects**, not new engines.
 - **History**
-  - **Expedition Journal** (top): one dated record, newest first, of landmarks and group milestones (who carried it), the expedition's first photo of each species (rare and legendary finds flagged), field-guide milestones (10, 25, complete), trail sections completed, and every hiker's badge unlocks (species badges grouped per hiker per day). Built by `expeditionJournal()` from data already loaded; no new tables or RPCs. 12 entries show, the rest sit under "Older Entries".
+  - **Expedition Journal** (top): one dated record, newest first, of landmarks and group milestones (who carried it), the expedition's first photo of each species (rare and legendary finds flagged), field-guide milestones (10, 25, complete), trail sections completed, and every hiker's badge unlocks (species badges grouped per hiker per day). Built by `expeditionJournal()` from data already loaded; no new tables or RPCs. Wildlife stories cover the current expedition only (`wildlifeSince()`), while collections stay lifetime. 12 entries show, the rest sit under "Older Entries".
   - **Your Activities**: this device's own activities, editable and deletable.
   - The "About this device" card (with the Device ID) was removed on request. To make a device an organizer, see `docs/deployment.md` §2b (find its `user_id` on an activity it logged).
 
@@ -163,7 +170,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 - **Add landmark photos:** run the "Landmark photos" workflow, then review the PR: look at every image (searches sometimes return the wrong place) and rewrite the alt text by hand. Add rejected Commons file titles to `REJECTED` in the script and re-run with those ids. For a hand-picked photo, add `photo` to the landmark's story.
 - **Add a species:** add one object in `NEW_SPECIES` plus habitat weights in `expedition-themes.js`, and give it `behavior: BEHAVIOR.<class>` (pick the closest class; only add a class if none fits). The guide, hints, journal and badges pick it up.
 - **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art. (A new species gets its species badge automatically.)
-- **Reset the expedition:** give the owner `supabase/expedition-reset.sql` as plain text. It backs up into `archive.*_YYYYMMDD_HHMMSS` first. The undo recipe is in the script header: it pauses the logging triggers (`disable trigger user`) so old dates and outing dates restore unchanged; a plain `insert … select` would be refused. Tested in `reset.test.sql`.
+- **Reset the expedition:** give the owner `supabase/expedition-reset.sql` as plain text. It backs up into `archive.*_YYYYMMDD_HHMMSS` first. The undo recipe is in the script header: it pauses the logging triggers (`disable trigger user`) so old dates and outing dates restore unchanged; a plain `insert … select` would be refused. Wildlife observations are kept, so collections carry on. Tested in `reset.test.sql`.
 - **Change the schema:** see Rules below.
 
 ## 6. Rules

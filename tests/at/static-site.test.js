@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../../", import.meta.url));
 const read = (p) => readFileSync(join(root, p), "utf8");
 
 function walk(dir, out = []) {
   for (const name of readdirSync(join(root, dir))) {
-    const rel = join(dir, name);
+    const rel = join(dir, name).split("\\").join("/");
     if (name === "node_modules" || name === ".git") continue;
     if (statSync(join(root, rel)).isDirectory()) walk(rel, out); else out.push(rel);
   }

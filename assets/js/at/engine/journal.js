@@ -1,6 +1,8 @@
 // The expedition journal: one dated record of everything meaningful that has happened on the
 // journey, newest first. Pure and DOM-free; built entirely from data the app already loads
 // (the trail register, at_expedition_marks, at_expedition_hikers and at_field_guide rows).
+// Wildlife entries are worked out from each hiker's lifetime collection but only those dated during
+// this expedition are kept (see wildlifeSince), so a reset starts a fresh journal.
 //
 // Entry: { id, date: "YYYY-MM-DD" | null, kind, title, detail, art?, species?, rarity?, hikerId? }
 //   kind: "landmark" | "milestone" | "species" | "guide" | "section" | "badge"
@@ -16,6 +18,13 @@ export const GUIDE_MILESTONES = Object.freeze([10, 25]);
 
 // Same-day ties: the bigger story first.
 const ORDER = { landmark: 0, milestone: 1, guide: 2, section: 3, species: 4, badge: 5 };
+
+// The first wildlife date of this expedition, or null when every saved find belongs to it (no reset
+// yet, or a database without expeditions). "9999-12-31" when nothing has been photographed since.
+export function wildlifeSince(sightings = []) {
+  if (!sightings.some((r) => r.thisExpedition === false)) return null;
+  return sightings.filter((r) => r.thisExpedition !== false).map((r) => r.firstSeen).filter(Boolean).sort()[0] || "9999-12-31";
+}
 
 export function expeditionJournal({ hikers = [], register = [], marks = [], sightings = [], today, theme = THEMES.wildlife } = {}) {
   const names = new Map(hikers.map((x) => [x.id, x.name]));
@@ -33,7 +42,7 @@ export function expeditionJournal({ hikers = [], register = [], marks = [], sigh
     const rarity = e.spec.rarity === "rare" || e.spec.rarity === "legend" ? e.spec.rarity : null;
     const who = names.get(e.firstBy);
     const lead = rarity === "legend" ? "Legend sighted" : rarity === "rare" ? "Rare find" : "First photo";
-    out.push({ id: `species-${e.spec.id}`, date: e.firstSeen, kind: "species", species: e.spec, rarity, hikerId: e.firstBy,
+    out.push({ id: `species-${e.spec.id}`, date: e.firstSeen, kind: "species", species: e.spec, rarity, hikerId: e.firstBy, wild: true,
       title: `${lead}: ${speciesTitle(e.spec.name)}`, detail: who ? `Photographed by ${who}` : "Added to the field guide" });
   });
 
@@ -42,19 +51,19 @@ export function expeditionJournal({ hikers = [], register = [], marks = [], sigh
   [...new Set([...GUIDE_MILESTONES.filter((n) => n < guide.total), guide.total])].forEach((n) => {
     if (firsts.length < n) return;
     const all = n === guide.total;
-    out.push({ id: `guide-${all ? "all" : n}`, date: firsts[n - 1], kind: "guide", art: all ? "laurel" : "book",
+    out.push({ id: `guide-${all ? "all" : n}`, date: firsts[n - 1], kind: "guide", art: all ? "laurel" : "book", wild: true,
       title: all ? "The field guide is complete!" : `${n} species in the field guide`,
       detail: all ? `All ${n} species photographed by the expedition` : `${guide.total - n} still to find` });
   });
 
   regionProgress(sightings, { theme }).filter((r) => r.completedOn).forEach((r) => out.push({
-    id: `section-${r.id}`, date: r.completedOn, kind: "section", art: "fern",
+    id: `section-${r.id}`, date: r.completedOn, kind: "section", art: "fern", wild: true,
     title: `Section complete: ${r.label}`, detail: `Every local species photographed there (${r.total})`
   }));
 
   hikers.forEach((hk) => {
     hikerBadges(hk, { marks, register, today, sightings }).filter((b) => b.earned).forEach((b) => out.push({
-      id: `badge-${hk.id}-${b.id}`, date: b.earnedOn || null, kind: "badge", art: b.art, prestige: !!b.prestige, hikerId: hk.id,
+      id: `badge-${hk.id}-${b.id}`, date: b.earnedOn || null, kind: "badge", art: b.art, prestige: !!b.prestige, hikerId: hk.id, wild: b.kind === "wildlife",
       title: `${hk.name} earned ${b.title}`, detail: b.description
     }));
   });
@@ -64,12 +73,16 @@ export function expeditionJournal({ hikers = [], register = [], marks = [], sigh
     speciesBadgeDays(speciesBadges(sightings, { hikerId: hk.id, theme })).forEach((d) => {
       const titles = d.badges.filter((b) => firstBy.get(b.id) !== `${hk.id}|${d.date}`).map((b) => b.title);
       if (!titles.length) return;
-      out.push({ id: `species-badges-${hk.id}-${d.date}`, date: d.date, kind: "badge", art: "camera", hikerId: hk.id,
+      out.push({ id: `species-badges-${hk.id}-${d.date}`, date: d.date, kind: "badge", art: "camera", hikerId: hk.id, wild: true,
         title: `${hk.name} earned ${titles.length === 1 ? "a species badge" : `${titles.length} species badges`}`, detail: listTitles(titles) });
     });
   });
 
-  return out.sort((a, b) => {
+  // Wildlife stories are worked out from the lifetime collection (so badge dates stay honest), then
+  // only those written during this expedition are kept: after a reset the journal starts fresh.
+  const since = wildlifeSince(sightings);
+  const kept = since === null ? out : out.filter((e) => !e.wild || !e.date || e.date >= since);
+  return kept.map(({ wild, ...e }) => e).sort((a, b) => {
     if (a.date !== b.date) {
       if (!a.date) return 1;
       if (!b.date) return -1;

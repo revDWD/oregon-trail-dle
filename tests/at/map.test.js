@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { computeProgress } from "../../assets/js/at/engine/progress.js";
 import {
-  project, mapViewBox, MIN_ZOOM, MAX_ZOOM, defaultView, clampView, viewBoxOf, zoomView, panView, fitView, routeSlice, landmarkStatus, clusterPoints
+  project, mapViewBox, MIN_ZOOM, MAX_ZOOM, defaultView, clampView, viewBoxOf, zoomView, panView, fitView, routeSlice, landmarkStatus, clusterPoints,
+  patchIconSize
 } from "../../assets/js/at/ui/map.js";
 
 const base = mapViewBox();
@@ -90,4 +91,12 @@ test("patch icons cluster when they would overlap and split apart as the map zoo
   });
   assert.deepEqual(clusterPoints([{ x: 0, y: 0 }, { x: 50, y: 0 }], 10).map((g) => g.members.length), [1, 1]);
   assert.deepEqual(clusterPoints([], 10), []);
+});
+test("patch icons are larger than before and grow on screen as you zoom, within the zoom limits", () => {
+  assert.equal(patchIconSize(1), 24, "about 40% larger than the old 17-unit icon");
+  const onScreen = (z) => patchIconSize(z) * z;
+  assert.ok(onScreen(2) > onScreen(1) && onScreen(MAX_ZOOM) > onScreen(2), "grows on screen");
+  assert.ok(onScreen(MAX_ZOOM) < 24 * MAX_ZOOM / 2, "but far less than the map itself, so the trail stays readable");
+  assert.equal(patchIconSize(MAX_ZOOM * 10), patchIconSize(MAX_ZOOM));
+  assert.equal(patchIconSize(undefined), patchIconSize(1));
 });

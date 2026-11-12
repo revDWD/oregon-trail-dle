@@ -376,30 +376,73 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .patch-tile:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
 .patch-detail { margin-top: .75rem; scroll-margin-bottom: 5rem; }
 .patch-detail-card { display: grid; gap: .6rem; grid-template-columns: 1fr; background: #fbf4e2; border: 1px dashed var(--bark); border-radius: 10px; padding: .75rem; }
-.patch-detail-card > .patch-art { width: 8rem; height: 8rem; justify-self: center; }
-.patch-detail-card h5 { margin: 0; font-size: 1rem; color: var(--forest-dark); }
+.patch-detail-art { position: relative; justify-self: center; width: 8rem; }
+.patch-detail-art .patch-art { width: 8rem; height: 8rem; }
+.patch-detail-art .date-stamp { position: absolute; right: -.6rem; bottom: -.3rem; }
+.patch-detail-photo .story-photo { margin: .4rem 0; }
+.patch-detail-photo img { max-height: 12rem; width: 100%; object-fit: cover; }
+.patch-detail-card h5 { margin: .6rem 0 0; font-size: 1rem; color: var(--forest-dark); }
+.patch-detail-body > h5:first-child { margin-top: 0; font-family: Georgia, serif; font-size: 1.15rem; }
 .patch-detail-card h5 + .hint { margin-top: .15rem; }
 .patch-detail-card p { margin: .3rem 0; }
-.patch-links { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .25rem; }
+.patch-trivia { margin: .3rem 0; padding-left: 1.2rem; display: grid; gap: .25rem; }
+.patch-links { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .35rem; }
 .patch-links li { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .4rem; min-height: var(--tap); }
 .patch-links .tag { font-size: .72rem; padding: .05rem .5rem; }
+.patch-links .tag.kind-patch, .patch-links .tag.kind-patch-shop { background: #8f2d1f; color: #fff; }
+.patch-links .tag.kind-park-store, .patch-links .tag.kind-state-park-store, .patch-links .tag.kind-conservancy-store, .patch-links .tag.kind-outfitter { background: #7a4a10; color: #fff; }
 .patch-links a { overflow-wrap: anywhere; padding: .3rem 0; }
+.patch-links .offers { display: flex; flex-wrap: wrap; gap: .25rem; flex-basis: 100%; }
+.patch-links .offer { font-size: .72rem; border: 1px solid var(--line); border-radius: 999px; padding: 0 .45rem; background: #fff; color: var(--ink); }
+.patch-links .offer.has-patch { border-color: #8f2d1f; color: #8f2d1f; font-weight: 700; }
 @media (min-width: 40rem) {
-  .patch-detail-card { grid-template-columns: 8rem 1fr; }
-  .patch-detail-card > .patch-art { justify-self: start; }
+  .patch-detail-card { grid-template-columns: 8rem 1fr; align-items: start; }
+  .patch-detail-art { justify-self: start; }
 }
+/* Passport look: a canvas page the patches are sewn onto, with inked date stamps */
+.patch-passport { margin-top: .5rem; padding: .75rem; border-radius: 10px; border: 1px solid #d8c7a4;
+  background-color: #f6eedb;
+  background-image: repeating-linear-gradient(0deg, rgba(122,90,60,.05) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, rgba(122,90,60,.05) 0 1px, transparent 1px 4px); }
+.patch-passport .patch-tile { background: rgba(255,250,240,.75); }
+.patch-passport .patch-tile.earned { background: #fffaf0; box-shadow: 0 2px 0 rgba(91,70,54,.18); }
+.patch-tile.earned .patch-art { transform: rotate(-2deg); }
+.patch-grid li:nth-child(even) .patch-tile.earned .patch-art { transform: rotate(2deg); }
+.date-stamp { display: inline-flex; flex-direction: column; align-items: center; transform: rotate(-6deg); border: 2px dashed #8f2d1f; border-radius: 6px; padding: .05rem .35rem; background: rgba(255,250,240,.85); color: #8f2d1f; font-size: .68rem; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: .04em; }
+.date-stamp .stamp-word { font-size: .62rem; letter-spacing: .12em; }
+.patch-tile .date-stamp { margin-top: .15rem; }
+.patch-state-title { margin: 1.1rem 0 .3rem; font-size: 1rem; color: var(--forest-dark); }
+.state-collections { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .6rem; }
+.state-collection { display: grid; grid-template-columns: 6rem 1fr; gap: .75rem; align-items: center; background: rgba(255,250,240,.75); border: 2px dashed var(--line); border-radius: var(--radius); padding: .6rem .75rem; }
+.state-collection.earned { border: 2px solid #b8860b; background: #fffaf0; box-shadow: 0 2px 0 rgba(91,70,54,.18); }
+.state-collection-art { position: relative; width: 6rem; }
+.state-collection-art .patch-art { width: 6rem; height: 6rem; }
+.state-collection-art .date-stamp { position: absolute; right: -.5rem; bottom: -.4rem; }
+.state-collection p { margin: .15rem 0; }
+.state-collection .bar { margin: .3rem 0; }
 /* Celebration */
 .celebrate > p:first-child { margin-top: 0; }
 .patch-earned-list { list-style: none; padding: 0; margin: .5rem 0 0; display: grid; gap: .6rem; }
 .patch-earned { display: grid; grid-template-columns: 5rem 1fr; gap: .75rem; align-items: center; background: #fff8e6; border: 2px solid var(--amber); border-radius: var(--radius); padding: .5rem .75rem; }
 .patch-earned .patch-art { width: 5rem; height: 5rem; animation: pop .5s steps(3) 1; }
+.patch-earned.explorer { grid-template-columns: 6rem 1fr; border-color: #b8860b; background: #fff3cf; }
+.patch-earned.explorer .patch-art { width: 6rem; height: 6rem; }
 .patch-earned p { margin: .15rem 0; font-weight: 400; color: var(--ink); }
 .patch-earned .patch-earned-title { font-family: Georgia, serif; font-weight: 700; font-size: 1.1rem; color: var(--forest-dark); }
 /* Trail map */
 .map-patch-field { max-width: 20rem; }
+.map-patch-next { margin: 0 0 .4rem; }
 .map-frame { position: relative; }
 .map-patch { cursor: pointer; outline: none; }
 .map-patch .hit { fill: transparent; }
+.map-patch-body { transform-box: fill-box; transform-origin: center; transition: transform .15s ease-out; }
+.map-patch:not(.cluster):hover .map-patch-body, .map-patch:not(.cluster):focus-visible .map-patch-body { transform: scale(1.18); }
+.map-patch.fresh .map-patch-body { animation: stitch-pop .7s cubic-bezier(.2,1.6,.4,1) 1 both; }
+.patch-sparkles path { fill: #f2c94c; stroke: #7a4a10; stroke-width: calc(.5px / var(--z)); opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .map-patch.fresh .patch-sparkles path { animation: sparkle 1.6s ease-out .5s 2 both; }
+}
+@keyframes stitch-pop { 0% { transform: translateY(-40%) scale(.2) rotate(-12deg); opacity: 0; } 60% { transform: translateY(0) scale(1.25) rotate(4deg); opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes sparkle { 0%, 100% { opacity: 0; } 40% { opacity: 1; } }
 .map-patch:focus-visible .hit { fill: rgba(11,87,208,.15); stroke: #0b57d0; stroke-width: calc(2px / var(--z)); }
 .map-patch .cluster-bg { fill: #7a5a3c; stroke: var(--ink); stroke-width: calc(1px / var(--z)); }
 .map-patch .cluster-stitch { fill: none; stroke: #f6ecd2; stroke-width: calc(1px / var(--z)); stroke-dasharray: calc(2px / var(--z)) calc(1.5px / var(--z)); }
@@ -413,10 +456,19 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .patch-pop-item { display: grid; grid-template-columns: 4.5rem 1fr; gap: .6rem; align-items: start; }
 .patch-pop-item .patch-art { width: 4.5rem; height: 4.5rem; }
 .patch-pop-item p { margin: .15rem 0; }
-@media (min-width: 40rem) { .patch-pop { left: auto; width: 22rem; } }
+.patch-pop-card { display: grid; grid-template-columns: 7rem 1fr; gap: .75rem; align-items: start; margin-top: .4rem; }
+.patch-pop-card .patch-art { width: 7rem; height: 7rem; }
+.patch-pop-facts { display: grid; grid-template-columns: auto 1fr; gap: .1rem .5rem; margin: 0; font-size: .88rem; }
+.patch-pop-facts dt { font-weight: 700; color: var(--bark); }
+.patch-pop-facts dd { margin: 0; }
+.patch-pop-desc { grid-column: 1 / -1; margin: .2rem 0 0; }
+@media (max-width: 22rem) { .patch-pop-card { grid-template-columns: 5rem 1fr; } .patch-pop-card .patch-art { width: 5rem; height: 5rem; } }
+@media (min-width: 40rem) { .patch-pop { left: auto; width: 22rem; } .patch-pop.single { width: 26rem; } }
 @media (forced-colors: active) {
-  .patch-tile, .patch-earned, .patch-pop { border: 2px solid CanvasText; }
+  .patch-tile, .patch-earned, .patch-pop, .state-collection { border: 2px solid CanvasText; }
   .patch-tile[aria-pressed="true"] { outline: 3px solid Highlight; }
   .patch-art.locked { opacity: .6; }
+  .date-stamp { border-color: CanvasText; color: CanvasText; }
+  .patch-passport { background-image: none; }
 }
 .celebrate .more-link { margin: .75rem 0 0; }

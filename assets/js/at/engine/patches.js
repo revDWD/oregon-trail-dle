@@ -7,8 +7,10 @@
 // activity. Patches therefore follow every device and reset with the expedition, like the trail.
 
 import { landmarksInOrder, regionAtMarker, round2 } from "./progress.js";
+import { daysBetween, localDateString, parseDate } from "./activities.js";
+import { DEFAULT_THEME, themeFor } from "./expedition-themes.js";
 import { landmarkStory } from "../trail/landmark-stories.js";
-import { LANDMARK_PATCHES, NPS_TRAIL, PATCH_STORE, TRAIL_HOME } from "../trail/landmark-patches.js";
+import { LANDMARK_PATCHES, NPS_TRAIL, PATCH_STORE, STATE_EMBLEMS, TRAIL_HOME } from "../trail/landmark-patches.js";
 
 export const STATE_NAMES = Object.freeze({
   GA: "Georgia", NC: "North Carolina", TN: "Tennessee", VA: "Virginia", WV: "West Virginia", MD: "Maryland",
@@ -29,7 +31,26 @@ export const PATCH_MILESTONES = Object.freeze([
 
 export const PATCH_SORTS = Object.freeze({ trail: "Trail order", state: "State", earned: "Date earned" });
 export const PATCH_SHAPES = Object.freeze(["circle", "shield", "hexagon"]);
-export const RESOURCE_KINDS = Object.freeze({ official: "Official site", learn: "Learn more", patch: "Patch information" });
+
+// "Related Resources" kinds, best first: where a real patch or souvenir is most likely, down to the
+// authoritative page for the landmark. Links are listed in this order.
+export const RESOURCE_KINDS = Object.freeze({
+  patch: "Official Patch",
+  "park-store": "Park Store",
+  "state-park-store": "State Park Store",
+  "conservancy-store": "Conservancy Store",
+  outfitter: "Trail Outfitter",
+  "patch-shop": "Patch Shop",
+  "trail-club": "Trail Club",
+  "visitor-center": "Visitor Center",
+  history: "History",
+  official: "Official Site",
+  learn: "Learn More"
+});
+const KIND_ORDER = Object.keys(RESOURCE_KINDS);
+
+// What a resource offers, shown as small tags. Only set where the page itself shows it.
+export const RESOURCE_OFFERS = Object.freeze({ patch: "Patch available", souvenir: "Souvenirs", visitor: "Visitor information", hiking: "Hiking information" });
 
 const key = (miles) => String(round2(Number(miles) || 0));
 
@@ -51,7 +72,8 @@ export function patchMarks(trail, direction) {
 }
 
 // "Related Resources": the patch's own links, the landmark story's official page, then the
-// Appalachian Trail Conservancy store. Falls back to the trail-wide pages. https only, no duplicates.
+// Appalachian Trail Conservancy store, ordered by RESOURCE_KINDS (patches and stores first). Falls
+// back to the trail-wide pages. https only, no duplicates.
 export function patchResources(landmarkId, entry = LANDMARK_PATCHES[landmarkId]) {
   const story = landmarkStory(landmarkId);
   const own = [...((entry && entry.resources) || [])];
@@ -60,7 +82,14 @@ export function patchResources(landmarkId, entry = LANDMARK_PATCHES[landmarkId])
   const seen = new Set();
   return list
     .filter((r) => r && typeof r.url === "string" && r.url.startsWith("https://") && !seen.has(r.url) && seen.add(r.url))
-    .map((r) => ({ label: r.label, url: r.url, kind: RESOURCE_KINDS[r.kind] ? r.kind : "learn", kindLabel: RESOURCE_KINDS[r.kind] || RESOURCE_KINDS.learn }));
+    .map((r) => {
+      const kind = RESOURCE_KINDS[r.kind] ? r.kind : "learn";
+      const offers = (Array.isArray(r.offers) ? r.offers : []).filter((o) => RESOURCE_OFFERS[o]);
+      return { label: r.label, url: r.url, kind, kindLabel: RESOURCE_KINDS[kind], offers, offerLabels: offers.map((o) => RESOURCE_OFFERS[o]) };
+    })
+    .map((r, i) => [r, i])
+    .sort(([a, i], [b, j]) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || i - j)
+    .map(([r]) => r);
 }
 
 // One patch for a landmark (with `distance` from landmarksInOrder), defaults filled in.
@@ -79,7 +108,10 @@ export function patchFor(landmark, trail) {
     mile: landmark.miles,
     distance: round2(Number(landmark.distance ?? landmark.miles) || 0),
     kind: landmark.kind,
-    region: region ? { id: region.id, name: region.name, color: region.color } : null,
+    elevationFt: Number(landmark.elevationFt) || null,
+    trivia: landmark.trivia || "",
+    since: entry.since && Number(entry.since.year) ? { year: Number(entry.since.year), note: entry.since.note || "" } : null,
+    region: region ? { id: region.id, name: region.name, color: region.color, scene: region.scene } : null,
     shape: PATCH_SHAPES.includes(entry.shape) ? entry.shape : "circle",
     motif: entry.motif || landmark.id,
     banner: String(entry.banner || landmark.name).toUpperCase(),
@@ -119,24 +151,46 @@ export function patchMilestones(patches = []) {
     });
 }
 
+// Each state's collection, in trail order: progress, and its State Explorer patch, earned once every
+// landmark in the state is reached (dated by the last of them, when known). A landmark on a border
+// counts for both states. States the trail crosses without a landmark have no collection.
+export function explorerId(code) {
+  return `explorer-${code}`;
+}
+
+export function stateCollections(patches = []) {
+  const order = [];
+  const byState = new Map();
+  patches.forEach((p) => p.states.forEach((code) => {
+    if (!byState.has(code)) { byState.set(code, []); order.push(code); }
+    byState.get(code).push(p);
+  }));
+  return order.map((code) => {
+    const list = byState.get(code);
+    const earned = list.filter((p) => p.earned).length;
+    const complete = earned === list.length;
+    const dates = list.map((p) => p.earnedOn);
+    const name = stateName(code);
+    const emblem = list.find((p) => p.landmarkId === STATE_EMBLEMS[code]) || list[list.length - 1];
+    return {
+      code, name, earned, total: list.length, percent: Math.floor((earned / list.length) * 100), complete,
+      patches: list,
+      explorer: {
+        id: explorerId(code), code, name: `${name} Explorer`, stateName: name, earned: complete,
+        earnedOn: complete && dates.every(Boolean) ? [...dates].sort()[dates.length - 1] : null,
+        motif: emblem.motif, color: emblem.region ? emblem.region.color : null, landmarks: list.length
+      }
+    };
+  });
+}
+
 // Collector statistics for one hiker's patches.
 export function patchCollection(patches = [], hiker = null) {
   const total = patches.length;
   const earnedCount = patches.filter((p) => p.earned).length;
   const nextPatch = patches.find((p) => !p.earned) || null;
   const totalMiles = hiker ? Number(hiker.totalMiles) || 0 : 0;
-  const states = [];
-  const byState = new Map();
-  patches.forEach((p) => p.states.forEach((code) => {
-    if (!byState.has(code)) { byState.set(code, { code, name: stateName(code), earned: 0, total: 0 }); states.push(code); }
-    const s = byState.get(code);
-    s.total += 1;
-    if (p.earned) s.earned += 1;
-  }));
-  const stateProgress = states.map((code) => {
-    const s = byState.get(code);
-    return { ...s, percent: Math.floor((s.earned / s.total) * 100), complete: s.earned === s.total };
-  });
+  const stateProgress = stateCollections(patches);
   return {
     earned: earnedCount,
     total,
@@ -144,8 +198,70 @@ export function patchCollection(patches = [], hiker = null) {
     nearest: nextPatch ? { ...nextPatch, milesAway: round2(Math.max(nextPatch.distance - totalMiles, 0)) } : null,
     nextState: stateProgress.find((s) => !s.complete) || null,
     stateProgress,
+    explorers: stateProgress.map((s) => s.explorer),
     milestones: patchMilestones(patches)
   };
+}
+
+// How many hikers on the roster hold each patch (a hiker holds it once their own miles reach it).
+// `rarest` is the earned patch the fewest hikers share (ties go to the furthest along the trail);
+// `mostEarned` is the crew's most collected patch. Needs `patches` for one hiker (with `earned`).
+export function patchRarity(patches = [], hikers = []) {
+  const roster = (hikers || []).filter((x) => x && x.active !== false);
+  const holds = (hk, p) => {
+    const miles = Number(hk.totalMiles) || 0;
+    return p.distance > 0 ? miles >= p.distance : miles > 0 || (Number(hk.activityCount) || 0) > 0;
+  };
+  const holders = new Map(patches.map((p) => [p.id, roster.filter((hk) => holds(hk, p)).length]));
+  const pick = (list, better) => list.reduce((best, p) => (!best || better(p, best) ? p : best), null);
+  const earned = patches.filter((p) => p.earned);
+  const rarest = pick(earned, (p, best) => holders.get(p.id) <= holders.get(best.id));
+  const most = pick(patches.filter((p) => holders.get(p.id) > 0), (p, best) => holders.get(p.id) > holders.get(best.id));
+  return {
+    roster: roster.length,
+    holders,
+    rarest: rarest ? { patch: rarest, holders: holders.get(rarest.id) } : null,
+    mostEarned: most ? { patch: most, holders: holders.get(most.id) } : null
+  };
+}
+
+// A gentle forecast from the hiker's average weekly miles since their first activity (at least one
+// week, so a big first day doesn't skew it). Null until there is a pace to go on.
+export function patchForecast(patches = [], hiker = null, today = localDateString()) {
+  if (!hiker || !hiker.firstActivityDate || !parseDate(hiker.firstActivityDate) || !parseDate(today)) return null;
+  const total = Number(hiker.totalMiles) || 0;
+  const weeks = Math.max(daysBetween(hiker.firstActivityDate, today) / 7, 1);
+  const weekly = round2(total / weeks);
+  if (!(weekly > 0)) return null;
+  const left = patches.filter((p) => !p.earned);
+  const weeksTo = (p) => Math.max(Math.ceil((p.distance - total) / weekly), 1);
+  const dateIn = (w) => {
+    const d = parseDate(today);
+    d.setUTCDate(d.getUTCDate() + w * 7);
+    return d.toISOString().slice(0, 10);
+  };
+  const next = left[0] || null;
+  const last = left[left.length - 1] || null;
+  return {
+    weeklyMiles: weekly,
+    next: next ? { patch: next, weeks: weeksTo(next), date: dateIn(weeksTo(next)) } : null,
+    complete: last ? { patch: last, weeks: weeksTo(last), date: dateIn(weeksTo(last)) } : null
+  };
+}
+
+// Wildlife a hiker is likely to meet near a landmark: the most common species in its region's
+// habitat (rare and legendary finds stay a surprise).
+export function nearbyWildlife(patch, count = 4) {
+  const theme = themeFor(DEFAULT_THEME);
+  const habitat = patch && patch.region && theme.habitats[patch.region.scene];
+  if (!habitat) return [];
+  const byId = new Map(theme.species.map((sp, i) => [sp.id, { sp, i }]));
+  return Object.entries(habitat.animals)
+    .map(([id, weight]) => ({ ...byId.get(id), weight }))
+    .filter((x) => x.sp && x.sp.rarity === "common")
+    .sort((a, b) => b.weight - a.weight || a.i - b.i)
+    .slice(0, count)
+    .map((x) => ({ id: x.sp.id, name: x.sp.name }));
 }
 
 // Sort a copy of the patches: trail order (as given), by state (trail order within a state), or by
@@ -175,8 +291,12 @@ export function groupPatchesByState(patches = []) {
   return [...groups].map(([state, list]) => ({ state, patches: list }));
 }
 
-// Ids of everything earned in the collection (patches and collection milestones): used to spot new
-// unlocks after an activity is logged.
+// Ids of everything earned in the collection (patches, State Explorer patches and collection
+// milestones): used to spot new unlocks after an activity is logged.
 export function earnedPatchIds(patches = []) {
-  return [...patches.filter((p) => p.earned).map((p) => p.id), ...patchMilestones(patches).filter((m) => m.earned).map((m) => m.id)];
+  return [
+    ...patches.filter((p) => p.earned).map((p) => p.id),
+    ...stateCollections(patches).filter((s) => s.complete).map((s) => s.explorer.id),
+    ...patchMilestones(patches).filter((m) => m.earned).map((m) => m.id)
+  ];
 }

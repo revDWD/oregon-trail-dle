@@ -63,11 +63,13 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `expedition.js` and `expedition-themes.js`: Wildlife Spotting rules and data.
     - `field-guide.js`: field guide, region progress, wildlife badges.
     - `journal.js`: the Expedition Journal on History (`expeditionJournal`).
+    - `patches.js`: Landmark Patches (`landmarkPatches`, `patchCollection`, `patchMilestones`, sorts).
     - `markdown.js`: safe dispatch text.
   - **`trail/`**: data only.
     - `appalachian-trail.js`: landmarks, route, milestones, regions.
     - `landmark-stories.js`: history, nature, did-you-know, `kevin`, `learnMore`, optional `photo`.
     - `landmark-photos.js`: **generated** photo credits.
+    - `landmark-patches.js`: one patch entry per landmark (shape, motif, banner, description, related resources).
   - **`ui/`**: DOM.
     - `app.js`: state, router, loading, actions.
     - `views.js`: one function per tab.
@@ -76,7 +78,8 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `expedition-view.js`: canvas game.
     - `badge-art.js`: 12×12 sprites.
     - `illustrations.js`: pixel landmark scenes.
-    - `dom.js`: `h()` and `svg()` helpers.
+    - `patch-art.js`: embroidered-style SVG landmark patches (`patchArt`, one motif per landmark).
+    - `dom.js`: `h()`, `svg()`, `fill()` and `formatDay()` helpers.
 - **Rendering.** The app re-renders a whole view on change.
   - Background refresh runs every 60 s (`loadExpedition(true)`). It redraws Trail, Camp, Log or History only when data changed and nobody is typing or focused on a control (History also waits while an edit form is open).
   - A running Wildlife Spotting round is stopped on re-render (`game.stop()`).
@@ -117,7 +120,8 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - The map card contains:
     - **Journey progress**: regions as parents and landmarks as children (✓ passed, ➜ next, ○ ahead).
     - A **Previous / Current / Next** strip.
-    - The **landmark detail** panel: a real photo or the pixel-art scene, facts, story and Kevin's notes.
+    - The **landmark detail** panel: a real photo or the pixel-art scene, facts, story and Kevin's notes. **No patch art here** (test-enforced); the Trail tab stays about the trail.
+    - A "Show landmark patches for" select: the chosen hiker's earned patches sit on the map as small icons (clustered when they'd overlap, splitting as you zoom). Click or Enter opens a popover with the patch, date and description.
   - There is no "Coming up" card and no separate Landmarks card.
 - **Landmark photos**
   - Shown in the detail panel. Comes from `landmarkStory(id).photo` (a hand-picked override) or the generated `LANDMARK_PHOTOS[id]`. Otherwise the pixel art shows, and it is also the fallback if the image fails to load.
@@ -127,7 +131,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - In page order:
     1. **Trail Dispatches** (top).
     2. The pixel camp scene.
-    3. "The hikers": picker plus per-hiker panel showing miles, share, week, achievement and species badge counts, the **Badge Collection** bar, achievement badges, a collapsible **Species Badges** grid, milestones and their journey.
+    3. "The hikers": picker plus per-hiker panel showing miles, share, week, achievement and species badge counts, the **Badge Collection** bar, achievement badges, a collapsible **Species Badges** grid, a collapsible **Landmark Patch Collection**, milestones and their journey.
     4. The trail register.
     5. The dispatch archive.
   - Time of day follows the device clock: morning 5–9, day 9–17, evening 17–21, night 21–5. There are no buttons.
@@ -148,6 +152,11 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Trail Legends are secret: their badges appear only once photographed, in gold, as a bonus outside every total.
   - Celebrated after an outing (one line for all new species), grouped per day in the hiker's timeline and the journal. The journal skips a species badge already told by the expedition's "First photo" entry.
 - **Badge Collection bar** (Camp): `badgeCollection(badges, species)` = (achievement badges earned + regular species badges earned) / (24 + 50). It measures exactly the badges shown beneath it, so 100% is reachable without legends. The old bar showed mileage toward the next mileage badge, unlabelled, and felt disconnected; mileage is now a line of text and its name stays a surprise.
+- **Landmark Patches** (`engine/patches.js`): one collectible patch per landmark, earned when the hiker's *own* miles reach it (Springer with their first activity). Kept apart from `hikerBadges()` and the Badge Collection bar, which are unchanged.
+  - Derived, never stored: dates come from personal marks (`patchMarks()` rides along with `PERSONAL_MARKS` in the `at_expedition_marks` call, ≤ 100 values). No SQL; an expedition reset clears them like mileage badges.
+  - Camp's collection: completion, nearest collectible, next state completion, collection milestones (First, 10, 25, 50, 100, All; only those smaller than the set show), a grid sortable by trail order, state or date earned, locked patches muted, and a detail card with "Related Resources" (https only, new tab).
+  - Celebrated after logging: "Patch Earned: X" cards in the flash, and milestone lines.
+  - Art is original SVG (circle, shield or hexagon, stitched edge, a scene per landmark, ribbon banner). No ATC logos or real patch designs.
 - **Wildlife Spotting**
   - The restored Oregon Trail DLE hunt, re-themed as photography with the same pacing and renderer. The data-only theme is in `expedition-themes.js`; rules are in `expedition.js`.
   - Species follow the section's habitat and the season. Rare finds are rolled at 5% and legends at 0.4% per outing.
@@ -170,6 +179,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 - **Add a dispatch:** post it from Camp as an organizer. No code change.
 - **Add landmark photos:** run the "Landmark photos" workflow, then review the PR: look at every image (searches sometimes return the wrong place) and rewrite the alt text by hand. Add rejected Commons file titles to `REJECTED` in the script and re-run with those ids. For a hand-picked photo, add `photo` to the landmark's story.
 - **Add a species:** follow `docs/adding-species.md`. In short: one object in `expedition-themes.js` (in `TRAIL_EXPANSION` or a new wave list added to `SPECIES`) with its `where`, `behavior: BEHAVIOR.<class>` (pick the closest class; only add a class if none fits), fact, range and pixel `parts`. Spawn tables, the guide, hints, badges, collector stats and the journal all derive from it; run `npm test`. Never rename or remove a photographed species id. No SQL needed.
+- **Add a landmark (and its patch):** add the landmark to `appalachian-trail.js`, then an entry in `landmark-patches.js` (`shape`, `banner` ≤ 13 characters, `description`, `resources`) and, ideally, a motif in `patch-art.js` (otherwise a scene for its `kind` is used). Earning, map icons, Camp, sorts and milestones derive from it; `tests/at/patches.test.js` checks every patch. No SQL needed.
 - **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art. (A new species gets its species badge automatically.)
 - **Reset the expedition:** give the owner `supabase/expedition-reset.sql` as plain text. It backs up into `archive.*_YYYYMMDD_HHMMSS` first. The undo recipe is in the script header: it pauses the logging triggers (`disable trigger user`) so old dates and outing dates restore unchanged; a plain `insert … select` would be refused. Wildlife observations are kept, so collections carry on. Tested in `reset.test.sql`.
 - **Change the schema:** see Rules below.

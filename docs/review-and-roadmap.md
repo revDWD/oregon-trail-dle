@@ -569,3 +569,15 @@ Regional field guides and expedition wildlife reports (`this_expedition`, `habit
 **First expansion wave: 37 → 56 species (50 regular plus 6 legends).** Common: eastern chipmunk, eastern gray squirrel, black-capped chickadee, eastern garter snake, American toad, eastern tiger swallowtail. Uncommon: pileated woodpecker, luna moth, North American porcupine, bobcat, peregrine falcon, timber rattlesnake, snowshoe hare, spruce grouse. Rare: Bicknell's thrush (alpine), fisher (lakes to Maine), Carolina northern flying squirrel (high balds). Legends: Specter Moose (Maine), Mothman (West Virginia). The Badge Collection is now out of 24 + 50.
 
 **Next.** Seasonal and event windows (`months: [..]` or an `event` id alongside `season`), a species of the week, per-section field guide views, community leaderboards from `at_wildlife_discoveries`, and an auto-dispatch for rare finds.
+
+## 19. Landmark Patch Collection
+
+**Goal.** A collectible "patch jacket" that fills as each hiker walks: one patch per landmark (26 today), earned when the hiker's own cumulative miles reach it, alongside (never replacing) the 24 achievement badges.
+
+**Reuse, not new systems.** Patches are derived like mileage badges. Their dates come from the existing personal marks RPC (`at_expedition_marks`): the landmark distances ride along with `PERSONAL_MARKS` (31 values; the RPC accepts 100). Springer is earned with a hiker's first activity. **No SQL and no new tables**; an expedition reset clears patches just as it clears mileage badges. Earned ids feed the existing "newly earned" diff in `app.js`, so the flash after logging shows "Patch Earned: X — You've reached this Appalachian Trail landmark." plus any collection milestone.
+
+**Where it lives.** There is no Profile tab (removed earlier, not revived), so the collection is a collapsible section in Camp's per-hiker panel: completion bar, nearest collectible, next state completion, milestones (First, 10, 25, 50, 100, All; only those smaller than the set show, so 50 and 100 wait for more landmarks), a grid sortable by trail order, state or date earned (locked patches muted), and a detail card with "Related Resources" (official sites, NPS and ATC pages, the ATC Trail Store for patches; https only, new tab). The Trail map gets a "Show landmark patches for" select: earned patches appear as small icons that cluster when they would overlap and split apart on zoom; click or Enter opens a popover. The landmark detail card is deliberately untouched (test-enforced).
+
+**Art.** Original SVG: circle, shield or hexagon with a stitched edge, region-coloured twill, a scene per landmark (balds, fire towers, rivers, bridges, ponies, the Katahdin sign…) and a ribbon banner. Muted greyscale when locked. No ATC logos or real patch designs.
+
+**Next.** A one-time postcard on arrival, a printable "patch jacket" view, state completion lines in the journal, and patches for future landmarks (one data entry plus an optional motif; see AGENTS.md §5).

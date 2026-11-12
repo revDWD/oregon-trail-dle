@@ -50,3 +50,9 @@ export function formatMiles(value) {
   const n = Number(value) || 0;
   return `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} mi`;
 }
+
+// Calendar dates (YYYY-MM-DD) are shown as that local day, never shifted by the time zone.
+export function formatDay(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ""));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+}

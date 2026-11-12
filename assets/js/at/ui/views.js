@@ -1,5 +1,5 @@
 // Views: pure functions of (state, actions) that return DOM nodes.
-import { h, svg, fill, formatMiles } from "./dom.js";
+import { h, svg, fill, formatMiles, formatDay } from "./dom.js";
 import { renderTrailMap } from "./map.js";
 import { renderMarkdown } from "./markdown-view.js";
 import { renderCampScene, markSelectedHiker } from "./camp-scene.js";
@@ -14,6 +14,8 @@ import { groupMilestoneStatus, pickTip } from "../engine/game.js";
 import { buildFieldGuide, regionProgress, speciesBadges, speciesTitle, whereToLook, wildlifeCollection } from "../engine/field-guide.js";
 import { expeditionJournal } from "../engine/journal.js";
 import { badgeCollection, expeditionTotals, hikerBadges, hikerMilestones, hikerTimeline, hikerShare, nextMileBadge } from "../engine/hikers.js";
+import { PATCH_SORTS, groupPatchesByState, landmarkPatches, patchCollection, sortPatches } from "../engine/patches.js";
+import { patchArt } from "./patch-art.js";
 
 const field = (id, label, control, hint, error) => h("div", { class: "field" },
   h("label", { for: id }, label), control,
@@ -26,14 +28,24 @@ const bar = (percent, label) => h("div", { class: "bar", role: "progressbar", "a
 const stat = (label, value) => h("div", { class: "stat" }, h("dt", {}, label), h("dd", {}, value));
 
 const when = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-// Calendar dates (YYYY-MM-DD) are shown as that local day, never shifted by the time zone.
-const day = (ymd) => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ""));
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
-};
+const day = formatDay;
 
-// A one-time message (a celebration) for the page it belongs to.
-const flashNote = (s, page) => (s.flash && s.flash.route === page ? h("p", { class: "card celebrate" }, s.flash.text) : null);
+// A one-time message (a celebration) for the page it belongs to. Newly earned landmark patches are
+// shown with their art, like a patch handed over at the trailhead.
+const flashNote = (s, page) => {
+  if (!s.flash || s.flash.route !== page) return null;
+  const patches = s.flash.patches || [];
+  if (!patches.length) return h("p", { class: "card celebrate" }, s.flash.text);
+  return h("div", { class: "card celebrate" },
+    s.flash.text ? h("p", {}, s.flash.text) : null,
+    h("ul", { class: "patch-earned-list" }, patches.map(({ patch, hikerName }) => h("li", { class: "patch-earned" },
+      patchArt(patch),
+      h("div", {},
+        h("p", { class: "patch-earned-title" }, `Patch Earned: ${patch.landmarkName}`),
+        h("p", {}, "You've reached this Appalachian Trail landmark."),
+        h("p", { class: "hint" }, `${hikerName} · ${patch.state} · mile ${patch.mile}`))))),
+    h("p", { class: "more-link" }, h("a", { href: "#/camp" }, "See the patch collection at Camp")));
+};
 const activeHikers = (s) => (s.hikers || []).filter((x) => x.active);
 // The roster is loaded (anyone can log for any hiker; there is nothing to join).
 const hasRoster = (s) => !s.expeditionUnavailable && (s.hikers || []).length > 0;
@@ -51,11 +63,32 @@ function dispatchCard(d, { featured = false, actions = null } = {}) {
     actions);
 }
 
+// The trail map, with one hiker's earned landmark patches pinned beside their landmarks.
+function drawTrailMap(s, holder, hiker) {
+  const patches = hiker && hasRoster(s) ? { hikerName: hiker.name, list: landmarkPatches(TRAIL, s.progress.direction, hiker, s.marks) } : null;
+  fill(holder, renderTrailMap(TRAIL, s.progress, { patches }));
+}
+
+// Whose patches the map shows. Remembers the choice like the rest of the app (the selected hiker).
+function patchPicker(s, a, holder) {
+  const roster = activeHikers(s);
+  if (!hasRoster(s) || !roster.length) return null;
+  const current = (roster.find((x) => x.id === s.selectedHiker) || roster[0]).id;
+  return h("div", { class: "field map-patch-field" },
+    h("label", { for: "map-patch-hiker" }, "Show landmark patches for"),
+    h("select", { id: "map-patch-hiker", onChange: (e) => {
+      a.selectHiker(e.target.value);
+      drawTrailMap(s, holder, roster.find((x) => x.id === e.target.value));
+    } }, roster.map((x) => h("option", { value: x.id, selected: x.id === current }, x.name))));
+}
+
 export function trailView(s, a) {
   const p = s.progress;
   const featured = (s.dispatches || [])[0];
   const roster = activeHikers(s);
   const group = groupMilestoneStatus(TRAIL, p.creditedMiles, roster.map((x) => ({ weekCreditedMiles: x.weekMiles })));
+  const mapHolder = h("div", { class: "map-holder" });
+  drawTrailMap(s, mapHolder, roster.find((x) => x.id === s.selectedHiker) || roster[0] || null);
   return h("section", { "aria-labelledby": "page-title" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, p.completed ? "The Expedition Finished the Appalachian Trail!" : "The Expedition"),
     flashNote(s, "trail"),
@@ -69,7 +102,8 @@ export function trailView(s, a) {
         stat("Landmarks passed", `${p.passedLandmarks.length} of ${p.landmarks.length}`),
         p.nextLandmark ? stat(`Next: ${p.nextLandmark.name}`, formatMiles(p.distanceToNext)) : stat("Next landmark", "We made it!"))),
     h("div", { class: "card map-card" }, h("h2", {}, "Trail Map"),
-      renderTrailMap(TRAIL, p),
+      patchPicker(s, a, mapHolder),
+      mapHolder,
       h("p", { class: "hint" }, `${TRAIL.directions[p.direction].label}. Mileage, elevations and positions are approximate.`)),
     h("div", { class: "card" }, h("h2", {}, "This Week"),
       roster.length ? h("ul", { class: "week-hikers" }, roster.map((x) => h("li", {},
@@ -223,6 +257,84 @@ function collectionStats(c) {
     c.recent.length ? stat("Recent finds", c.recent.map((r) => r.title).join(", ")) : null);
 }
 
+// ---- Landmark Patch Collection --------------------------------------------------------------------
+// One collectible patch per landmark, earned when the hiker's own miles reach it. Lives at Camp with
+// the hiker's other collections (there is no Profile tab); the Trail map pins the earned ones.
+const patchUi = { sort: "trail", selected: null };
+
+const patchStatus = (pt) => (pt.earned ? (pt.earnedOn ? `Earned ${day(pt.earnedOn)}` : "Earned") : `${formatMiles(pt.milesToGo)} to go`);
+
+function patchDetail(pt, hk) {
+  if (!pt) return h("p", { class: "hint" }, "Choose a patch to read about its landmark and find related resources.");
+  return h("div", { class: `patch-detail-card${pt.earned ? " earned" : ""}` },
+    patchArt(pt),
+    h("div", {},
+      h("h5", {}, pt.name),
+      h("p", { class: "hint" }, pt.earned ? `${patchStatus(pt)} by ${hk.name}` : `Not yet earned · ${patchStatus(pt)} for ${hk.name}`),
+      h("dl", { class: "facts" },
+        h("dt", {}, "Landmark"), h("dd", {}, pt.landmarkName),
+        h("dt", {}, "Mile"), h("dd", {}, formatMiles(pt.mile)),
+        h("dt", {}, "State"), h("dd", {}, pt.stateNames.join(" / ")),
+        pt.region ? [h("dt", {}, "Section"), h("dd", {}, pt.region.name)] : null),
+      h("p", {}, pt.description),
+      pt.resources.length ? [h("h5", {}, "Related Resources"),
+        h("ul", { class: "patch-links" }, pt.resources.map((r) => h("li", {},
+          h("span", { class: "tag" }, r.kindLabel), " ",
+          h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, r.label, h("span", { class: "sr-only" }, " (opens in a new tab)")))))] : null));
+}
+
+function patchSection(s, hk) {
+  const patches = landmarkPatches(TRAIL, s.progress.direction, hk, s.marks);
+  const c = patchCollection(patches, hk);
+  const detailId = "patch-detail";
+  const detail = h("div", { id: detailId, class: "patch-detail" });
+  const grid = h("div", { class: "patch-grid-wrap" });
+  const tiles = new Map();
+  const choose = (id, { scroll = false } = {}) => {
+    const pt = patches.find((x) => x.id === id) || null;
+    patchUi.selected = pt ? pt.id : null;
+    tiles.forEach((btn, key) => btn.setAttribute("aria-pressed", key === patchUi.selected ? "true" : "false"));
+    fill(detail, patchDetail(pt, hk));
+    if (scroll) detail.scrollIntoView?.({ block: "nearest" });
+  };
+  const tile = (pt) => {
+    const btn = h("button", { type: "button", class: `patch-tile ${pt.earned ? "earned" : "locked"}`, "aria-pressed": "false", "aria-controls": detailId,
+      onClick: () => choose(pt.id, { scroll: true }) },
+    patchArt(pt, { decorative: true }),
+    h("strong", {}, pt.landmarkName),
+    h("span", { class: "hint" }, `${pt.state} · mile ${pt.mile}`),
+    h("span", { class: "hint patch-status" }, patchStatus(pt)));
+    tiles.set(pt.id, btn);
+    return h("li", {}, btn);
+  };
+  const drawGrid = () => {
+    tiles.clear();
+    fill(grid, patchUi.sort === "state"
+      ? groupPatchesByState(patches).map((g) => [h("h5", { class: "patch-state" }, `${g.state} (${g.patches.filter((x) => x.earned).length} of ${g.patches.length})`),
+        h("ul", { class: "patch-grid", "aria-label": `${g.state} patches` }, g.patches.map(tile))])
+      : h("ul", { class: "patch-grid", "aria-label": "Landmark patches" }, sortPatches(patches, patchUi.sort).map(tile)));
+    choose(patchUi.selected);
+  };
+  drawGrid();
+  return h("details", { class: "timeline-wrap patch-collection" },
+    h("summary", {}, `Landmark Patch Collection (${c.earned} of ${c.total})`),
+    h("dl", { class: "stats collection-stats patch-stats" },
+      stat("Patches collected", `${c.earned} of ${c.total} · ${c.percent}%`),
+      stat("Nearest collectible", c.nearest ? `${c.nearest.name} · ${formatMiles(c.nearest.milesAway)} away` : "Every patch collected!"),
+      stat("Next state completion", c.nextState ? `${c.nextState.name} · ${c.nextState.percent}% complete` : "Every state complete!")),
+    bar(c.percent, `Landmark patches: ${c.earned} of ${c.total} collected`),
+    h("ul", { class: "patch-milestones", "aria-label": "Collection milestones" }, c.milestones.map((m) => h("li", { class: m.earned ? "earned" : "locked" },
+      h("span", { "aria-hidden": "true" }, m.earned ? "★ " : "☆ "), m.title,
+      h("span", { class: "hint" }, m.earned ? (m.earnedOn ? ` · ${day(m.earnedOn)}` : "") : ` · ${m.count - c.earned} to go`)))),
+    h("p", { class: "hint" }, `Each landmark has a patch. ${hk.name} earns it when their own miles reach that landmark, and earned patches appear on the Trail map.`),
+    h("div", { class: "field patch-sort" },
+      h("label", { for: "patch-sort" }, "Sort patches by"),
+      h("select", { id: "patch-sort", onChange: (e) => { patchUi.sort = e.target.value; drawGrid(); } },
+        Object.entries(PATCH_SORTS).map(([value, label]) => h("option", { value, selected: value === patchUi.sort }, label)))),
+    grid,
+    detail);
+}
+
 // One hiker's page at Camp: contribution, badges, milestones and their story so far.
 function hikerPanel(s, hk) {
   const badges = hikerBadges(hk, { marks: s.marks, register: s.register, today: s.today, sightings: s.fieldGuide });
@@ -258,6 +370,7 @@ function hikerPanel(s, hk) {
       collectionStats(wildlifeCollection(s.fieldGuide, { hikerId: hk.id })),
       h("p", { class: "hint" }, "Photograph a species for the first time in Wildlife Spotting to earn its badge. Finds are saved for good, across expeditions."),
       h("ul", { class: "badge-grid species-grid" }, species.map(speciesBadge))),
+    patchSection(s, hk),
     h("h4", {}, "Milestones Reached"),
     ms.landmarks.length || ms.groupMilestones.length
       ? h("ul", { class: "milestones" },

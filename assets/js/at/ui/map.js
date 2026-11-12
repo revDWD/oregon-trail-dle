@@ -1,8 +1,9 @@
 // Appalachian Trail map: the centrepiece of the Trail page.
 // US state outlines, coloured regional sections, the route, mile posts, landmark buttons with a detail
-// panel, the hiker, the crew camp and crew-mates. Zoom and pan with buttons, keyboard, wheel, drag
+// panel, the hiker, the crew camp, crew-mates and a hiker's earned landmark patches. Zoom and pan with buttons, keyboard, wheel, drag
 // or pinch. Everything shown on the map is also available as text (detail panel + lists).
-import { h, svg, formatMiles } from "./dom.js";
+import { h, svg, fill, formatMiles, formatDay } from "./dom.js";
+import { patchArt } from "./patch-art.js";
 import { landmarkArt } from "./illustrations.js";
 import { mileMarkers, journeyProgress, journeyWindow, positionFor } from "../engine/progress.js";
 import { landmarkStory } from "../trail/landmark-stories.js";
@@ -38,6 +39,8 @@ export function mapViewBox() {
 // ---- Pure view maths (tested) ----------------------------------------------------------------------
 export const MIN_ZOOM = 1;
 export const MAX_ZOOM = 8;
+// On-screen size of a map patch icon, in base map units (about a pixel each on a phone).
+const PATCH_ICON = 17;
 
 export function defaultView(base = mapViewBox()) {
   return { cx: base.x + base.width / 2, cy: base.y + base.height / 2, zoom: 1 };
@@ -87,6 +90,20 @@ export function fitView(points, base = mapViewBox(), pad = 30) {
   const hgt = Math.max(...ys) - Math.min(...ys) + pad * 2;
   const zoom = Math.min(base.width / w, base.height / hgt);
   return clampView({ zoom, cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2 }, base);
+}
+
+// Groups map points closer than `minDist` (map units) so earned patches never pile up on each other.
+// Points keep their order; a group sits at the average position of its members.
+export function clusterPoints(points, minDist) {
+  const groups = [];
+  points.forEach((pt) => {
+    const near = groups.find((g) => Math.hypot(g.x - pt.x, g.y - pt.y) < minDist);
+    if (!near) { groups.push({ x: pt.x, y: pt.y, members: [pt] }); return; }
+    near.members.push(pt);
+    near.x += (pt.x - near.x) / near.members.length;
+    near.y += (pt.y - near.y) / near.members.length;
+  });
+  return groups;
 }
 
 // Route points (and interpolated ends) inside a northbound mile range.
@@ -167,9 +184,10 @@ function storyBlock(landmark) {
 /**
  * @param trail     trail data
  * @param progress  computeProgress() result for the player
- * @param options   { crew: [{ name, me, totalMiles }], crewMiles: number|null, stateMarkup }
+ * @param options   { crew: [{ name, me, totalMiles }], crewMiles: number|null, stateMarkup,
+ *                    patches: { hikerName, list: landmarkPatches() } | null }
  */
-export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, stateMarkup = globalThis.AT_US_STATES } = {}) {
+export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, stateMarkup = globalThis.AT_US_STATES, patches = null } = {}) {
   const base = mapViewBox();
   let view = memory.view ? clampView(memory.view, base) : defaultView(base);
   const live = h("p", { class: "sr-only", "aria-live": "polite" });
@@ -251,6 +269,84 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     svg("circle", { cx: here.x.toFixed(1), cy: here.y.toFixed(1), r: 9, class: "map-hiker-halo" }),
     svg("circle", { cx: here.x.toFixed(1), cy: here.y.toFixed(1), r: 5, class: "map-hiker-dot" })));
 
+  // Earned landmark patches: a small patch beside each landmark, like a passport filling in. Icons
+  // keep the same on-screen size at every zoom and gather into a numbered cluster when they crowd.
+  const patchLayer = svg("g", { class: "map-patches" });
+  const pop = h("div", { class: "patch-pop", role: "dialog", "aria-label": "Landmark patch details", hidden: "" });
+  const earnedPatches = ((patches && patches.list) || []).filter((pt) => pt.earned).map((pt) => {
+    const lm = progress.landmarks.find((l) => l.id === pt.landmarkId) || (trail.landmarks || []).find((l) => l.id === pt.landmarkId);
+    return lm ? { ...project(lm.lat, lm.lon), patch: pt } : null;
+  }).filter(Boolean);
+  const earnedText = (pt) => (pt.earnedOn ? `Earned ${formatDay(pt.earnedOn)}` : "Earned");
+  let returnFocus = null;
+  const closePop = () => {
+    if (pop.hidden) return;
+    pop.hidden = true;
+    const back = returnFocus && returnFocus.isConnected ? returnFocus : root;
+    back.focus?.();
+  };
+  const openPatches = (list, from) => {
+    returnFocus = from;
+    fill(pop,
+      h("div", { class: "patch-pop-head" },
+        h("p", { class: "patch-pop-title" }, list.length === 1 ? "Landmark patch" : `${list.length} landmark patches`),
+        h("button", { class: "btn small", type: "button", "aria-label": "Close patch details", onClick: closePop }, "Close")),
+      h("ul", { class: "patch-pop-list" }, list.map((pt) => h("li", { class: "patch-pop-item" },
+        patchArt(pt),
+        h("div", {},
+          h("strong", {}, pt.name),
+          h("p", { class: "hint" }, `${pt.landmarkName} · ${pt.state} · ${earnedText(pt)}${patches.hikerName ? ` by ${patches.hikerName}` : ""}`),
+          h("p", {}, pt.description))))));
+    pop.hidden = false;
+    pop.querySelector("button")?.focus();
+    live.textContent = list.length === 1 ? `${list[0].name}. ${earnedText(list[0])}.` : `${list.length} landmark patches: ${list.map((pt) => pt.landmarkName).join(", ")}.`;
+  };
+  pop.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); closePop(); } });
+  const asButton = (attrs, onActivate, ...children) => svg("g", {
+    ...attrs, role: "button", tabindex: "0",
+    onClick: (e) => onActivate(e.currentTarget),
+    onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onActivate(e.currentTarget); } }
+  }, ...children);
+  const patchIcon = (group, size) => {
+    // Up and to the right of the landmark dot, so the dot stays visible.
+    const cx = group.x + size * 0.6;
+    const cy = group.y - size * 0.6;
+    if (group.members.length === 1) {
+      const pt = group.members[0].patch;
+      const art = patchArt(pt, { mini: true, decorative: true });
+      art.setAttribute("x", (cx - size / 2).toFixed(2));
+      art.setAttribute("y", (cy - size / 2).toFixed(2));
+      art.setAttribute("width", size.toFixed(2));
+      art.setAttribute("height", size.toFixed(2));
+      return asButton({ class: "map-patch", "data-patch": pt.landmarkId, "aria-label": `${pt.name}, earned${pt.earnedOn ? ` ${formatDay(pt.earnedOn)}` : ""}. Show patch.` },
+        (el) => openPatches([pt], el),
+        svg("title", {}, `${pt.name} · ${earnedText(pt)}`),
+        svg("circle", { class: "hit", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.8).toFixed(2) }),
+        art);
+    }
+    const list = group.members.map((m) => m.patch);
+    const names = list.map((pt) => pt.landmarkName).join(", ");
+    return asButton({ class: "map-patch cluster", "aria-label": `${list.length} landmark patches here: ${names}. Zoom in to see them.` },
+      (el) => {
+        if (view.zoom >= MAX_ZOOM - 0.01) { openPatches(list, el); return; }
+        setView({ zoom: Math.min(view.zoom * 2.5, MAX_ZOOM), cx: group.x, cy: group.y }, `Showing ${list.length} landmark patches: ${names}.`);
+        patchLayer.querySelector(`[data-patch="${list[0].landmarkId}"]`)?.focus();
+      },
+      svg("title", {}, `${list.length} patches: ${names}`),
+      svg("circle", { class: "hit", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.8).toFixed(2) }),
+      svg("circle", { class: "cluster-bg", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size / 2).toFixed(2) }),
+      svg("circle", { class: "cluster-stitch", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.4).toFixed(2) }),
+      svg("text", { class: "cluster-count", x: cx.toFixed(2), y: (cy + size * 0.17).toFixed(2), "font-size": (size * 0.48).toFixed(2) }, String(list.length)));
+  };
+  let drawnZoom = null;
+  const drawPatches = () => {
+    if (!earnedPatches.length || drawnZoom === view.zoom) return;
+    drawnZoom = view.zoom;
+    const size = PATCH_ICON / view.zoom;
+    fill(patchLayer, clusterPoints(earnedPatches, size * 1.1).map((g) => patchIcon(g, size)));
+  };
+  root.append(patchLayer);
+
   // ---- View handling -------------------------------------------------------------------------------
   const apply = () => {
     memory.view = view;
@@ -260,6 +356,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     root.style.setProperty("--z", String(view.zoom));
     root.style.touchAction = view.zoom > 1.01 ? "none" : "pan-y";
     zoomLabel.textContent = `${Math.round(view.zoom * 10) / 10}×`;
+    drawPatches();
   };
   const setView = (next, text) => { view = clampView(next, base); apply(); if (text) live.textContent = text; };
   const toMap = (clientX, clientY) => {
@@ -360,7 +457,9 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     h("li", {}, h("span", { class: "key next", "aria-hidden": "true" }), "Next landmark"),
     crew.some((c) => !c.me) ? h("li", {}, h("span", { class: "key mate", "aria-hidden": "true" }), "Crew-mates") : null,
     crewMiles !== null ? h("li", {}, h("span", { class: "key camp", "aria-hidden": "true" }), "Crew camp (combined miles)") : null,
-    h("li", {}, h("span", { class: "key post", "aria-hidden": "true" }), "Mile posts every 250 mi"));
+    h("li", {}, h("span", { class: "key post", "aria-hidden": "true" }), "Mile posts every 250 mi"),
+    patches ? h("li", {}, h("span", { class: "key patch", "aria-hidden": "true" }),
+      `${patches.hikerName ? `${patches.hikerName}'s landmark patches` : "Landmark patches"} (${earnedPatches.length} of ${patches.list.length})`) : null);
 
   // Previous / Current / Next: where we've been, where we are, where we're heading.
   const win = journeyWindow(progress);
@@ -376,7 +475,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
 
   apply();
   select(memory.selectedId, { announce: false });
-  return h("div", { class: "map-wrap" }, toolbar, h("div", { class: "map-frame" }, root), legend, live, journeyStrip, panel,
+  return h("div", { class: "map-wrap" }, toolbar, h("div", { class: "map-frame" }, root, pop), legend, live, journeyStrip, panel,
     h("h3", { class: "sections-title" }, "Journey Progress"), sections);
 }
 

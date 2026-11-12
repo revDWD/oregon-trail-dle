@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { computeProgress } from "../../assets/js/at/engine/progress.js";
 import {
-  project, mapViewBox, MIN_ZOOM, MAX_ZOOM, defaultView, clampView, viewBoxOf, zoomView, panView, fitView, routeSlice, landmarkStatus
+  project, mapViewBox, MIN_ZOOM, MAX_ZOOM, defaultView, clampView, viewBoxOf, zoomView, panView, fitView, routeSlice, landmarkStatus, clusterPoints
 } from "../../assets/js/at/ui/map.js";
 
 const base = mapViewBox();
@@ -75,4 +75,19 @@ test("landmark status reads as passed, next, or distance ahead", () => {
   assert.match(landmarkStatus(p.landmarks[p.landmarks.length - 1], p), / ahead$/);
   const zero = computeProgress(TRAIL, 0, "nobo");
   assert.equal(landmarkStatus(zero.landmarks[0], zero), "Starting point");
+});
+
+test("patch icons cluster when they would overlap and split apart as the map zooms in", () => {
+  const pts = TRAIL.landmarks.map((l) => ({ id: l.id, ...project(l.lat, l.lon) }));
+  const wide = clusterPoints(pts, 17);
+  const close = clusterPoints(pts, 17 / MAX_ZOOM);
+  assert.equal(wide.flatMap((g) => g.members).length, pts.length, "every patch is in exactly one group");
+  assert.ok(wide.length < pts.length, "dense landmarks cluster at the default zoom");
+  assert.ok(close.length > wide.length, "zooming in separates them");
+  wide.forEach((g) => {
+    const mx = g.members.reduce((s, m) => s + m.x, 0) / g.members.length;
+    assert.ok(Math.abs(g.x - mx) < 1e-9, "a cluster sits at its members' centre");
+  });
+  assert.deepEqual(clusterPoints([{ x: 0, y: 0 }, { x: 50, y: 0 }], 10).map((g) => g.members.length), [1, 1]);
+  assert.deepEqual(clusterPoints([], 10), []);
 });

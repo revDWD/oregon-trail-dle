@@ -9,6 +9,7 @@ A friends-based fitness game: log walks, hikes, runs and rides, and turn them in
 - **Journey progress** on the Trail map: each region lists its landmarks (✓ passed, ➜ next, ○ ahead); tap one to see it on the map
 - **Landmark stories**: tap any landmark for a real, credited photo (when one has been added; otherwise pixel art), why it matters, nature notes, a "Did you know?" and Kevin's Trail Notes; a Previous / Current / Next strip under the map tells the journey so far
 - **Per-hiker badges** (locked ones stay mystery silhouettes until earned) with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
+- **Landmark Patch Collection**: every landmark has an original embroidered-style patch. A hiker earns it when their own miles reach that landmark (with a "Patch Earned" celebration); Camp shows each hiker's collection (completion, nearest collectible, next state, collection milestones, related resources) and the Trail map shows the chosen hiker's patches
 - **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles. 56 species (mammals, birds, insects, reptiles and amphibians) change with the trail section and the season; very rare finds and a few playful legends are rolled once per outing. A **Field guide** collects every species photographed (fact, range, first and last sighting, photos, who found it); it follows whoever is spotting, eleven wildlife badges reward collecting, and **every species has its own badge** (its sprite in a medallion) for each hiker's first photo of it
 - Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
 - Static frontend (GitHub Pages) + Supabase Auth/Postgres with Row Level Security
@@ -43,9 +44,9 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 
 | Tab | What it is |
 |---|---|
-| Trail | "Message from Camp", expedition progress, the interactive map, this week by hiker, landmarks |
+| Trail | "Message from Camp", expedition progress, the interactive map (with a hiker's landmark patches), this week by hiker, landmarks |
 | Log Activity | Log an activity for a hiker (the dropdown remembers the last hiker on this device) |
-| Camp | **Trail Dispatches** first, then the camp scene (automatic time of day), **the hikers** (pick one: miles, a Badge Collection bar, achievement and species badges, milestones, journey), the trail register |
+| Camp | **Trail Dispatches** first, then the camp scene (automatic time of day), **the hikers** (pick one: miles, a Badge Collection bar, achievement and species badges, landmark patches, milestones, journey), the trail register |
 | Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; choose who's spotting; the habitat follows the expedition's section; the Field guide below the game collects species (silhouettes until found) |
 | History | The Expedition Journal (landmarks, wildlife discoveries, field-guide milestones and badge unlocks, newest first), then activities logged on this device: edit, delete, or assign a hiker to older entries |
 

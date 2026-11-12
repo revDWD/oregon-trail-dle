@@ -4,8 +4,10 @@ import { readFileSync } from "node:fs";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { LANDMARK_PATCHES } from "../../assets/js/at/trail/landmark-patches.js";
 import {
-  PATCH_SHAPES, RESOURCE_KINDS, groupPatchesByState, landmarkPatches, patchCollection, patchFor, patchMarks, patchMilestones, sortPatches
+  PATCH_SHAPES, RESOURCE_KINDS, RESOURCE_OFFERS, groupPatchesByState, landmarkPatches, nearbyWildlife, patchCollection, patchFor, patchForecast,
+  patchMarks, patchMilestones, patchRarity, sortPatches, stateCollections
 } from "../../assets/js/at/engine/patches.js";
+import { DEFAULT_THEME, themeFor } from "../../assets/js/at/engine/expedition-themes.js";
 import { PERSONAL_MARKS, hikerBadges } from "../../assets/js/at/engine/hikers.js";
 
 // A minimal SVG DOM, just enough to draw patch art.
@@ -23,7 +25,7 @@ globalThis.document = {
   createElementNS: (ns, tag) => new FakeNode(tag),
   createTextNode: (text) => new FakeNode("#text", text)
 };
-const { patchArt, PATCH_MOTIFS, motifFor } = await import("../../assets/js/at/ui/patch-art.js");
+const { patchArt, explorerArt, PATCH_MOTIFS, motifFor } = await import("../../assets/js/at/ui/patch-art.js");
 const walk = (n, out = []) => { out.push(n); (n.kids || []).forEach((k) => walk(k, out)); return out; };
 
 const hiker = (totalMiles, extra = {}) => ({ id: "h1", name: "Kayla", totalMiles, activityCount: totalMiles > 0 ? 3 : 0, firstActivityDate: totalMiles > 0 ? "2026-03-01" : null, ...extra });
@@ -45,7 +47,11 @@ test("every landmark has exactly one patch with complete, valid data", () => {
     p.resources.forEach((r) => {
       assert.match(r.url, /^https:\/\//, `${p.id} ${r.url}`);
       assert.ok(RESOURCE_KINDS[r.kind] && r.kindLabel === RESOURCE_KINDS[r.kind], `${p.id} ${r.kind}`);
+      assert.ok(r.offers.every((o) => RESOURCE_OFFERS[o]) && r.offerLabels.length === r.offers.length, `${p.id} ${r.url} offers`);
     });
+    const order = Object.keys(RESOURCE_KINDS);
+    const ranks = p.resources.map((r) => order.indexOf(r.kind));
+    assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b), `${p.id} resources are listed best first`);
     assert.equal(new Set(p.resources.map((r) => r.url)).size, p.resources.length, `${p.id} resources are not repeated`);
   });
 });
@@ -157,6 +163,86 @@ test("patches sort by trail order, by state and by date earned", () => {
 
 test("achievement badges are untouched by patches", () => {
   assert.equal(hikerBadges(hiker(600), { today: "2026-11-20" }).length, 24);
+});
+
+test("state collections: border landmarks count for both states, and the Explorer patch is dated by the last landmark", () => {
+  const ps = landmarkPatches(TRAIL, "nobo", hiker(600), []).map((p, i) => ({ ...p, earnedOn: p.earned ? `2026-05-${String(i + 1).padStart(2, "0")}` : null }));
+  const states = stateCollections(ps);
+  const codes = states.map((s) => s.code);
+  assert.equal(new Set(codes).size, codes.length);
+  ps.forEach((p) => p.states.forEach((code) => assert.ok(states.find((s) => s.code === code).patches.includes(p), `${p.id} in ${code}`)));
+  const ga = states.find((s) => s.code === "GA");
+  assert.ok(ga.complete && ga.explorer.earned);
+  assert.equal(ga.explorer.name, "Georgia Explorer");
+  assert.equal(ga.explorer.id, "explorer-GA");
+  assert.equal(ga.explorer.earnedOn, [...ga.patches.map((p) => p.earnedOn)].sort().at(-1));
+  assert.equal(ga.explorer.landmarks, ga.total);
+  const me = states.find((s) => s.code === "ME");
+  assert.ok(!me.complete && !me.explorer.earned && me.explorer.earnedOn === null);
+  const undated = stateCollections(landmarkPatches(TRAIL, "nobo", hiker(600), []));
+  assert.equal(undated.find((s) => s.code === "GA").explorer.earnedOn, null, "no date unless every landmark has one");
+});
+
+test("patch rarity counts the active roster holding each patch", () => {
+  const ps = landmarkPatches(TRAIL, "nobo", hiker(600), []);
+  const crew = [hiker(600), hiker(100, { id: "h2" }), hiker(0, { id: "h3" }), hiker(2000, { id: "h4", active: false })];
+  const r = patchRarity(ps, crew);
+  assert.equal(r.roster, 3, "retired hikers don't count");
+  assert.equal(r.holders.get(ps[0].id), 2, "Springer: everyone who has set out");
+  assert.equal(r.mostEarned.patch.id, ps[0].id);
+  assert.equal(r.mostEarned.holders, 2);
+  const furthest = ps.filter((p) => p.earned).at(-1);
+  assert.equal(r.rarest.patch.id, furthest.id, "ties go to the furthest along");
+  assert.equal(r.rarest.holders, 1);
+  assert.equal(patchRarity(landmarkPatches(TRAIL, "nobo", hiker(0), []), crew).rarest, null, "nothing earned, nothing rare");
+});
+
+test("the patch forecast follows the hiker's own weekly pace, never sooner than a week", () => {
+  const hk = hiker(100, { firstActivityDate: "2026-03-01" });
+  const ps = landmarkPatches(TRAIL, "nobo", hk, []);
+  const f = patchForecast(ps, hk, "2026-03-29");
+  assert.equal(f.weeklyMiles, 25);
+  const next = ps.find((p) => !p.earned);
+  assert.equal(f.next.patch.id, next.id);
+  assert.equal(f.next.weeks, Math.max(Math.ceil((next.distance - 100) / 25), 1));
+  assert.equal(f.complete.patch.id, ps.at(-1).id);
+  assert.ok(f.complete.date > f.next.date);
+  const early = patchForecast(ps, hk, "2026-03-02");
+  assert.equal(early.weeklyMiles, 100, "the first week counts as a whole week");
+  assert.equal(patchForecast(ps, hiker(0), "2026-03-29"), null, "no pace yet");
+  assert.equal(patchForecast(ps, null, "2026-03-29"), null);
+  const done = hiker(TRAIL.totalMiles);
+  const all = patchForecast(landmarkPatches(TRAIL, "nobo", done, []), done, "2026-09-01");
+  assert.ok(all && all.next === null && all.complete === null, "nothing left to forecast");
+});
+
+test("nearby wildlife lists common species from the landmark's section only", () => {
+  const theme = themeFor(DEFAULT_THEME);
+  const rarity = new Map(theme.species.map((sp) => [sp.id, sp.rarity]));
+  landmarkPatches(TRAIL, "nobo").forEach((p) => {
+    const list = nearbyWildlife(p);
+    assert.ok(list.length > 0 && list.length <= 4, `${p.id} wildlife`);
+    list.forEach((w) => {
+      assert.equal(rarity.get(w.id), "common", `${p.id} ${w.id}`);
+      assert.ok(theme.habitats[p.region.scene].animals[w.id] > 0, `${p.id} ${w.id} lives here`);
+    });
+  });
+  assert.deepEqual(nearbyWildlife({ region: null }), []);
+});
+
+test("State Explorer patch art is unique per state, gold-edged, and muted until earned", () => {
+  const states = stateCollections(landmarkPatches(TRAIL, "nobo", hiker(600), []));
+  const ids = new Set();
+  states.forEach((s) => {
+    const art = explorerArt(s.explorer);
+    assert.match(art.attrs.class, new RegExp(`patch-art explorer-art ${s.complete ? "earned" : "locked"}`));
+    assert.ok(art.attrs["aria-label"].includes(s.explorer.name));
+    const nodes = walk(art);
+    assert.ok(nodes.some((n) => n.kids && n.kids.some((k) => k.text === "EXPLORER")), `${s.code} says EXPLORER`);
+    nodes.filter((n) => n.attrs && n.attrs.id).forEach((n) => { assert.ok(!ids.has(n.attrs.id), `duplicate id ${n.attrs.id}`); ids.add(n.attrs.id); });
+  });
+  const shadowed = patchArt(landmarkPatches(TRAIL, "nobo")[0], { shadow: true });
+  assert.ok(walk(shadowed).some((n) => n.tag === "filter"), "a sewn-on drop shadow");
 });
 
 test("the Trail tab keeps patches off the landmark detail card", () => {

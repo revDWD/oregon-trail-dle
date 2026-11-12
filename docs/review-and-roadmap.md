@@ -581,3 +581,21 @@ Regional field guides and expedition wildlife reports (`this_expedition`, `habit
 **Art.** Original SVG: circle, shield or hexagon with a stitched edge, region-coloured twill, a scene per landmark (balds, fire towers, rivers, bridges, ponies, the Katahdin sign…) and a ribbon banner. Muted greyscale when locked. No ATC logos or real patch designs.
 
 **Next.** A one-time postcard on arrival, a printable "patch jacket" view, state completion lines in the journal, and patches for future landmarks (one data entry plus an optional motif; see AGENTS.md §5).
+
+## 20. Landmark Patch refinement
+
+**Goal.** Make patches a flagship progression system: easier to see on the map, more landmark-specific art, more useful real-world links, and a collection people want to browse. Improved in place; no new systems, tables or SQL.
+
+**Map.** Icons are about 40% larger (24 map units, from 17) and grow gently with zoom (`patchIconSize`), with a drop shadow and a stitched merrow edge; they scale up on hover/focus. Mouse hover now opens the preview card (photo, state, mile, date, description), tap and Enter still do. Newly earned patches, or the cluster holding one, stitch-pop and sparkle once (motion allowed only). A hint under the select names the hiker's next patch and its distance.
+
+**Art.** Every landmark has its own scene (Springer's plaque, Clingmans' ramp tower, McAfee's ledge, Katahdin's sign, Dragon's Tooth, Harpers Ferry's church and rivers…), a thread texture and a merrow edge. Still original SVG; no ATC logos or real patch designs.
+
+**Links.** Every resource was opened by a person before being listed, then typed (`kind`: Official Patch, Park Store, Conservancy Store, Patch Shop, Trail Club, Visitor Center, History, Official Site, Learn More) and tagged with what it offers (patch, souvenirs, visitor or hiking information). They sort best first. Where no landmark-specific patch exists (Pen Mar, Delaware Water Gap, Roan), the authoritative landmark page is listed instead. Third-party retailers are labelled "Patch Shop"; a hint reminds people that stock changes.
+
+**Collector's detail.** Photo, art with a date stamp, elevation, mile, section, "on the trail since" where well documented (Springer 1958, Bear Mountain 1923), who else holds it, "Why This Landmark Matters", "Nearby Wildlife" (from the region's Wildlife Spotting habitat) and "Trail Trivia".
+
+**Motivation and states.** Stats: next patch and miles to it, current state progress, state patches, rarest patch held, crew favourite, and a gentle forecast from the hiker's average weekly miles. **State Collections** list every state; reaching all of a state's landmarks earns a larger, gold-rimmed State Explorer patch, celebrated in the flash. Explorers stay outside the patch milestones and the Badge Collection bar.
+
+**Showcase.** The collection sits on a canvas-textured "passport" page; earned patches tilt slightly with a shadow and a red "Earned" date stamp.
+
+**Next.** A printable patch jacket, state completion lines in the Expedition Journal, and a one-time arrival postcard.

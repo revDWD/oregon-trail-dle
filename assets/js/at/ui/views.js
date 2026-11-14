@@ -3,6 +3,8 @@ import { h, svg, fill, formatMiles, formatDay } from "./dom.js";
 import { renderTrailMap, landmarkPicture } from "./map.js";
 import { renderMarkdown } from "./markdown-view.js";
 import { renderCampScene, markSelectedHiker } from "./camp-scene.js";
+import { enableCamp3d, markCampHiker, mountCamp3d } from "./camp-3d.js";
+import { CAMP_LOCATIONS, bulletinBoard, rosterCampfire } from "../engine/camp-world.js";
 import { createExpedition } from "./expedition-view.js";
 import { badgeArt } from "./badge-art.js";
 import { CAMP_TIME_LABELS, campContext } from "../engine/camp.js";
@@ -447,6 +449,7 @@ function hikersSection(s, a, select) {
     buttons.forEach((btn, key) => btn.setAttribute("aria-pressed", key === hk.id ? "true" : "false"));
     panel.replaceChildren(hikerPanel(s, hk));
     if (select.scene) markSelectedHiker(select.scene, hk.id);
+    markCampHiker(hk.id);
   };
   select.current = show;
   const picker = h("div", { class: "hiker-picker", role: "group", "aria-label": "Choose a hiker" }, hikers.map((x) => {
@@ -459,6 +462,180 @@ function hikersSection(s, a, select) {
   return h("section", { class: "hikers", "aria-labelledby": "hikers-title" },
     h("h2", { id: "hikers-title", tabindex: "-1" }, "The Hikers"),
     hikers.length ? [picker, panel] : h("p", { class: "card" }, "No hikers on the roster yet."));
+}
+
+// ---- Camp locations -------------------------------------------------------------------------------
+// The places in camp (walk up to them in the 3D camp, or choose one from the list). Each opens a short
+// panel built from data already loaded and points to the page that does the full job.
+const campUi = { open: null };
+
+const campLink = (href, text) => h("p", { class: "more-link" }, h("a", { href }, text));
+
+function campBulletin(s) {
+  return bulletinBoard({ hikers: activeHikers(s), register: s.register || [], patches: hasRoster(s) ? expeditionPatches(s) : [], dispatches: s.dispatches || [] });
+}
+
+function campPlaceBody(s, id, { selectHiker, showPatches }) {
+  const prog = s.progress;
+  if (id === "roster") {
+    if (!hasRoster(s)) return h("p", { class: "hint" }, "The roster appears here once the expedition is reachable.");
+    const r = rosterCampfire(activeHikers(s), s.totals);
+    return [
+      h("dl", { class: "stats" },
+        stat("Hikers at camp", String(r.hikerCount)),
+        stat("Miles together", formatMiles(r.totalMiles)),
+        stat("This week", formatMiles(r.weekMiles)),
+        stat("Activities logged", String(r.activities)),
+        stat("On the trail this week", `${r.onTrailThisWeek} of ${r.hikerCount}`),
+        r.weekStar ? stat("Most miles this week", `${r.weekStar.name} · ${formatMiles(r.weekStar.miles)}`) : null),
+      h("ul", { class: "camp-roster" }, r.rows.map((row) => h("li", {},
+        h("button", { type: "button", class: "btn small", onClick: () => selectHiker(row.id) }, row.name),
+        h("span", { class: "hint" }, `${formatMiles(row.miles)} · ${row.share}% of the miles${row.weekMiles ? ` · ${formatMiles(row.weekMiles)} this week` : ""}`))))];
+  }
+  if (id === "bulletin") {
+    const b = campBulletin(s);
+    const none = (text) => h("p", { class: "hint" }, text);
+    return [
+      h("h4", {}, "Recently on the Trail"),
+      b.movers.length ? h("ul", { class: "camp-list" }, b.movers.map((m) => h("li", {}, `${m.name} logged miles ${day(m.date)}`,
+        h("span", { class: "hint" }, m.weekMiles ? ` · ${formatMiles(m.weekMiles)} this week` : "")))) : none("No miles logged yet."),
+      h("h4", {}, "Latest Landmarks"),
+      b.landmarks.length ? h("ul", { class: "camp-list" }, b.landmarks.map((l) => h("li", {}, `The Expedition reached ${l.title}`,
+        h("span", { class: "hint" }, ` · mile ${l.miles}${l.date ? ` · ${day(l.date)}` : ""}`)))) : none("The first landmark is just up the trail."),
+      h("h4", {}, "Recent Patch Unlocks"),
+      b.patches.length ? h("ul", { class: "camp-list" }, b.patches.map((p) => h("li", {}, `${p.name} patch`,
+        h("span", { class: "hint" }, ` · ${p.state}${p.date ? ` · ${day(p.date)}` : ""}`)))) : none("No patches yet."),
+      h("h4", {}, "Expedition News"),
+      b.dispatch ? h("p", {}, `“${b.dispatch.title}” from ${b.dispatch.author || "the organizer"}`, h("span", { class: "hint" }, `${b.dispatch.date ? ` · ${when(b.dispatch.date)}` : ""} · read it at the top of Camp.`))
+        : none("No dispatches yet.")];
+  }
+  if (id === "journal") {
+    const entries = s.expeditionUnavailable ? [] : expeditionJournal({ hikers: s.hikers, register: s.register, marks: s.marks,
+      sightings: s.fieldGuideUnavailable ? [] : s.fieldGuide, today: s.today });
+    return [
+      entries.length ? h("ol", { class: "journal" }, entries.slice(0, 3).map(journalEntry)) : h("p", { class: "hint" }, "The journal is blank for now."),
+      campLink("#/history", "Read the whole Expedition Journal in History")];
+  }
+  if (id === "patches") {
+    if (!hasRoster(s)) return h("p", { class: "hint" }, "Patches appear once the expedition is reachable.");
+    const expedition = expeditionOf(s);
+    const c = patchCollection(expeditionPatches(s), expedition);
+    const recent = campBulletin(s).patches;
+    return [
+      h("dl", { class: "stats" },
+        stat("Expedition patches earned", `${c.earned} of ${c.total} · ${c.percent}%`),
+        stat("Next patch", c.nearest ? `${c.nearest.landmarkName} · ${formatMiles(c.nearest.milesAway)} to go` : "Every patch collected!"),
+        stat("State completion progress", c.nextState ? `${c.nextState.name} · ${c.nextState.earned} of ${c.nextState.total}` : "Every state complete!"),
+        stat("State patches", `${c.explorers.filter((x) => x.earned).length} of ${c.explorers.length}`),
+        recent.length ? stat("Newest on the board", recent.map((p) => p.name).join(", ")) : null),
+      bar(c.percent, `Expedition collection progress: ${c.earned} of ${c.total} patches`),
+      h("p", { class: "more-link" }, h("button", { type: "button", class: "btn small", onClick: showPatches }, "Open the Expedition Patch Collection"))];
+  }
+  if (id === "wildlife") {
+    const c = s.fieldGuideUnavailable ? null : wildlifeCollection(s.fieldGuide);
+    return [
+      !c ? h("p", { class: "hint" }, "The field guide fills in once wildlife records are reachable.")
+        : !c.found && !c.legendsFound ? h("p", { class: "hint" }, "No species photographed yet. Choose a hiker in Wildlife Spotting to take the first photo.")
+          : collectionStats(c),
+      campLink("#/wildlife", "Go Wildlife Spotting and open the Field Guide")];
+  }
+  const percent = Math.round(Number(prog.percent) || 0);
+  return [
+    h("dl", { class: "stats" },
+      stat("Hiked together", `${formatMiles(prog.creditedMiles)} of ${TRAIL.totalMiles.toLocaleString("en-US")} mi · ${percent}%`),
+      stat("Section", regionAtMarker(TRAIL, prog.position.marker)?.name || "—"),
+      stat("Last landmark", prog.lastLandmark ? prog.lastLandmark.name : "Springer Mountain"),
+      stat("Next landmark", prog.nextLandmark ? `${prog.nextLandmark.name} · ${formatMiles(prog.distanceToNext)}` : "Katahdin reached!")),
+    bar(percent, `Trail progress: ${percent}%`),
+    campLink("#/trail", "Open the Trail map and landmark stories")];
+}
+
+// The 3D camp (with the pixel camp as its fallback), the Camp Locations list and the open place.
+function campExplorer(s, ctx, { scene, caption, captions, select }) {
+  const holder = h("div", { class: "camp-frame" }, scene);
+  const settings = h("div", { class: "camp3d-slot" });
+  const panel = h("div", { id: "camp-place", class: "camp-place" });
+  const buttons = new Map();
+  let returnTo = null;
+  const close = () => {
+    campUi.open = null;
+    fill(panel);
+    buttons.forEach((btn) => btn.setAttribute("aria-pressed", "false"));
+    const back = returnTo;
+    returnTo = null;
+    if (back && back.isConnected) back.focus({ preventScroll: true });
+  };
+  const selectHiker = (id) => {
+    if (select.current) select.current(id);
+    document.getElementById("hiker-name")?.focus();
+  };
+  const showPatches = () => {
+    const title = document.getElementById("patches-title");
+    title?.scrollIntoView?.({ block: "start" });
+    title?.focus({ preventScroll: true });
+  };
+  const open = (id, { from = null, focus = true } = {}) => {
+    const loc = CAMP_LOCATIONS.find((l) => l.id === id);
+    if (!loc) return;
+    campUi.open = id;
+    returnTo = from || returnTo;
+    buttons.forEach((btn, key) => btn.setAttribute("aria-pressed", key === id ? "true" : "false"));
+    const title = h("h3", { id: "camp-place-title", tabindex: "-1" }, loc.name);
+    fill(panel, h("section", { class: "camp-place-card", "aria-labelledby": "camp-place-title" },
+      h("div", { class: "camp-place-head" }, title,
+        h("button", { type: "button", class: "btn small", "aria-label": `Close ${loc.name}`, onClick: close }, "Close")),
+      campPlaceBody(s, id, { selectHiker, showPatches })));
+    if (focus) title.focus();
+    else {
+      caption.textContent = `${loc.name}: open below the camp.`;
+      panel.scrollIntoView?.({ block: "nearest" });
+    }
+  };
+  const places = h("section", { class: "camp-places", "aria-labelledby": "camp-places-title" },
+    h("h3", { id: "camp-places-title" }, "Camp Locations"),
+    h("ul", {}, CAMP_LOCATIONS.map((loc) => {
+      const btn = h("button", { type: "button", class: "camp-place-btn", "aria-pressed": "false", "aria-controls": "camp-place",
+        onClick: (e) => (campUi.open === loc.id ? close() : open(loc.id, { from: e.currentTarget })) }, loc.name);
+      buttons.set(loc.id, btn);
+      return h("li", {}, btn);
+    })));
+  if (campUi.open) open(campUi.open, { focus: false });
+
+  const patches = hasRoster(s) ? expeditionPatches(s) : [];
+  const earned = patches.filter((p) => p.earned).sort((a, b) => String(b.earnedOn || "").localeCompare(String(a.earnedOn || "")) || b.mile - a.mile);
+  const b = campBulletin(s);
+  const mount = () => {
+    const going = mountCamp3d(holder, ctx, {
+      settings,
+      data: {
+        fraction: (Number(s.progress.percent) || 0) / 100,
+        toKatahdin: Math.max(0, TRAIL.totalMiles - (Number(s.progress.creditedMiles) || 0)),
+        patches: earned.slice(0, 12).map((p) => ({ id: p.id, color: p.region && p.region.color })),
+        explorers: hasRoster(s) ? patchCollection(patches, expeditionOf(s)).explorers.filter((x) => x.earned).length : 0,
+        notes: b.movers.length + b.landmarks.length + b.patches.length + (b.dispatch ? 1 : 0),
+        selectedId: s.selectedHiker || null
+      },
+      onInteract: (id) => open(id, { focus: false }),
+      onSelectHiker: (id) => {
+        if (select.current) select.current(id);
+        const name = (ctx.people.find((p) => p.id === id) || {}).name;
+        if (name) caption.textContent = `${name} is chosen. Their badges are under The Hikers below.`;
+      },
+      onFallback: (reason) => {
+        holder.classList.remove("is-3d", "camp3d-loading");
+        fill(holder, scene);
+        caption.textContent = captions.flat;
+        if (reason === "off") {
+          fill(settings, h("button", { type: "button", class: "btn small", onClick: () => { enableCamp3d(); fill(settings); mount(); } }, "Explore the 3D camp"));
+        } else if (reason !== "unavailable") {
+          fill(settings, h("p", { class: "hint" }, "The 3D camp couldn't run smoothly here, so this is the pixel camp. It works just the same."));
+        } else fill(settings);
+      }
+    });
+    if (going) caption.textContent = captions.explore;
+  };
+  mount();
+  return [holder, settings, caption, places, panel];
 }
 
 function registerSection(s) {
@@ -488,8 +665,11 @@ export function campView(s, a) {
     photoLabel: `${photos} photo points pinned up`
   });
   const timeLabel = CAMP_TIME_LABELS[ctx.time];
-  const caption = h("p", { class: "camp-caption", "aria-live": "polite" },
-    `${timeLabel} at camp in ${where}. ${ctx.weather.label}. Tap the fire, the shelter, the bear bag line, the photo board or a hiker.`);
+  const captions = {
+    flat: `${timeLabel} at camp in ${where}. ${ctx.weather.label}. Tap the fire, the shelter, the bear bag line, the photo board or a hiker.`,
+    explore: `${timeLabel} at camp in ${where}. ${ctx.weather.label}. Walk around camp and visit a place, or choose one from Camp Locations.`
+  };
+  const caption = h("p", { class: "camp-caption", "aria-live": "polite" }, captions.flat);
   const select = { current: null };
   const describe = (id) => {
     if (id === "fire") return `Campfire: ${ctx.crewLabel}.`;
@@ -520,8 +700,7 @@ export function campView(s, a) {
       s.isOrganizer && editing !== "new" ? h("button", { class: "btn primary", type: "button", onClick: () => a.editDispatch("new") }, "Write a dispatch") : null,
       archive.length ? archive : h("p", { class: "card" }, s.dispatchesUnavailable ? "Dispatches will appear here once camp is set up." : "No dispatches yet. Check back soon!")),
     h("div", { class: "card camp-card" },
-      h("div", { class: "camp-frame" }, scene),
-      caption,
+      campExplorer(s, ctx, { scene, caption, captions, select }),
       h("dl", { class: "stats" },
         stat("Section", ctx.region ? ctx.region.name : "—"),
         stat(ctx.next ? `Next: ${ctx.next.name}` : "Next landmark", ctx.next ? formatMiles(ctx.next.miles) : "Katahdin reached!"),

@@ -11,6 +11,7 @@ import { listTitles, speciesBadges } from "../engine/field-guide.js";
 import { PERSONAL_MARKS, expeditionTotals, groupMarks, hikerBadges, trailRegister } from "../engine/hikers.js";
 import { earnedPatchIds, expeditionSummary, landmarkPatches, patchMilestones, stateCollections } from "../engine/patches.js";
 import { h, clear } from "./dom.js";
+import { pauseCamp3d } from "./camp-3d.js";
 import { trailView, logView, historyView, campView, wildlifeView } from "./views.js";
 
 // Unknown routes fall back to the trail. Old bookmarks still work: #/hunt opens Wildlife Spotting;
@@ -68,6 +69,7 @@ function setStatus(text, which) {
 function render({ focus = false } = {}) {
   state.today = localDateString();
   if (game) { game.stop(); game = null; }
+  pauseCamp3d();
   clear(root);
   nav.hidden = !state.user;
   if (!state.user) {

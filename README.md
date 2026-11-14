@@ -5,11 +5,11 @@ A friends-based fitness game: log walks, hikes, runs and rides, and turn them in
 - **The expedition**: one shared journey from Springer Mountain to Katahdin. Every activity is logged for one of the eleven official hikers (Alden, Amanda, Andrew, David, Elizabeth, Kayla, Kevin, Kelsey, Matthew, Shuva, Will), and everyone's miles move the group together
 - **Interactive trail map**: zoom/pan/pinch, regional sections, mile posts, landmark detail cards with original illustrations
 - **Trail Dispatches**: the organizer's announcements ("Message from Camp" on the Trail page, full archive at Camp), with simple formatting
-- **Camp, the hub**: a pixel-art camp that follows the device clock (morning, day, evening, night) and grows with the expedition's miles. Pick a hiker to see their miles contributed, badges, milestones and journey; the trail register shows who carried the group past each landmark
+- **Camp, the hub**: an explorable 3D camp (Three.js, loaded only on Camp) that follows the device clock and the season and grows with the expedition's miles. Walk a third-person hiker around with WASD/arrows and the mouse, or a joystick and drag on touchscreens, and press E at six Camp Locations (Hiker Roster Campfire, Expedition Bulletin Board, Trail Journal Tent, Patch Collection Display, Wildlife Observation Area, Trail Map Table); each is also a button under the scene. The original pixel-art camp is the fallback on devices without WebGL2 or that run it slowly. Pick a hiker to see their miles contributed, badges, milestones and journey; the trail register shows who carried the group past each landmark
 - **Journey progress** on the Trail map: each region lists its landmarks (✓ passed, ➜ next, ○ ahead); tap one to see it on the map
 - **Landmark stories**: tap any landmark for a real, credited photo (when one has been added; otherwise pixel art), why it matters, nature notes, a "Did you know?" and Kevin's Trail Notes; a Previous / Current / Next strip under the map tells the journey so far
 - **Per-hiker badges** (locked ones stay mystery silhouettes until earned) with original pixel art: mileage (First Steps 10 mi up to Katahdin Bound 1,000 mi), firsts, landmarks, group milestones and a forgiving activity rhythm
-- **Landmark Patch Collection**: every landmark has an original embroidered-style patch. A hiker earns it when their own miles reach that landmark (with a "Patch Earned" celebration), and a larger State Explorer patch for reaching every landmark in a state. Camp shows each hiker's collection as a passport (date stamps, motivation stats, state collections, collection milestones, and a collector's detail with photo, trivia, nearby wildlife and typed related resources), and the Trail map shows the chosen hiker's patches with a hover/tap preview
+- **Landmark Patch Collection**: every landmark has an original embroidered-style patch, owned by the whole Expedition. When the group's shared miles reach a landmark, every hiker gets its patch ("Patch Earned: X. The Expedition reached X."), and reaching every landmark in a state earns a larger State Explorer patch. Camp shows the shared collection as a passport (date stamps, motivation stats, state collections, collection milestones, and a collector's detail with photo, trivia, nearby wildlife and typed related resources), and the Trail map shows the Expedition's patches with a hover/tap preview
 - **Wildlife Spotting**: the original Oregon Trail DLE hunt minigame, restored and re-themed with a camera and Appalachian Trail wildlife. Photos are pinned to a hiker on the photo board at Camp and never add trail miles. 56 species (mammals, birds, insects, reptiles and amphibians) change with the trail section and the season; very rare finds and a few playful legends are rolled once per outing. A **Field guide** collects every species photographed (fact, range, first and last sighting, photos, who found it); it follows whoever is spotting, eleven wildlife badges reward collecting, and **every species has its own badge** (its sprite in a medallion) for each hiker's first photo of it
 - Per-hiker totals and badge dates are computed in Postgres (not in the browser), and each device can only see its own raw activity rows
 - Static frontend (GitHub Pages) + Supabase Auth/Postgres with Row Level Security
@@ -31,9 +31,10 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 |---|---|
 | `index.html`, `assets/css/at.css` | Single-page shell and styles |
 | `assets/js/at/trail/` | Trail data only (mileage, landmarks, milestones) |
-| `assets/js/at/engine/` | Pure logic: progress, activity validation/conversion, game mechanics, camp, expedition rules and themes, Markdown |
+| `assets/js/at/engine/` | Pure logic: progress, activity validation/conversion, game mechanics, camp (including the 3D camp's world), expedition rules and themes, Markdown |
 | `assets/js/at/data/` | The only code that talks to Supabase |
-| `assets/js/at/ui/` | DOM helpers, map, camp scene, expedition canvas, illustrations, views, app shell |
+| `assets/js/at/ui/` | DOM helpers, map, camp scene and 3D camp, expedition canvas, illustrations, views, app shell |
+| `assets/vendor/` | Vendored `supabase-js` and three.js, with checksums |
 | `supabase/migrations/` | Schema, RLS, RPCs |
 | `supabase/expedition-reset.sql` | Fresh start at mile 0, keeping wildlife collections (backs up first; run by hand, not a migration) |
 | `supabase/tests/` | RLS, reset and upgrade tests run against real PostgreSQL |
@@ -44,9 +45,9 @@ No build step and no runtime npm dependencies. `@supabase/supabase-js` is vendor
 
 | Tab | What it is |
 |---|---|
-| Trail | "Message from Camp", expedition progress, the interactive map (with a hiker's landmark patches), this week by hiker, landmarks |
+| Trail | "Message from Camp", expedition progress, the interactive map (with the Expedition's landmark patches), this week by hiker, landmarks |
 | Log Activity | Log an activity for a hiker (the dropdown remembers the last hiker on this device) |
-| Camp | **Trail Dispatches** first, then the camp scene (automatic time of day), **the hikers** (pick one: miles, a Badge Collection bar, achievement and species badges, landmark patches, milestones, journey), the trail register |
+| Camp | **Trail Dispatches** first, then the 3D camp (or the pixel camp) with its Camp Locations, the **Expedition Patch Collection**, **the hikers** (pick one: miles, a Badge Collection bar, achievement and species badges, milestones, journey), the trail register |
 | Wildlife Spotting | Photograph trail wildlife in 30 seconds with 12 frames of film; choose who's spotting; the habitat follows the expedition's section; the Field guide below the game collects species (silhouettes until found) |
 | History | The Expedition Journal (landmarks, wildlife discoveries, field-guide milestones and badge unlocks, newest first), then activities logged on this device: edit, delete, or assign a hiker to older entries |
 

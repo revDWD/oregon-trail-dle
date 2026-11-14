@@ -137,7 +137,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 /* ---- Trail Dispatches ---- */
 .dispatch .eyebrow { margin: 0 0 .2rem; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; font-weight: 700; color: var(--bark); }
 .dispatch.featured { background: linear-gradient(180deg, #fff3da, var(--paper)); border: 2px solid var(--amber); }
-.dispatch.featured h2 { font-family: Georgia, serif; font-size: 1.35rem; }
+.dispatch.featured h3 { font-size: 1.35rem; }
 .dispatch h3 { margin: 0; font-family: Georgia, serif; color: var(--forest-dark); }
 .byline { color: var(--muted); font-size: .85rem; margin: .1rem 0 .6rem; }
 .rich p, .rich ul, .rich ol, .rich blockquote { margin: 0 0 .6rem; }
@@ -146,14 +146,39 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .rich a { color: var(--forest-dark); font-weight: 600; }
 .more-link { margin: -.5rem 0 1rem; text-align: right; }
 .dispatches > .btn { margin-bottom: 1rem; }
+.earlier-dispatches > summary { list-style: none; }
 .field.check { display: flex; align-items: center; gap: .6rem; }
 .field.check input { width: 1.5rem; min-height: 1.5rem; height: 1.5rem; margin: 0; }
 .field.check label { margin: 0; }
 
+/* A photo outing (Wildlife Spotting) started from the Wildlife Observation Area: it covers the 3D camp,
+   or opens beneath the pixel camp. */
+.camp-outing:empty { display: none; }
+.camp-outing-card { margin: .7rem 0 .9rem; padding: .8rem; border: 2px solid var(--bark); border-radius: 12px; background: var(--paper); }
+.camp-frame:has(.camp-stage.is-3d) .camp-outing:not(:empty) { position: absolute; inset: 0; z-index: 4; overflow: auto; overscroll-behavior: contain; background: var(--paper); }
+.camp-frame:has(.camp-stage.is-3d) .camp-outing-card { margin: 0; min-height: 100%; box-sizing: border-box; border: 0; border-radius: 0; }
+.camp-outing-card .camp-place-head h3:focus { outline: none; }
+/* Wide frames: keep the whole meadow in view without scrolling the camp frame. */
+.camp-frame:has(.camp-stage.is-3d) .camp-outing .expedition { max-width: calc(40vh * 16 / 9); margin-inline: auto; }
+.outing-call { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin: .4rem 0 .6rem; }
+.outing-call .hint { margin: 0; }
+
+/* ---- History: the archive, one collapsible panel per record ---- */
+.history-panel { margin-bottom: .75rem; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); }
+.history-panel > summary { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .6rem; min-height: var(--tap); padding: .55rem .9rem; cursor: pointer; list-style: none; border-radius: 10px; }
+.history-panel > summary::-webkit-details-marker { display: none; }
+.history-panel > summary::before { content: "▸"; width: 1rem; color: var(--bark); font-size: 1.1rem; }
+.history-panel[open] > summary::before { content: "▾"; }
+.history-panel > summary:hover { background: rgba(91,70,54,.06); }
+.history-panel > summary:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
+.history-panel > summary h2 { flex: 1 1 0; margin: 0; font-size: 1.2rem; }
+.history-panel > summary h2:focus { outline: none; }
+.history-panel .panel-note { flex-basis: 100%; margin: 0 0 0 1.6rem; }
+.history-panel-body { padding: 0 .9rem .9rem; }
+.history-panel-body > :last-child { margin-bottom: 0; }
 /* ---- Camp ---- */
 /* Camp is a place to be: the page widens and the camp fills the screen above the fold. */
 main:has(.camp-page) { max-width: 76rem; }
-.camp-page .dispatches { max-width: 44rem; margin-left: auto; margin-right: auto; }
 .camp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1rem; }
 .camp-head h1 { margin-bottom: .4rem; }
 .camp-head .hint { margin: 0 0 .6rem; }
@@ -283,7 +308,6 @@ main:has(.camp-page) { max-width: 76rem; }
 .find-card { display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .5rem; border-radius: 8px; background: #fffaf0; color: var(--ink); text-align: center; font-size: .85rem; }
 .find-card.is-notable { box-shadow: 0 0 0 3px #2a9d8f; }
 /* History: the expedition's archive, with quick links down the page */
-.archive-jump { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; padding: 0; }
 /* The photo camera: a round shutter-style button at the bottom centre, like a phone camera app */
 .camp3d::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(20,24,18,.32) 100%); pointer-events: none; }
 .camp3d-camera-btn { position: absolute; left: 50%; bottom: .6rem; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; width: 72px; height: 72px; padding: 0; border: 4px solid #fffaf0; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #3f7a5c, var(--forest-dark) 70%); color: #fff; font: inherit; cursor: pointer; box-shadow: 0 0 0 2px var(--bark), 0 4px 10px rgba(0,0,0,.35); }

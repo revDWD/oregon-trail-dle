@@ -1,6 +1,6 @@
 // Appalachian Trail map: the centrepiece of the Trail page.
 // US state outlines, coloured regional sections, the route, mile posts, landmark buttons with a detail
-// panel, the hiker, the crew camp, crew-mates and a hiker's earned landmark patches. Zoom and pan with buttons, keyboard, wheel, drag
+// panel, the hiker, the crew camp, crew-mates and the Expedition's earned landmark patches. Zoom and pan with buttons, keyboard, wheel, drag
 // or pinch. Everything shown on the map is also available as text (detail panel + lists).
 import { h, svg, fill, formatMiles, formatDay } from "./dom.js";
 import { patchArt } from "./patch-art.js";
@@ -199,7 +199,7 @@ function storyBlock(landmark) {
  * @param trail     trail data
  * @param progress  computeProgress() result for the player
  * @param options   { crew: [{ name, me, totalMiles }], crewMiles: number|null, stateMarkup,
- *                    patches: { hikerName, list: landmarkPatches(), fresh: [patch ids just earned] } | null }
+ *                    patches: { list: the Expedition's landmarkPatches(), fresh: [patch ids just earned] } | null }
  */
 export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, stateMarkup = globalThis.AT_US_STATES, patches = null } = {}) {
   const base = mapViewBox();
@@ -310,7 +310,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     h("dt", {}, "Landmark"), h("dd", {}, pt.landmarkName),
     h("dt", {}, "State"), h("dd", {}, pt.stateNames.join(" / ") || pt.state),
     h("dt", {}, "Mile"), h("dd", {}, `${Number(pt.mile).toLocaleString("en-US")} of ${Number(trail.totalMiles).toLocaleString("en-US")}`),
-    h("dt", {}, "Earned"), h("dd", {}, `${pt.earnedOn ? formatDay(pt.earnedOn) : "Yes"}${patches.hikerName ? ` by ${patches.hikerName}` : ""}`));
+    h("dt", {}, "Earned"), h("dd", {}, `${pt.earnedOn ? formatDay(pt.earnedOn) : "Yes"} · unlocked by the Expedition`));
   const openPatches = (list, from, { hover = false } = {}) => {
     clearTimeout(hoverTimer);
     returnFocus = from;
@@ -509,7 +509,7 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     crewMiles !== null ? h("li", {}, h("span", { class: "key camp", "aria-hidden": "true" }), "Crew camp (combined miles)") : null,
     h("li", {}, h("span", { class: "key post", "aria-hidden": "true" }), "Mile posts every 250 mi"),
     patches ? h("li", {}, h("span", { class: "key patch", "aria-hidden": "true" }),
-      `${patches.hikerName ? `${patches.hikerName}'s landmark patches` : "Landmark patches"} (${earnedPatches.length} of ${patches.list.length})`) : null);
+      `Expedition landmark patches (${earnedPatches.length} of ${patches.list.length})`) : null);
 
   // Previous / Current / Next: where we've been, where we are, where we're heading.
   const win = journeyWindow(progress);

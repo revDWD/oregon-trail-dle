@@ -84,6 +84,18 @@ test("vendored supabase-js matches the documented checksum", () => {
   assert.ok(readme.includes(sum), "README must document the sha256 of supabase.js");
 });
 
+test("vendored three.js matches the documented checksums and is only loaded lazily by the 3D camp", () => {
+  const readme = read("assets/vendor/three/README.md");
+  for (const file of ["three.module.js", "three.core.js"]) {
+    const sum = createHash("sha256").update(readFileSync(join(root, "assets/vendor/three", file))).digest("hex");
+    assert.ok(readme.includes(sum), `README must document the sha256 of ${file}`);
+  }
+  assert.doesNotMatch(read("index.html"), /three/i, "three.js must not load on every page");
+  const camp3d = read("assets/js/at/ui/camp-3d.js");
+  assert.match(camp3d, /import\("\.\.\/\.\.\/\.\.\/vendor\/three\/three\.module\.js"\)/);
+  assert.doesNotMatch(camp3d, /^import .*three/m, "three.js must be imported dynamically");
+});
+
 test("stylesheet supports focus, reduced motion, touch targets and responsive layout", () => {
   const css = read("assets/css/at.css");
   assert.match(css, /:focus-visible/);
@@ -129,6 +141,19 @@ test("navigation: Trail, Log Activity, Camp, Wildlife Spotting, History; old tab
 test("the expedition loop is stopped whenever the page re-renders", () => {
   const app = read("assets/js/at/ui/app.js");
   assert.match(app, /if \(game\) \{ game\.stop\(\); game = null; \}/);
+  assert.match(app, /game = null; \}\s*pauseCamp3d\(\);/, "the 3D camp stops drawing before every re-render");
+});
+
+test("every 3D camp place is also a text button, and Camp falls back to the pixel camp", () => {
+  const views = read("assets/js/at/ui/views.js");
+  const explorer = views.slice(views.indexOf("function campExplorer"), views.indexOf("function registerSection"));
+  assert.match(explorer, /h\("h3", \{ id: "camp-places-title" \}, "Camp Locations"\)/);
+  assert.match(explorer, /CAMP_LOCATIONS\.map\(\(loc\) => \{\s*const btn = h\("button"/, "one button per location");
+  assert.match(explorer, /onFallback:[\s\S]*?fill\(holder, scene\)/, "the pixel camp comes back when 3D can't run");
+  const body = views.slice(views.indexOf("function campPlaceBody"), views.indexOf("function campExplorer"));
+  for (const id of ["roster", "bulletin", "journal", "patches", "wildlife"]) assert.match(body, new RegExp(`id === "${id}"`), `${id} has a panel`);
+  assert.match(body, /campLink\("#\/trail"/, "the map table (the last panel) links to the Trail");
+  assert.match(views.slice(views.indexOf("export function campView")), /campExplorer\(s, ctx,/);
 });
 
 test("starting a round from the keyboard does not also take a photo", () => {

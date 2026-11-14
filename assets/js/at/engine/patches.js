@@ -1,9 +1,11 @@
-// Landmark patches: a collectible patch for every landmark, earned when a hiker's own logged miles
-// reach it. Pure functions, no DOM, no network.
+// Landmark patches: a collectible patch for every landmark, earned by the whole expedition when its
+// shared miles reach the landmark. Pure functions, no DOM, no network.
 //
-// Nothing is stored. Like mileage badges, a patch is earned while the hiker's total covers the
-// landmark's distance, and its date comes from the server's personal marks (at_expedition_marks):
-// the day that hiker's cumulative miles first crossed it. The start (mile 0) is earned with a first
+// The expedition is collaborative, so there is one collection and every hiker shares it: when the
+// group reaches a landmark, everyone owns that patch. Nothing is stored. A patch is earned while the
+// expedition's credited miles cover the landmark's distance, and its date comes from the server's
+// group marks (at_expedition_marks, already fetched for the trail register): the day the group's
+// cumulative miles first crossed it. The start (mile 0) is earned with the expedition's first
 // activity. Patches therefore follow every device and reset with the expedition, like the trail.
 
 import { landmarksInOrder, regionAtMarker, round2 } from "./progress.js";
@@ -66,11 +68,6 @@ export function stateName(code) {
   return STATE_NAMES[code] || code;
 }
 
-// Distances the server should date for each hiker (every landmark after the start).
-export function patchMarks(trail, direction) {
-  return landmarksInOrder(trail, direction).filter((l) => l.distance > 0).map((l) => round2(l.distance));
-}
-
 // "Related Resources": the patch's own links, the landmark story's official page, then the
 // Appalachian Trail Conservancy store, ordered by RESOURCE_KINDS (patches and stores first). Falls
 // back to the trail-wide pages. https only, no duplicates.
@@ -120,18 +117,30 @@ export function patchFor(landmark, trail) {
   };
 }
 
-// Every patch on the trail, in trail order, with this hiker's progress toward it.
-// `marks` are at_expedition_marks() rows (all hikers; this hiker's personal ones are picked out).
-export function landmarkPatches(trail, direction, hiker = null, marks = []) {
-  const personal = new Map((marks || [])
-    .filter((m) => hiker && m.kind === "personal" && m.hikerId === hiker.id)
-    .map((m) => [key(m.mark), m.reachedOn]));
-  const total = hiker ? Number(hiker.totalMiles) || 0 : 0;
-  const started = hiker ? (Number(hiker.activityCount) || 0) > 0 || total > 0 : false;
+// The expedition as the patch engine sees it: shared miles, activity count and the day it set out
+// (the earliest first activity on the roster). `totals` (expeditionTotals) wins when given, so the
+// collection always matches the trail progress shown on the page.
+export function expeditionSummary(hikers = [], totals = null) {
+  const roster = hikers || [];
+  const sum = (field) => round2(roster.reduce((n, x) => n + (Number(x[field]) || 0), 0));
+  const firsts = roster.map((x) => x.firstActivityDate).filter(Boolean).sort();
+  return {
+    totalMiles: totals ? Number(totals.totalMiles) || 0 : sum("totalMiles"),
+    activityCount: totals ? Number(totals.activityCount) || 0 : sum("activityCount"),
+    firstActivityDate: firsts[0] || null
+  };
+}
+
+// Every patch on the trail, in trail order, with the expedition's progress toward it.
+// `expedition` is expeditionSummary(); the group rows of at_expedition_marks() date each patch.
+export function landmarkPatches(trail, direction, expedition = null, marks = []) {
+  const group = new Map((marks || []).filter((m) => m.kind === "group").map((m) => [key(m.mark), m.reachedOn]));
+  const total = expedition ? Number(expedition.totalMiles) || 0 : 0;
+  const started = expedition ? (Number(expedition.activityCount) || 0) > 0 || total > 0 : false;
   return landmarksInOrder(trail, direction).map((landmark) => {
     const patch = patchFor(landmark, trail);
-    const earned = Boolean(hiker) && (patch.distance > 0 ? total >= patch.distance : started);
-    const earnedOn = !earned ? null : patch.distance > 0 ? personal.get(key(patch.distance)) || null : hiker.firstActivityDate || null;
+    const earned = patch.distance > 0 ? total >= patch.distance : started;
+    const earnedOn = !earned ? null : patch.distance > 0 ? group.get(key(patch.distance)) || null : expedition.firstActivityDate || null;
     return { ...patch, earned, earnedOn, milesToGo: earned ? 0 : round2(Math.max(patch.distance - total, 0)) };
   });
 }
@@ -184,12 +193,12 @@ export function stateCollections(patches = []) {
   });
 }
 
-// Collector statistics for one hiker's patches.
-export function patchCollection(patches = [], hiker = null) {
+// Collector statistics for the expedition's shared collection.
+export function patchCollection(patches = [], expedition = null) {
   const total = patches.length;
   const earnedCount = patches.filter((p) => p.earned).length;
   const nextPatch = patches.find((p) => !p.earned) || null;
-  const totalMiles = hiker ? Number(hiker.totalMiles) || 0 : 0;
+  const totalMiles = expedition ? Number(expedition.totalMiles) || 0 : 0;
   const stateProgress = stateCollections(patches);
   return {
     earned: earnedCount,
@@ -203,34 +212,12 @@ export function patchCollection(patches = [], hiker = null) {
   };
 }
 
-// How many hikers on the roster hold each patch (a hiker holds it once their own miles reach it).
-// `rarest` is the earned patch the fewest hikers share (ties go to the furthest along the trail);
-// `mostEarned` is the crew's most collected patch. Needs `patches` for one hiker (with `earned`).
-export function patchRarity(patches = [], hikers = []) {
-  const roster = (hikers || []).filter((x) => x && x.active !== false);
-  const holds = (hk, p) => {
-    const miles = Number(hk.totalMiles) || 0;
-    return p.distance > 0 ? miles >= p.distance : miles > 0 || (Number(hk.activityCount) || 0) > 0;
-  };
-  const holders = new Map(patches.map((p) => [p.id, roster.filter((hk) => holds(hk, p)).length]));
-  const pick = (list, better) => list.reduce((best, p) => (!best || better(p, best) ? p : best), null);
-  const earned = patches.filter((p) => p.earned);
-  const rarest = pick(earned, (p, best) => holders.get(p.id) <= holders.get(best.id));
-  const most = pick(patches.filter((p) => holders.get(p.id) > 0), (p, best) => holders.get(p.id) > holders.get(best.id));
-  return {
-    roster: roster.length,
-    holders,
-    rarest: rarest ? { patch: rarest, holders: holders.get(rarest.id) } : null,
-    mostEarned: most ? { patch: most, holders: holders.get(most.id) } : null
-  };
-}
-
-// A gentle forecast from the hiker's average weekly miles since their first activity (at least one
-// week, so a big first day doesn't skew it). Null until there is a pace to go on.
-export function patchForecast(patches = [], hiker = null, today = localDateString()) {
-  if (!hiker || !hiker.firstActivityDate || !parseDate(hiker.firstActivityDate) || !parseDate(today)) return null;
-  const total = Number(hiker.totalMiles) || 0;
-  const weeks = Math.max(daysBetween(hiker.firstActivityDate, today) / 7, 1);
+// A gentle forecast from the expedition's average weekly miles since it set out (at least one week,
+// so a big first day doesn't skew it). Null until there is a pace to go on.
+export function patchForecast(patches = [], expedition = null, today = localDateString()) {
+  if (!expedition || !expedition.firstActivityDate || !parseDate(expedition.firstActivityDate) || !parseDate(today)) return null;
+  const total = Number(expedition.totalMiles) || 0;
+  const weeks = Math.max(daysBetween(expedition.firstActivityDate, today) / 7, 1);
   const weekly = round2(total / weeks);
   if (!(weekly > 0)) return null;
   const left = patches.filter((p) => !p.earned);
@@ -249,7 +236,7 @@ export function patchForecast(patches = [], hiker = null, today = localDateStrin
   };
 }
 
-// Wildlife a hiker is likely to meet near a landmark: the most common species in its region's
+// Wildlife hikers are likely to meet near a landmark: the most common species in its region's
 // habitat (rare and legendary finds stay a surprise).
 export function nearbyWildlife(patch, count = 4) {
   const theme = themeFor(DEFAULT_THEME);

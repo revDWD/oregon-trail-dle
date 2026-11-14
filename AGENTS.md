@@ -63,7 +63,8 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `expedition.js` and `expedition-themes.js`: Wildlife Spotting rules and data.
     - `field-guide.js`: field guide, region progress, wildlife badges.
     - `journal.js`: the Expedition Journal on History (`expeditionJournal`).
-    - `patches.js`: Landmark Patches (`landmarkPatches`, `patchCollection`, `patchMilestones`, sorts).
+    - `patches.js`: the Expedition's shared Landmark Patches (`expeditionSummary`, `landmarkPatches`, `patchCollection`, `patchMilestones`, sorts).
+    - `camp-world.js`: the 3D camp's layout and rules, kept apart from three.js so they can be tested (`CAMP_LOCATIONS`, colliders (`campColliders`), `moveActor`, `nearestLocation`, the follow camera (`followCamera`), `QUALITY` tiers and `qualityTier`, `campLighting`, `bulletinBoard`, `rosterCampfire`).
     - `markdown.js`: safe dispatch text.
   - **`trail/`**: data only.
     - `appalachian-trail.js`: landmarks, route, milestones, regions.
@@ -74,7 +75,8 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `app.js`: state, router, loading, actions.
     - `views.js`: one function per tab.
     - `map.js`: SVG trail map and landmark detail. Its view maths is pure and exported.
-    - `camp-scene.js`: pixel SVG camp.
+    - `camp-3d.js`: the explorable Three.js camp. It is the only file that touches three.js.
+    - `camp-scene.js`: the pixel SVG camp, which is also the 3D camp's fallback.
     - `expedition-view.js`: canvas game.
     - `badge-art.js`: 12×12 sprites.
     - `illustrations.js`: pixel landmark scenes.
@@ -82,7 +84,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - `dom.js`: `h()`, `svg()`, `fill()` and `formatDay()` helpers.
 - **Rendering.** The app re-renders a whole view on change.
   - Background refresh runs every 60 s (`loadExpedition(true)`). It redraws Trail, Camp, Log or History only when data changed and nobody is typing or focused on a control (History also waits while an edit form is open).
-  - A running Wildlife Spotting round is stopped on re-render (`game.stop()`).
+  - A running Wildlife Spotting round is stopped on re-render (`game.stop()`), and the 3D camp stops drawing (`pauseCamp3d()`). Its world (renderer, player position, camera) survives re-renders, and the scene is rebuilt only when what it shows changes.
 - **Supabase**
   - Tables are prefixed `at_`. Every table in `public` is now `at_*` (test-enforced): the old Oregon Trail tables (`community_progress`, `mileage_log`) and the unused challenge/profile tables were retired by `20261108000000_at_cleanup.sql` (see `docs/review-and-roadmap.md` §16).
   - Retired data is **archived, not destroyed**: it moves to the private `archive` schema (no grants to anon/authenticated, not in Realtime). Expedition resets back up there too.
@@ -121,7 +123,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - **Journey progress**: regions as parents and landmarks as children (✓ passed, ➜ next, ○ ahead).
     - A **Previous / Current / Next** strip.
     - The **landmark detail** panel: a real photo or the pixel-art scene, facts, story and Kevin's notes. **No patch art here** (test-enforced); the Trail tab stays about the trail.
-    - A "Show landmark patches for" select: the chosen hiker's earned patches sit on the map as icons (clustered when they'd overlap, splitting as you zoom). Hover, click or Enter opens a preview card with the patch, photo, state, mile, date and description.
+    - The Expedition's earned landmark patches sit on the map as icons (clustered when they'd overlap, splitting as you zoom). Hover, click or Enter opens a preview card with the patch, photo, state, mile, date and description. There is no per-hiker patch picker: patches belong to the whole expedition.
   - There is no "Coming up" card and no separate Landmarks card.
 - **Landmark photos**
   - Shown in the detail panel. Comes from `landmarkStory(id).photo` (a hand-picked override) or the generated `LANDMARK_PHOTOS[id]`. Otherwise the pixel art shows, and it is also the fallback if the image fails to load.
@@ -129,13 +131,20 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Refresh photos from GitHub: Actions › "Landmark photos" › Run, which opens a PR so a person reviews every picture.
 - **Camp (the hub)**
   - In page order:
-    1. **Trail Dispatches** (top).
-    2. The pixel camp scene.
-    3. "The hikers": picker plus per-hiker panel showing miles, share, week, achievement and species badge counts, the **Badge Collection** bar, achievement badges, a collapsible **Species Badges** grid, a collapsible **Landmark Patch Collection**, milestones and their journey.
-    4. The trail register.
-    5. The dispatch archive.
+    1. **Trail Dispatches** (top), with the dispatch archive.
+    2. The camp card: the **3D camp** (or the pixel camp), its **Camp Locations** list and place panel, and camp stats.
+    3. The **Expedition Patch Collection** (shared by everyone).
+    4. "The hikers": picker plus per-hiker panel showing miles, share, week, achievement and species badge counts, the **Badge Collection** bar, achievement badges, a collapsible **Species Badges** grid, milestones and their journey.
+    5. The trail register.
   - Time of day follows the device clock: morning 5–9, day 9–17, evening 17–21, night 21–5. There are no buttons.
   - Scenery follows the expedition's section, weather follows the season, and there is one bear bag per hiker.
+- **3D camp** (`ui/camp-3d.js` on top of the pure `engine/camp-world.js`)
+  - Progressive enhancement: the pixel camp is drawn first, then three.js is lazy-loaded (dynamic `import()`, only on Camp) and replaces it. Same section scenery, season, time of day, campers (shirts and hats from `camp-scene.js`) and bear bags.
+  - A third-person hiker walks around camp (the chosen hiker's colours). Desktop: WASD or arrows, Shift to jog, mouse drag or comma/period to turn the camera, E to interact. Touch: a virtual joystick on the left half, drag on the right half to turn, and a tap-to-act prompt. Collisions are simple circles in `camp-world.js`.
+  - **Camp Locations** (`CAMP_LOCATIONS`), each a place in the scene *and* a text button below it, opening the same panel: Hiker Roster Campfire (roster, miles, fun stats), Expedition Bulletin Board (`bulletinBoard`: recent logs, landmarks, patches, dispatches), Trail Journal Tent (recent journal entries, link to History), Patch Collection Display (recent patches, state progress; jumps to the collection), Wildlife Observation Area (recent photos, stats, link to Wildlife Spotting) and Trail Map Table (progress, next landmark, link to Trail). Add a place with one `CAMP_LOCATIONS` entry, a prop in `camp-3d.js` and a branch in `campPlaceBody` (views.js).
+  - Camp life: flickering fire with smoke, lit lanterns and fireflies after dark, a deer, rabbit or fox wandering the tree line, rain or snow with the weather, day/night lighting from `campLighting`. Reduced motion stills the ambient animation.
+  - Quality tiers (`QUALITY`: low, medium, high) scale pixel ratio, antialiasing, trees, particles and wildlife. The tier is picked from the device (`qualityTier`) and steps down when frames stay slow. Settings (quality, camera sensitivity) live only in the session.
+  - Falls back to the pixel camp when WebGL2 is missing, three.js fails to load, the context is lost, frames stay below ~10 fps on Low, or the user picks "Use the 2D camp instead" (an "Explore the 3D camp" button brings it back).
 - **Trail Dispatches**
   - Rows in `at_dispatches`, posted from Camp by organizers. Organizers are listed in `at_organizers` and added via the SQL editor.
   - Limited Markdown is rendered safely (https links only).
@@ -152,14 +161,14 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Trail Legends are secret: their badges appear only once photographed, in gold, as a bonus outside every total.
   - Celebrated after an outing (one line for all new species), grouped per day in the hiker's timeline and the journal. The journal skips a species badge already told by the expedition's "First photo" entry.
 - **Badge Collection bar** (Camp): `badgeCollection(badges, species)` = (achievement badges earned + regular species badges earned) / (24 + 50). It measures exactly the badges shown beneath it, so 100% is reachable without legends. The old bar showed mileage toward the next mileage badge, unlabelled, and felt disconnected; mileage is now a line of text and its name stays a surprise.
-- **Landmark Patches** (`engine/patches.js`): one collectible patch per landmark, earned when the hiker's *own* miles reach it (Springer with their first activity). Kept apart from `hikerBadges()` and the Badge Collection bar, which are unchanged.
-  - Derived, never stored: dates come from personal marks (`patchMarks()` rides along with `PERSONAL_MARKS` in the `at_expedition_marks` call, ≤ 100 values). No SQL; an expedition reset clears them like mileage badges.
-  - Camp's collection is styled as a passport (canvas texture, tilted earned patches with red "Earned" date stamps). It shows motivation stats (`patchMotivation`: collected, next patch, current state, state patches, rarest patch held via `patchRarity`, crew favourite, a gentle forecast via `patchForecast`), collection milestones (First, 10, 25, 50, 100, All; only those smaller than the set show), a grid sortable by trail order, state or date earned (locked patches muted), and **State Collections**.
-  - The collector's detail card: art plus date stamp, landmark photo (`landmarkPicture`), facts (state, elevation, mile, section, `since`, held by), "Why This Landmark Matters" (the story's history), "Nearby Wildlife" (`nearbyWildlife`, from the region's habitat), "Trail Trivia", and "Related Resources" (https only, new tab).
+- **Landmark Patches** (`engine/patches.js`): one collectible patch per landmark, owned by the **whole Expedition**. The trip is collaborative, so when the group's shared credited miles reach a landmark every hiker owns its patch (Springer with the expedition's first activity). There is no per-hiker patch ownership anywhere: no per-hiker collection, picker or "held by". Wording is "The Expedition reached X" and "Unlocked by the Expedition". Kept apart from `hikerBadges()` and the Badge Collection bar, which are unchanged.
+  - Derived, never stored: `landmarkPatches(trail, direction, expeditionSummary(hikers, totals), marks)` dates each patch from the server's **group** marks in `at_expedition_marks` (the day the group's miles crossed it). No SQL; an expedition reset clears them like the trail.
+  - Camp's **Expedition Patch Collection** is styled as a passport (canvas texture, tilted earned patches with red "Earned" date stamps). It shows motivation stats (`patchMotivation`: Expedition patches earned, next patch, state completion progress, state patches, a gentle forecast via `patchForecast` at the group's weekly pace), collection milestones (First, 10, 25, 50, 100, All; only those smaller than the set show), a grid sortable by trail order, state or date earned (locked patches muted), and **State Collections**.
+  - The collector's detail card: art plus date stamp, landmark photo (`landmarkPicture`), facts (state, elevation, mile, section, `since`), "Why This Landmark Matters" (the story's history), "Nearby Wildlife" (`nearbyWildlife`, from the region's habitat), "Trail Trivia", and "Related Resources" (https only, new tab).
   - **Resources** carry a `kind` (`RESOURCE_KINDS`, best first: patch, park-store, state-park-store, conservancy-store, outfitter, patch-shop, trail-club, visitor-center, history, official, learn) and `offers` (`RESOURCE_OFFERS`: patch, souvenir, visitor, hiking). `patchResources` sorts them. Third-party patch retailers are `patch-shop`. Only add links a person has opened; when no real patch exists, link the authoritative landmark page.
-  - **State Explorer patches** (`stateCollections`, `explorerArt`): earned when a hiker reaches every landmark in a state (dated by the last one). Larger gold-rimmed round patches with a state emblem (`STATE_EMBLEMS`). They don't count toward patch milestones or the Badge Collection bar.
-  - Map: earned icons are 24 map units (`patchIconSize(zoom)` grows them gently on zoom), with a drop shadow and stitched edge. Mouse hover opens the preview card (photo, state, mile, date, description); tap/Enter opens it too. Newly earned patches (and any cluster holding one) stitch-pop and sparkle once (only with motion allowed). A hint under the select names the hiker's next patch.
-  - Celebrated after logging: "Patch Earned: X" and "State Patch Earned: X Explorer" cards in the flash, and milestone lines. Logging an activity selects that hiker on the map.
+  - **State Explorer patches** (`stateCollections`, `explorerArt`): earned when the Expedition reaches every landmark in a state (dated by the last one). Larger gold-rimmed round patches with a state emblem (`STATE_EMBLEMS`). They don't count toward patch milestones or the Badge Collection bar.
+  - Map: the Expedition's earned icons are 24 map units (`patchIconSize(zoom)` grows them gently on zoom), with a drop shadow and stitched edge. Mouse hover opens the preview card (photo, state, mile, date, description); tap/Enter opens it too. Newly earned patches (and any cluster holding one) stitch-pop and sparkle once (only with motion allowed). A hint above the map names the Expedition's next patch.
+  - Celebrated once for everyone after logging: "Patch Earned: X. The Expedition reached X.", "State Patch Earned: X Explorer" and "The Expedition: <milestone>!" lines.
   - Art is original SVG (circle, shield or hexagon, merrow edge, thread texture, a landmark-specific scene, ribbon banner). No ATC logos or real patch designs.
 - **Wildlife Spotting**
   - The restored Oregon Trail DLE hunt, re-themed as photography with the same pacing and renderer. The data-only theme is in `expedition-themes.js`; rules are in `expedition.js`.
@@ -185,13 +194,14 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 - **Add a species:** follow `docs/adding-species.md`. In short: one object in `expedition-themes.js` (in `TRAIL_EXPANSION` or a new wave list added to `SPECIES`) with its `where`, `behavior: BEHAVIOR.<class>` (pick the closest class; only add a class if none fits), fact, range and pixel `parts`. Spawn tables, the guide, hints, badges, collector stats and the journal all derive from it; run `npm test`. Never rename or remove a photographed species id. No SQL needed.
 - **Add a landmark (and its patch):** add the landmark to `appalachian-trail.js`, then an entry in `landmark-patches.js` (`shape`, `banner` ≤ 13 characters, `description`, optional `since: { year, note }`, and `resources` each with `kind` and `offers`; a new state also needs a `STATE_EMBLEMS` entry; trivia comes from the landmark's `trivia` in `appalachian-trail.js`) and, ideally, a motif in `patch-art.js` (otherwise a scene for its `kind` is used). Earning, map icons, Camp, sorts and milestones derive from it; `tests/at/patches.test.js` checks every patch. No SQL needed.
 - **Add a badge:** add a data entry plus a unique sprite in `badge-art.js`; tests check the art. (A new species gets its species badge automatically.)
+- **Add a Camp location:** one entry in `CAMP_LOCATIONS` (`engine/camp-world.js`: id, Title Case name, sentence-case verb, position, radius and reach; it blocks walking automatically), a prop drawn in `createWorld` (`ui/camp-3d.js`) and a branch in `campPlaceBody` (views.js). The text button and "Press E" prompt follow automatically; `tests/at/camp-world.test.js` checks reachability and spacing. Scenery you can't use goes in `CAMP_PROPS`.
 - **Reset the expedition:** give the owner `supabase/expedition-reset.sql` as plain text. It backs up into `archive.*_YYYYMMDD_HHMMSS` first. The undo recipe is in the script header: it pauses the logging triggers (`disable trigger user`) so old dates and outing dates restore unchanged; a plain `insert … select` would be refused. Wildlife observations are kept, so collections carry on. Tested in `reset.test.sql`.
 - **Change the schema:** see Rules below.
 
 ## 6. Rules
 
 - **Code and dependencies**
-  - No build step and no third-party CDN scripts. `supabase-js` is vendored; update its checksum in `assets/vendor/supabase-js/README.md` when upgrading.
+  - No build step and no third-party CDN scripts. `supabase-js` and three.js are vendored; update their checksums in `assets/vendor/*/README.md` when upgrading (a test checks three's). three.js is loaded only with a dynamic `import()` from `ui/camp-3d.js`, never from `index.html` or a static import (test-enforced), so other tabs don't pay for it. `assets/vendor/**` is marked `-text` in `.gitattributes` so checksums survive line-ending conversion.
   - There is no login UI by design: `auth.ensureSession()` uses anonymous sign-in.
 - **Secrets and storage**
   - Never commit secrets; only the public URL and publishable key go in `config.js`.
@@ -251,5 +261,6 @@ The app must keep working when a migration hasn't been applied yet.
 - Seasonal events.
 - A short field-guide quiz.
 - Group milestone celebrations at Camp.
+- In the 3D camp (roadmap §21): wildlife photo missions, hidden collectibles, seasonal camp themes, landmark trophies, trail trivia, visiting hikers, camp pets and shelter upgrades. Each should be a `CAMP_LOCATIONS` entry or a prop driven by existing data.
 
 Each should reuse existing data, avoid new tabs, and keep the experience calm.

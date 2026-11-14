@@ -599,3 +599,37 @@ Regional field guides and expedition wildlife reports (`this_expedition`, `habit
 **Showcase.** The collection sits on a canvas-textured "passport" page; earned patches tilt slightly with a shadow and a red "Earned" date stamp.
 
 **Next.** A printable patch jacket, state completion lines in the Expedition Journal, and a one-time arrival postcard.
+
+## 21. A shared patch collection and a 3D Community Camp
+
+**Patches belong to the Expedition.** The trip is collaborative, so landmark patches are no longer per-hiker. When the group's shared miles reach a landmark, every hiker owns its patch. `landmarkPatches` now takes `expeditionSummary(hikers, totals)` and dates patches from the server's *group* marks, so the per-hiker `patchMarks` extra marks are gone. Also removed: the map's "Show landmark patches for" picker, per-hiker unlock lines, "held by", "rarest patch held" and "crew favourite" (meaningless when everyone holds everything). Wording is "The Expedition reached X", "Unlocked by the Expedition" and "Expedition Patch Collection". The collection moved out of the per-hiker panel into its own Camp section. Celebrations happen once, for everyone. No SQL.
+
+**Camp becomes a place.** The pixel camp was decorative. Camp now opens an explorable Three.js camp, decided with these constraints:
+
+- *No build step, no CDN.* three r187 is vendored in `assets/vendor/three` with SHA-256 sums (about 2 MB, `three.module.js` plus `three.core.js`) and loaded with a dynamic `import()` only when Camp is shown, so the other tabs pay nothing. A static test checks the sums and that nothing imports it eagerly.
+- *Progressive enhancement.* The pixel camp renders first and is kept as the fallback: no WebGL2, a failed load, a lost context, frames under about 10 fps even on Low, or "Use the 2D camp instead". An "Explore the 3D camp" button goes back.
+- *Pure world, thin renderer.* Layout, collisions, movement, camera, quality tiers, lighting and the bulletin and roster summaries live in `engine/camp-world.js` (unit-tested). `ui/camp-3d.js` only draws, using low-poly primitives and canvas-texture signs, with no model or texture downloads.
+- *Same camp, more of it.* It uses the same section scenery, season and weather, time of day, campers (shirts and hats from `camp-scene.js`), tents that grow with the miles, and one bear bag per hiker.
+- *Controls.* WASD or arrows (Shift to jog), mouse drag or comma/period to turn, E to interact. On touch: a joystick on the left half, drag on the right half, and a tap prompt. The camera follows from behind and pulls in rather than clipping through the shelter. Sensitivity and quality are in a settings panel and kept for the session only.
+- *Six Camp Locations,* each reachable in the scene **and** as a text button below it (anything drawn is also text):
+  - Hiker Roster Campfire
+  - Expedition Bulletin Board
+  - Trail Journal Tent
+  - Patch Collection Display
+  - Wildlife Observation Area
+  - Trail Map Table
+
+  They reuse existing data: the roster, register, journal, patch collection, field guide and progress. They link to History, Wildlife Spotting, Trail and the full patch collection rather than duplicating them.
+- *Camp life, lightly.* A flickering fire with smoke, lit lanterns and fireflies after dark, a deer, rabbit or fox along the tree line, rain or snow, and day/night lighting. Reduced motion stills it.
+- *Mobile.* Three quality tiers pick themselves from the device (pixel ratio, cores, memory, Save-Data). They step down automatically when frames stay slow. Low caps at about 30 fps. Drawing stops when the tab is hidden, the canvas is off screen, or the view re-renders (`pauseCamp3d`).
+
+**Next (camp).** Each of these should be a `CAMP_LOCATIONS` entry or a prop driven by existing data:
+
+- wildlife photo missions
+- hidden collectibles
+- seasonal camp themes
+- landmark trophies on a shelf
+- trail trivia at the signpost
+- visiting hikers on group milestones
+- a camp pet
+- shelter upgrades as the miles grow

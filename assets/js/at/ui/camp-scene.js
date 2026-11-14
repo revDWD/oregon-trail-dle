@@ -11,7 +11,7 @@ const H = 180;
 const GROUND = 120;
 
 const SKY = { dawn: ["#f6d7b0", "#f3b98f"], day: ["#a9d6ea", "#d8eef5"], dusk: ["#e9a072", "#7d5a8c"], night: ["#16223a", "#2c3c5e"] };
-const SCENES = {
+export const SCENES = {
   "southern-ridges": { far: "#7f9f86", near: "#4f7a55", ground: "#6f8f4a" },
   "high-balds": { far: "#8fae7c", near: "#a9c47a", ground: "#7a9a4b", bald: true },
   "blue-ridge": { far: "#7d99b3", near: "#5c7f97", ground: "#6b8c4a" },
@@ -21,8 +21,8 @@ const SCENES = {
   alpine: { far: "#8e97a8", near: "#6c7a73", ground: "#6c8048", snowcaps: true },
   "north-woods": { far: "#5f7f72", near: "#35594a", ground: "#5a7a44", spruce: true }
 };
-const SHIRTS = ["#c0392b", "#2f6b9a", "#e0a43a", "#6d8f5e", "#8e5a9b", "#d4703a", "#3f8f8a", "#b04f6a"];
-const HATS = ["#5b4636", "#2f5d46", "#8f2d1f", "#e8dcc0", "#3a3a3a"];
+export const SHIRTS = ["#c0392b", "#2f6b9a", "#e0a43a", "#6d8f5e", "#8e5a9b", "#d4703a", "#3f8f8a", "#b04f6a"];
+export const HATS = ["#5b4636", "#2f5d46", "#8f2d1f", "#e8dcc0", "#3a3a3a"];
 
 const px = (parent, x, y, w, h, fill, cls) => { const r = svg("rect", { x, y, width: w, height: h, fill, class: cls }); parent.append(r); return r; };
 const group = (parent, attrs = {}) => { const g = svg("g", attrs); parent.append(g); return g; };

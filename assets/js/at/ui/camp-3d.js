@@ -1,7 +1,10 @@
 // The explorable 3D camp: a cozy low-poly Appalachian Trail base camp drawn with three.js. Walk a hiker
 // round the fire, the shelter, the tents and six places to visit; each place opens a Camp panel (the
-// view decides what it shows). Everything here is drawing and input: layout, collisions, the camera
-// rig, quality tiers, lighting and the board summaries live in engine/camp-world.js and are tested.
+// view decides what it shows). The expedition's hikers go about their day around camp, wildlife
+// wanders through now and then, and a photo camera (C) frames whatever you point it at. Everything here
+// is drawing and input: layout, collisions, the camera rig, quality tiers and lighting live in
+// engine/camp-world.js, and hikers' activities, visitors, plants and photo framing in
+// engine/camp-life.js. Both are tested.
 //
 // Progressive enhancement: the 2D pixel camp is drawn first and stays as the fallback. three.js is
 // vendored and only imported here, lazily, the first time Camp is opened. If WebGL2 is missing, the
@@ -11,13 +14,22 @@
 import { h, fill } from "./dom.js";
 import { SCENES, SHIRTS, HATS } from "./camp-scene.js";
 import {
-  CAMP_LOCATIONS, CAMP_START, MOVE_KEYS, QUALITY, RUN_SPEED, TENT_SPOTS, WALK_SPEED, WORLD_RADIUS,
-  campColliders, campLighting, campSeats, clampPitch, followCamera, forestRing, headingOf, joystickVector,
-  keysVector, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
+  BENCH_SEATS, CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, FIRE_BENCHES, LANTERN_SPOTS, MOVE_KEYS, PLAYER_RADIUS, QUALITY, RUN_SPEED,
+  TENT_SPOTS, WALK_SPEED, WORLD_RADIUS, campColliders, campLighting, clampPitch, followCamera, forestRing, headingOf,
+  joystickVector, keysVector, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
 } from "../engine/camp-world.js";
+import {
+  CAMP_PATHS, FALLEN_LOG, NPC_RADIUS, OVERLOOK, activityLabel, allActivitySpots, campFlora, createCampLife, createVisitors,
+  describeNpc, describeVisitor, floraFor, framePhoto, photoCaption, projectPoint, stepCampLife, stepVisitors, vantagePoints, waryDistance
+} from "../engine/camp-life.js";
 
-// Session-only preferences (localStorage holds only the last-chosen hiker).
-const session = { webgl: null, degraded: false, optOut: false, quality: "auto", sensitivity: 1 };
+// Session-only preferences and the photo roll (localStorage holds only the last-chosen hiker; camp
+// photos live in memory until the page closes and are never uploaded).
+const session = { webgl: null, degraded: false, optOut: false, quality: "auto", sensitivity: 1, photos: [] };
+const MAX_PHOTOS = 12;
+const EYE = 1.55; // the photo camera's height
+const FOV = 55;
+const MIN_FOV = 20;
 let threeModule = null;
 let world = null;
 let mountToken = 0;
@@ -29,7 +41,6 @@ const loadThree = () => {
 
 // Short names for the floating signs (the full names are in the prompt and the text list).
 const SIGN = { roster: "Campfire", bulletin: "Bulletin Board", journal: "Trail Journal", patches: "Patches", wildlife: "Wildlife", map: "Trail Map" };
-const LANTERN_SPOTS = [{ x: -3.6, z: -5.6 }, { x: 3, z: -4.8 }, { x: -4.2, z: 3.6 }, { x: 5.4, z: 4.4 }];
 const SKIN = 0xe6b98f;
 const WOOD = 0x7a5a3c;
 const WOOD_DARK = 0x5b4636;
@@ -82,6 +93,7 @@ const chosenTier = () => (session.quality === "auto" ? autoTier() : QUALITY[sess
  * @param opts.onSelectHiker(id)  a hiker by the fire was tapped
  * @param opts.onFallback(reason) the 2D camp should come back ("off" | "unavailable" | "load-failed" | "context-lost" | "slow" | "error")
  * @param opts.settings           an element to fill with the Controls and Settings panel
+ * @param opts.life               an element to fill with Around Camp Now and Camp Photos (the text version of camp life)
  * @param opts.data               { fraction, toKatahdin, patches: [{ id, color }], explorers, notes, selectedId }
  */
 export function mountCamp3d(holder, ctx, opts = {}) {
@@ -126,6 +138,7 @@ function attach(THREE, token, holder, ctx, opts, tries = 0) {
     holder.classList.remove("camp3d-loading");
     holder.classList.add("is-3d");
     if (opts.settings) fill(opts.settings, settingsPanel(world));
+    if (opts.life) fill(opts.life, lifePanel(world));
     resize(world);
     start(world);
   } catch (e) {
@@ -142,10 +155,12 @@ function fallback(w, reason, opts = w && w.opts) {
     w.resizeObserver?.disconnect();
     w.intersection?.disconnect();
     document.removeEventListener("visibilitychange", w.onVisibility);
+    clearTimeout(w.toastTimer);
     try { w.renderer.dispose(); } catch (e) { /* already gone */ }
     w.root.remove();
   }
   world = null;
+  if (opts?.life) fill(opts.life);
   opts?.onFallback?.(reason);
 }
 
@@ -302,9 +317,9 @@ function createWorld(THREE) {
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "application");
   canvas.setAttribute("aria-roledescription", "3D camp");
-  canvas.setAttribute("aria-label", "Explorable 3D camp. Use W A S D or the arrow keys to walk, comma and period to turn the camera, and E to visit the nearest place. Every place is also in the Camp Locations list below.");
+  canvas.setAttribute("aria-label", "Explorable 3D camp. Use W A S D or the arrow keys to walk, comma and period to turn the camera, E to visit the nearest place and C for the photo camera. Every place is also in the Camp Locations list below, and what's happening in camp is in Around Camp Now.");
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.1, 170);
+  const camera = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 170);
   const touch = coarsePointer();
   const ui = {
     status: h("p", { class: "sr-only", "aria-live": "polite" }),
@@ -312,23 +327,41 @@ function createWorld(THREE) {
     place: h("span", { class: "camp3d-place" }),
     knob: h("span", { class: "camp3d-knob" }),
     hint: h("p", { class: "camp3d-hint", "aria-hidden": "true" }, touch
-      ? "Drag on the left to walk · drag on the right to look · tap a place to visit"
-      : "Click the camp, then W A S D or arrows to walk · drag to look · E to visit")
+      ? "Drag on the left to walk · drag on the right to look · tap a place to visit · 📷 for photos"
+      : "Click the camp, then W A S D or arrows to walk · drag to look · E to visit · C for the camera"),
+    zoom: h("span", { class: "camp3d-zoom" }, "×1.0"),
+    toast: h("p", { class: "camp3d-toast", hidden: true, "aria-hidden": "true" }),
+    flash: h("div", { class: "camp3d-flash", "aria-hidden": "true" })
   };
   ui.joy = h("div", { class: "camp3d-joy", hidden: true, "aria-hidden": "true" }, ui.knob);
   ui.act = h("button", { type: "button", class: "camp3d-act", onClick: () => { if (w.near) interact(w, w.near.id); } },
     h("kbd", { class: "camp3d-key", "aria-hidden": "true" }, "E"), ui.verb, ui.place);
   ui.prompt = h("div", { class: "camp3d-prompt", hidden: true }, ui.act);
+  ui.cameraBtn = h("button", { type: "button", class: "camp3d-camera-btn", "aria-label": "Photo camera", onClick: () => enterCamera(w) },
+    h("span", { "aria-hidden": "true" }, "📷"), h("span", { class: "camp3d-camera-label" }, "Camera"));
+  ui.finder = h("div", { class: "camp3d-finder", hidden: true, "aria-hidden": "true" },
+    ["tl", "tr", "bl", "br"].map((c) => h("span", { class: `camp3d-corner ${c}` })), h("span", { class: "camp3d-reticle" }), ui.zoom);
+  ui.shutter = h("button", { type: "button", class: "camp3d-shutter", "aria-label": "Take photo", onClick: () => takePhoto(w) });
+  ui.camBar = h("div", { class: "camp3d-cambar", hidden: true, onKeydown: (e) => { if (e.key === "Escape") { e.preventDefault(); exitCamera(w, { focus: true }); } } },
+    h("button", { type: "button", class: "camp3d-cam-ctl", "aria-label": "Zoom out", onClick: () => zoomCamera(w, 1) }, "−"),
+    ui.shutter,
+    h("button", { type: "button", class: "camp3d-cam-ctl", "aria-label": "Zoom in", onClick: () => zoomCamera(w, -1) }, "+"),
+    h("button", { type: "button", class: "btn small camp3d-cam-done", onClick: () => exitCamera(w, { focus: true }) }, "Done"));
   const w = {
     THREE, renderer, canvas, scene, camera, tier, ui,
     geos: new Map(), mats: new Map(), disposables: [], key: null,
     dynamic: new THREE.Group(),
     player: { x: CAMP_START.x, z: CAMP_START.z, heading: CAMP_START.heading, phase: 0, speed: 0 },
     cam: { yaw: 0, pitch: 0.42, pos: null },
+    photo: { on: false, yaw: 0, pitch: 0, fov: FOV },
     held: new Set(), joy: null, drag: null, near: null, running: false, raf: 0, last: 0, clock: 0,
-    fps: { frames: 0, since: 0, slow: 0, warm: 0 }, colliders: campColliders(), pickables: [], anim: null,
+    fps: { frames: 0, since: 0, slow: 0, warm: 0 }, colliders: campColliders(), pickables: [], occluders: [], anim: null,
+    life: null, lifeKey: null, visitors: null, npcViews: new Map(), visitorViews: new Map(), lifeUi: null,
+    playerCollider: { id: "player", x: CAMP_START.x, z: CAMP_START.z, radius: PLAYER_RADIUS, tall: false },
+    playerColliders: [], npcBlockers: [],
     visible: true, selectedId: null, opts: {},
-    raycaster: new THREE.Raycaster(), ndc: new THREE.Vector2(), camPos: new THREE.Vector3(), camLook: new THREE.Vector3()
+    raycaster: new THREE.Raycaster(), ndc: new THREE.Vector2(), camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
+    rayFrom: new THREE.Vector3(), rayDir: new THREE.Vector3()
   };
   scene.add(w.dynamic);
   w.playerMesh = hikerModel(w, scene, { shirt: 0xd4703a, hat: 0x2f5d46, pack: true, pose: "walk" });
@@ -337,7 +370,7 @@ function createWorld(THREE) {
   you.position.y = 1.85;
   w.playerMesh.add(you);
   w.disposables = []; // the player's label lives for the page, never freed on rebuild
-  w.root = h("div", { class: "camp3d" }, canvas, ui.joy, ui.prompt, ui.hint, ui.status);
+  w.root = h("div", { class: "camp3d" }, canvas, ui.flash, ui.finder, ui.joy, ui.prompt, ui.cameraBtn, ui.camBar, ui.toast, ui.hint, ui.status);
   bindInput(w);
   canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); fallback(w, "context-lost"); });
   w.resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => resize(w)) : null;
@@ -374,6 +407,56 @@ function clearDynamic(w) {
   w.disposables.forEach((d) => d.dispose());
   w.disposables = [];
   w.pickables = [];
+  w.occluders = [];
+  w.npcViews.clear();
+  w.visitorViews.clear();
+  w.lifeKey = null;
+}
+
+// The clearing's ground, painted once per build: grass, a worn centre, worn footpaths (CAMP_PATHS),
+// ash round the fire and scattered speckles, so the floor reads as a place and not a flat colour.
+const GROUND_SPAN = 44;
+function groundTexture(w, look, light) {
+  const size = w.tier.ground || 1024;
+  return canvasTexture(w, size, size, (g) => {
+    const px = (v) => ((v + GROUND_SPAN / 2) / GROUND_SPAN) * size;
+    const k = size / GROUND_SPAN;
+    const ground = hex(look.ground);
+    const css = (c, a = 1) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
+    g.fillStyle = css(ground);
+    g.fillRect(0, 0, size, size);
+    const clearing = g.createRadialGradient(px(0), px(0), 0, px(0), px(0), (WORLD_RADIUS + 2) * k);
+    clearing.addColorStop(0, css(mix(ground, 0xc8b48a, 0.35)));
+    clearing.addColorStop(0.75, css(mix(ground, 0xc8b48a, 0.18)));
+    clearing.addColorStop(1, css(ground, 0));
+    g.fillStyle = clearing;
+    g.fillRect(0, 0, size, size);
+    const rand = seededRandom(17);
+    for (let i = 0; i < size * 3; i += 1) {
+      const a = rand() * Math.PI * 2;
+      const r = Math.sqrt(rand()) * 21;
+      const shade = rand();
+      g.fillStyle = css(shade < 0.5 ? mix(ground, 0x22381e, 0.35) : mix(ground, 0xe8dca0, 0.3), 0.5);
+      g.fillRect(px(Math.sin(a) * r), px(Math.cos(a) * r), 1 + rand() * k * 0.08, 1 + rand() * k * 0.08);
+    }
+    const dirt = mix(ground, 0x9a8462, 0.65);
+    g.lineCap = "round";
+    CAMP_PATHS.forEach((p) => {
+      g.strokeStyle = css(dirt, 0.35);
+      g.lineWidth = p.width * k * 1.6;
+      g.beginPath(); g.moveTo(px(p.ax), px(p.az)); g.lineTo(px(p.bx), px(p.bz)); g.stroke();
+      g.strokeStyle = css(dirt, 0.9);
+      g.lineWidth = p.width * k;
+      g.beginPath(); g.moveTo(px(p.ax), px(p.az)); g.lineTo(px(p.bx), px(p.bz)); g.stroke();
+    });
+    const ash = g.createRadialGradient(px(0), px(0), 0, px(0), px(0), 1.9 * k);
+    ash.addColorStop(0, "rgba(58,52,48,0.85)");
+    ash.addColorStop(0.6, css(dirt, 0.9));
+    ash.addColorStop(1, css(dirt, 0));
+    g.fillStyle = ash;
+    g.fillRect(0, 0, size, size);
+    if (light.snow) { g.fillStyle = "rgba(245,248,255,0.55)"; g.fillRect(0, 0, size, size); }
+  });
 }
 
 function build(w, ctx, data) {
@@ -391,7 +474,7 @@ function build(w, ctx, data) {
   const look = SCENES[ctx.scene] || SCENES["southern-ridges"];
   const light = campLighting(ctx.time, ctx.weather);
   const reduced = reducedMotion();
-  const anim = { flames: [], smoke: [], fireflies: null, precip: null, wanderers: [], rings: [], wavers: [], fireLight: null, reduced };
+  const anim = { flames: [], smoke: [], fireflies: null, precip: null, rings: [], fireLight: null, blockAxe: null, reduced };
   w.anim = anim;
 
   // Sky, fog and light.
@@ -402,17 +485,19 @@ function build(w, ctx, data) {
   sun.position.set(10, 4 + light.sunHeight * 14, 7);
   root.add(sun);
 
-  // Ground, the clearing, the trail through camp and footpaths to each place.
+  // Ground: the wide forest floor, then the painted clearing (worn paths, ash, speckles) and the trail
+  // running on through the woods either side.
   const ground = hex(look.ground);
   const dirt = mix(ground, 0x9a8462, 0.65);
-  part(w, root, ["CircleGeometry", 1, 48], ground, { rx: -Math.PI / 2, sx: 80, sy: 80 });
-  part(w, root, ["CircleGeometry", 1, 48], mix(ground, 0xc8b48a, 0.3), { y: 0.005, rx: -Math.PI / 2, sx: WORLD_RADIUS + 0.6, sy: WORLD_RADIUS + 0.6 });
-  part(w, root, ["PlaneGeometry", 1, 1], dirt, { y: 0.01, rx: -Math.PI / 2, sx: 1.2, sy: 90 });
-  part(w, root, ["CircleGeometry", 1, 24], dirt, { y: 0.012, rx: -Math.PI / 2, sx: 2.4, sy: 2.4 });
-  CAMP_LOCATIONS.filter((l) => l.id !== "roster").forEach((l) => {
-    const len = Math.hypot(l.x, l.z);
-    part(w, root, ["PlaneGeometry", 1, 1], dirt, { x: l.x / 2, y: 0.011, z: l.z / 2, rx: -Math.PI / 2, rz: Math.atan2(l.x, l.z), sx: 0.8, sy: len });
-  });
+  part(w, root, ["CircleGeometry", 1, 48], light.snow ? mix(ground, 0xf4f6fb, 0.5) : ground, { rx: -Math.PI / 2, sx: 80, sy: 80 });
+  const floorTex = groundTexture(w, look, light);
+  floorTex.anisotropy = Math.min(4, w.renderer.capabilities.getMaxAnisotropy());
+  const floor = new T.Mesh(geo(w, "PlaneGeometry", GROUND_SPAN, GROUND_SPAN), new T.MeshLambertMaterial({ map: floorTex }));
+  w.disposables.push(floor.material);
+  floor.position.y = 0.008;
+  floor.rotation.x = -Math.PI / 2;
+  root.add(floor);
+  [-1, 1].forEach((s) => part(w, root, ["PlaneGeometry", 1, 1], dirt, { y: 0.006, z: s * (GROUND_SPAN / 2 + 12), rx: -Math.PI / 2, sx: 1.2, sy: 24 }));
 
   // Hills: a near ridge fades into the fog, a far range stays as a silhouette against the sky.
   const rand = seededRandom(31);
@@ -445,23 +530,52 @@ function build(w, ctx, data) {
     }
   }
 
-  // The forest ring, instanced (two draw calls per kind, however many trees).
-  const trees = forestRing(w.tier.trees).map((t) => (Math.abs(t.x) < 1.8 ? { ...t, x: t.x + Math.sign(t.x || 1) * 2.4 } : t))
+  // The forest ring, instanced (two draw calls per kind, however many trees). The section sets the
+  // evergreen share (REGION_FLORA in camp-life.js).
+  const flora = floraFor(ctx.scene);
+  const trees = forestRing(w.tier.trees, 7, look.spruce ? Math.max(flora.pine, 0.85) : flora.pine)
+    .map((t) => (Math.abs(t.x) < 1.8 ? { ...t, x: t.x + Math.sign(t.x || 1) * 2.4 } : t))
     .filter((t) => !water || Math.hypot(t.x - water.x, t.z - water.z) > water.r + 1);
-  const pines = trees.filter((t) => look.spruce || t.kind === "pine");
-  const broad = trees.filter((t) => !(look.spruce || t.kind === "pine"));
+  const pines = trees.filter((t) => t.kind === "pine");
+  const broad = trees.filter((t) => t.kind !== "pine");
   const dummy = new T.Object3D();
   const instanced = (list, geometry, color, place) => {
-    if (!list.length) return;
+    if (!list.length) return null;
     const m = new T.InstancedMesh(geometry, mat(w, color), list.length);
     list.forEach((t, i) => { place(t); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
     root.add(m);
     w.disposables.push({ dispose: () => m.dispose() });
+    return m;
   };
   const reset = () => { dummy.rotation.set(0, 0, 0); };
-  instanced(trees, geo(w, "CylinderGeometry", 0.14, 0.2, 1, 6), WOOD_DARK, (t) => { reset(); dummy.position.set(t.x, 0.6 * t.scale, t.z); dummy.scale.set(t.scale, 1.2 * t.scale, t.scale); });
-  instanced(pines, geo(w, "ConeGeometry", 1, 1, 7), mix(hex(look.near), 0x1f3a2a, look.spruce ? 0.45 : 0.25), (t) => { reset(); dummy.position.set(t.x, 1 + 1.4 * t.scale, t.z); dummy.scale.set(1.1 * t.scale, 2.8 * t.scale, 1.1 * t.scale); });
-  instanced(broad, geo(w, "IcosahedronGeometry", 1, 0), hex(look.near), (t) => { reset(); dummy.position.set(t.x, 1.3 + 1.1 * t.scale, t.z); dummy.rotation.set(0, t.x, 0); dummy.scale.set(1.3 * t.scale, 1.2 * t.scale, 1.3 * t.scale); });
+  const near = hex(look.near);
+  [
+    instanced(trees, geo(w, "CylinderGeometry", 0.14, 0.2, 1, 6), WOOD_DARK, (t) => { reset(); dummy.position.set(t.x, 0.6 * t.scale, t.z); dummy.scale.set(t.scale, 1.2 * t.scale, t.scale); }),
+    instanced(pines, geo(w, "ConeGeometry", 1, 1, 7), mix(near, 0x1f3a2a, look.spruce ? 0.45 : 0.25), (t) => { reset(); dummy.position.set(t.x, 1 + 1.4 * t.scale, t.z); dummy.scale.set(1.1 * t.scale, 2.8 * t.scale, 1.1 * t.scale); }),
+    instanced(broad, geo(w, "IcosahedronGeometry", 1, 0), near, (t) => { reset(); dummy.position.set(t.x, 1.3 + 1.1 * t.scale, t.z); dummy.rotation.set(0, t.x, 0); dummy.scale.set(1.3 * t.scale, 1.2 * t.scale, 1.3 * t.scale); })
+  ].forEach((m) => { if (m) w.occluders.push(m); });
+
+  // The section's undergrowth round the clearing, one instanced mesh per kind of plant. Thickets and
+  // boulders are solid, so you (and the hikers) walk round them.
+  const plants = campFlora(ctx.scene, w.tier.flora, { seed: ctx.scene.length * 7 + 3,
+    colliders: campColliders({ tents: TENT_SPOTS.length, extra: LANTERN_SPOTS }), avoid: allActivitySpots() })
+    .filter((f) => !water || Math.hypot(f.x - water.x, f.z - water.z) > water.r + 0.5);
+  const byKind = (kind) => plants.filter((f) => f.kind === kind);
+  const leaf = mix(near, 0x2c4a2a, 0.3);
+  const bloom = { "blue-ridge": 0xe8c547, "high-balds": 0xd986b8, lakes: 0xf0f0f0, "southern-ridges": 0xe58fb4 }[ctx.scene] || 0xf2d05a;
+  const plantMeshes = [
+    instanced(byKind("rhododendron"), geo(w, "IcosahedronGeometry", 1, 0), mix(leaf, 0x1f3a2a, 0.3), (f) => { reset(); dummy.position.set(f.x, 0.55 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.75 * f.scale, f.size); }),
+    instanced(byKind("rhododendron"), geo(w, "SphereGeometry", 1, 6, 4), mix(bloom, 0xffffff, 0.2), (f) => { reset(); dummy.position.set(f.x + 0.3 * f.scale, 1.05 * f.scale, f.z + 0.2 * f.scale); dummy.scale.set(0.16 * f.scale, 0.12 * f.scale, 0.16 * f.scale); }),
+    instanced(byKind("shrub"), geo(w, "IcosahedronGeometry", 1, 0), leaf, (f) => { reset(); dummy.position.set(f.x, 0.35 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.45 * f.scale, f.size); }),
+    instanced(byKind("fern"), geo(w, "ConeGeometry", 1, 1, 5), mix(leaf, 0x7fae4a, 0.35), (f) => { reset(); dummy.position.set(f.x, 0.18 * f.scale, f.z); dummy.rotation.set(0, f.rot, Math.PI); dummy.scale.set(f.size, 0.36 * f.scale, f.size); }),
+    instanced(byKind("grass"), geo(w, "ConeGeometry", 1, 1, 4), mix(hex(look.ground), 0x9fbf5a, 0.35), (f) => { reset(); dummy.position.set(f.x, 0.16 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.32 * f.scale, f.size); }),
+    instanced(byKind("flower"), geo(w, "SphereGeometry", 1, 5, 3), bloom, (f) => { reset(); dummy.position.set(f.x, 0.14 * f.scale, f.z); dummy.scale.set(f.size * 0.6, 0.1 * f.scale, f.size * 0.6); }),
+    instanced(byKind("stone"), geo(w, "DodecahedronGeometry", 1, 0), STONE, (f) => { reset(); dummy.position.set(f.x, 0.06 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.5 * f.size, f.size * 0.8); }),
+    instanced(byKind("boulder"), geo(w, "DodecahedronGeometry", 1, 0), mix(STONE, 0x5a5a56, 0.3), (f) => { reset(); dummy.position.set(f.x, 0.3 * f.scale, f.z); dummy.rotation.set(f.rot, f.rot, 0); dummy.scale.set(f.size, 0.7 * f.size, f.size * 0.9); }),
+    instanced(byKind("needles"), geo(w, "CircleGeometry", 1, 9), mix(0x8a6a3a, hex(look.ground), 0.4), (f) => { reset(); dummy.position.set(f.x, 0.014, f.z); dummy.rotation.set(-Math.PI / 2, 0, f.rot); dummy.scale.set(f.size, f.size * 0.8, 1); })
+  ];
+  plantMeshes.forEach((m, i) => { if (m && (i === 0 || i === 7)) w.occluders.push(m); });
+  const floraColliders = plants.filter((f) => f.solid).map((f, i) => ({ id: `flora-${i}`, x: f.x, z: f.z, radius: f.size * 0.8, tall: false }));
 
   // The campfire: stones, logs, flames that flicker, a warm light and rising smoke.
   const fire = group(w, root);
@@ -494,33 +608,24 @@ function build(w, ctx, data) {
   }
   w.pickables.push(tagPick(fire, "location", "roster"));
 
-  // The expedition's hikers, sitting round the fire on stumps, each with a name tag.
-  const seats = campSeats(ctx.people.length);
-  const seatColliders = [];
-  w.hikerSpots = new Map();
-  ctx.people.forEach((p, i) => {
-    const seat = seats[i];
-    const spot = group(w, root, { x: seat.x, z: seat.z, ry: seat.heading });
-    part(w, spot, ["CylinderGeometry", 0.24, 0.27, 0.4, 8], WOOD, { y: 0.2, z: -0.05 });
-    const model = hikerModel(w, spot, { shirt: SHIRTS[p.seed % SHIRTS.length], hat: HATS[(p.seed >> 3) % HATS.length], seated: true, pose: p.pose, pack: false });
-    if (p.pose === "wave") anim.wavers.push(model);
-    if (p.recent) part(w, spot, ["BoxGeometry", 0.34, 0.46, 0.2], 0x7a5a3c, { x: 0.5, y: 0.23, z: 0.05, ry: 0.4 });
-    shadow(w, spot, 0.4);
-    const tag = labelSprite(w, p.name, { height: 0.28 });
-    tag.position.y = 1.62;
-    spot.add(tag);
-    w.pickables.push(tagPick(spot, "hiker", p.id));
-    w.hikerSpots.set(p.id, seat);
-    seatColliders.push({ id: `seat-${p.id}`, x: seat.x, z: seat.z, radius: 0.35, tall: false });
+  // Log benches round the fire. The expedition's hikers (built by syncLife) sit here and wander off to
+  // their own activities through the day.
+  FIRE_BENCHES.forEach((b) => {
+    const g = group(w, root, { x: b.x, z: b.z, ry: b.heading });
+    part(w, g, ["CylinderGeometry", 0.2, 0.22, 1.25, 8], WOOD, { y: 0.2, rz: Math.PI / 2 });
+    [-0.62, 0.62].forEach((x) => part(w, g, ["CircleGeometry", 0.2, 8], WOOD_LIGHT, { x: x + Math.sign(x) * 0.005, y: 0.2, ry: Math.sign(x) * Math.PI / 2 }));
+    shadow(w, g, 0.55);
   });
+  const lanternColliders = [];
   w.selectionRing = part(w, root, ["RingGeometry", 0.5, 0.64, 28], GOLD, { y: 0.03, rx: -Math.PI / 2, basic: true });
-  placeSelection(w);
+  w.selectionRing.visible = false;
 
   // Tents, growing with the miles, doors turned to the fire.
   TENT_SPOTS.slice(0, ctx.scale.tents).forEach((t, i) => {
     const g = group(w, root, { x: t.x, z: t.z, ry: headingOf(-t.x, -t.z) });
     part(w, g, ["ConeGeometry", 1, 1, 4], SHIRTS[(i * 3 + 1) % SHIRTS.length], { y: 0.7, sx: 1.25, sy: 1.4, sz: 1.25, ry: Math.PI / 4 });
     part(w, g, ["BoxGeometry", 0.42, 0.62, 0.03], 0x2a2420, { y: 0.31, z: 0.47, rx: -0.55 });
+    w.occluders.push(g);
   });
 
   // The shelter: an open-front lean-to on the trail, facing camp.
@@ -532,6 +637,7 @@ function build(w, ctx, data) {
   [-2.2, 2.2].forEach((x) => part(w, shelter, ["CylinderGeometry", 0.09, 0.09, 2.5, 6], WOOD_DARK, { x, y: 1.25, z: 1.35 }));
   part(w, shelter, ["BoxGeometry", 5.2, 0.14, 3.6], WOOD_DARK, { y: 2.55, z: 0.1, rx: -0.3 });
   part(w, shelter, ["BoxGeometry", 0.4, 0.06, 0.3], CREAM, { x: 1.4, y: 0.53, z: 0.6 });
+  w.occluders.push(shelter);
 
   // Trail Journal Tent: a canvas wall tent with a lantern by the door.
   const journal = place(w, root, "journal", { facing: "in" });
@@ -613,8 +719,39 @@ function build(w, ctx, data) {
     part(w, g, ["CylinderGeometry", 0.05, 0.06, 1.6, 6], WOOD_DARK, { y: 0.8 });
     part(w, g, ["BoxGeometry", 0.18, 0.24, 0.18], light.lanterns ? 0xffe28a : 0x8a8a7a, { y: 1.72, basic: light.lanterns });
     if (light.lanterns) { const halo = glowSprite(w, 0xffc85a, 1.4, 0.6); halo.position.y = 1.72; g.add(halo); }
-    seatColliders.push({ id: `lantern-${s.x}`, x: s.x, z: s.z, radius: 0.15, tall: false });
+    lanternColliders.push(s);
   });
+
+  // Camp chores and corners: a cook pot on a tripod, the woodpile and chopping block, supply crates,
+  // an overlook bench facing the view and a mossy fallen log.
+  const tripod = group(w, root);
+  [0, 2.1, 4.2].forEach((a) => part(w, tripod, ["CylinderGeometry", 0.025, 0.025, 1.5, 4], WOOD_DARK, { x: Math.sin(a) * 0.45, y: 0.7, z: Math.cos(a) * 0.45, rx: -Math.cos(a) * 0.3, rz: Math.sin(a) * 0.3 }));
+  part(w, tripod, ["CylinderGeometry", 0.006, 0.006, 0.45, 3], 0x3a3a3a, { y: 1.15 });
+  part(w, tripod, ["CylinderGeometry", 0.17, 0.13, 0.2, 10], 0x3a3a3a, { y: 0.88 });
+  const woodpile = group(w, root, { x: -8.5, z: 1.2, ry: 0.5 });
+  [[0, 0.11, -0.25], [0, 0.11, 0], [0, 0.11, 0.25], [0, 0.31, -0.13], [0, 0.31, 0.13], [0, 0.5, 0]].forEach(([x, y, z]) =>
+    part(w, woodpile, ["CylinderGeometry", 0.11, 0.11, 1, 7], WOOD, { x, y, z, rz: Math.PI / 2 }));
+  const block = group(w, root, { x: -7.4, z: -0.8 });
+  part(w, block, ["CylinderGeometry", 0.3, 0.33, 0.45, 9], WOOD_LIGHT, { y: 0.22 });
+  const axe = group(w, block, { y: 0.45 });
+  part(w, axe, ["CylinderGeometry", 0.025, 0.025, 0.6, 5], WOOD_LIGHT, { y: 0.26, rz: 0.3 });
+  part(w, axe, ["BoxGeometry", 0.05, 0.12, 0.18], 0x8a8a8a, { x: 0.02, y: 0.06, rz: 0.3 });
+  anim.blockAxe = axe;
+  const crates = group(w, root, { x: 3.2, z: -7.4, ry: 0.4 });
+  part(w, crates, ["BoxGeometry", 0.55, 0.45, 0.45], WOOD_LIGHT, { x: -0.25, y: 0.22 });
+  part(w, crates, ["BoxGeometry", 0.45, 0.4, 0.4], WOOD, { x: -0.2, y: 0.65, ry: 0.3 });
+  part(w, crates, ["CylinderGeometry", 0.22, 0.22, 0.6, 10], 0x6a4a2c, { x: 0.38, y: 0.3 });
+  const bench = group(w, root, { x: OVERLOOK.x, z: OVERLOOK.z, ry: OVERLOOK.heading + Math.PI });
+  part(w, bench, ["BoxGeometry", 1.3, 0.08, 0.4], WOOD_LIGHT, { y: 0.45 });
+  [-0.5, 0.5].forEach((x) => part(w, bench, ["BoxGeometry", 0.08, 0.45, 0.35], WOOD_DARK, { x, y: 0.22 }));
+  const log = group(w, root, { x: FALLEN_LOG.x, z: FALLEN_LOG.z, ry: FALLEN_LOG.heading });
+  part(w, log, ["CylinderGeometry", 0.28, 0.32, 2, 9], WOOD_DARK, { y: 0.28, rz: Math.PI / 2 });
+  part(w, log, ["BoxGeometry", 1.4, 0.06, 0.4], mix(near, 0x6b8e3a, 0.5), { y: 0.55 });
+  [[-0.5, 0.25], [0.3, 0.3], [0.7, -0.25]].forEach(([x, z]) => {
+    part(w, log, ["CylinderGeometry", 0.025, 0.03, 0.12, 5], CREAM, { x, y: 0.06, z });
+    part(w, log, ["SphereGeometry", 0.07, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2], 0xb5532c, { x, y: 0.12, z });
+  });
+  [woodpile, crates, log].forEach((g) => w.occluders.push(g));
 
   // Gold rings and signs mark the places you can visit.
   CAMP_LOCATIONS.forEach((l) => {
@@ -626,7 +763,7 @@ function build(w, ctx, data) {
     root.add(tag);
   });
 
-  // Camp life: fireflies at dusk, wildlife wandering the tree line, stars, rain or snow.
+  // Camp life: fireflies at dusk, stars, rain or snow. Hikers and wildlife visitors come from syncLife.
   if (light.fireflies) {
     const n = w.tier.fireflies;
     const pos = new Float32Array(n * 3);
@@ -664,13 +801,9 @@ function build(w, ctx, data) {
     root.add(points);
     anim.precip = { points, speed: light.snow ? 1.3 : 11, snow: light.snow };
   }
-  const critters = [deerModel, rabbitModel, foxModel];
-  for (let i = 0; i < w.tier.wanderers; i += 1) {
-    const g = critters[i % critters.length](w, root);
-    anim.wanderers.push({ g, r: 17 + i * 1.3, a: i * 2.1, speed: [0.05, 0.09, 0.07][i % 3] * (i % 2 ? -1 : 1), graze: i === 0 });
-  }
-
-  w.colliders = campColliders({ tents: ctx.scale.tents, extra: seatColliders });
+  w.colliders = campColliders({ tents: ctx.scale.tents, extra: [...lanternColliders, ...floraColliders] });
+  syncLife(w, ctx);
+  placeSelection(w);
   w.near = undefined;
 }
 
@@ -688,11 +821,12 @@ function tagPick(object, type, id) {
   return object;
 }
 
+// The gold ring under the hiker chosen in "The Hikers", wherever they are in camp.
 function placeSelection(w) {
-  const seat = w.selectedId && w.hikerSpots && w.hikerSpots.get(w.selectedId);
   if (!w.selectionRing) return;
-  w.selectionRing.visible = Boolean(seat);
-  if (seat) w.selectionRing.position.set(seat.x, 0.03, seat.z);
+  const npc = w.selectedId && w.life ? w.life.npcs.find((n) => n.id === w.selectedId) : null;
+  w.selectionRing.visible = Boolean(npc);
+  if (npc) w.selectionRing.position.set(npc.x, 0.03, npc.z);
 }
 
 function trailMapTexture(w, fraction) {
@@ -726,38 +860,469 @@ function trailMapTexture(w, fraction) {
   });
 }
 
-function deerModel(w, root) {
-  const g = group(w, root);
-  const c = 0x8a6a4a;
-  part(w, g, ["BoxGeometry", 0.36, 0.42, 0.95], c, { y: 0.85 });
-  part(w, g, ["BoxGeometry", 0.16, 0.45, 0.16], c, { y: 1.2, z: 0.45, rx: -0.4 });
-  part(w, g, ["BoxGeometry", 0.18, 0.18, 0.3], c, { y: 1.42, z: 0.6 });
-  part(w, g, ["BoxGeometry", 0.1, 0.12, 0.06], 0xf4ead5, { y: 0.98, z: -0.5 });
-  [[-0.12, 0.35], [0.12, 0.35], [-0.12, -0.35], [0.12, -0.35]].forEach(([x, z]) => part(w, g, ["BoxGeometry", 0.07, 0.64, 0.07], 0x5b4636, { x, y: 0.32, z }));
-  shadow(w, g, 0.55);
-  return g;
+// ---- Camp life: the expedition's hikers and wildlife visitors ---------------------------------------
+// The simulation (who does what, where visitors walk) is engine/camp-life.js; here it is only drawn.
+
+// Rebuild the hikers' and visitors' models after a scene build. The simulation itself starts over only
+// when what it depends on changes (time, weather, section, tents, lanterns, the roster), so the 60 s
+// background refresh doesn't send everyone back to their first activity.
+function syncLife(w, ctx) {
+  const reduced = w.anim ? w.anim.reduced : reducedMotion();
+  const key = JSON.stringify([ctx.time, ctx.weather && ctx.weather.id, ctx.scene, ctx.scale.tents, ctx.scale.lanterns, reduced, w.tier.visitors,
+    ctx.people.map((p) => [p.id, p.name, p.seed, p.recent ? 1 : 0])]);
+  if (key !== w.lifeSimKey || !w.life) {
+    const seed = Math.floor(Math.random() * 1e6) + 1;
+    w.life = createCampLife({ people: ctx.people, time: ctx.time, weather: ctx.weather, tents: ctx.scale.tents, lanterns: ctx.scale.lanterns, seed, reduced });
+    w.visitors = createVisitors({ time: ctx.time, weather: ctx.weather, scene: ctx.scene, cap: w.tier.visitors ?? 2, seed: seed + 7, reduced, colliders: w.colliders });
+    w.lifeSimKey = key;
+  } else w.visitors.colliders = w.colliders;
+  w.lifeKey = key;
+  w.npcColliders = w.life.npcs.map((n) => ({ id: n.id, x: n.x, z: n.z, radius: NPC_RADIUS, tall: false }));
+  w.life.npcs.forEach((n) => w.npcViews.set(n.id, npcView(w, n)));
+  w.visitors.list.forEach((v) => addVisitorView(w, v));
+  w.playerColliders = [...w.colliders, ...w.npcColliders];
+  w.npcBlockers = [...w.colliders, w.playerCollider];
+  w.npcViews.forEach((view, id) => applyPose(view, w.life.npcs.find((n) => n.id === id), w.clock, reduced));
+  w.lifeDirty = true;
+  renderLife(w);
 }
 
-function rabbitModel(w, root) {
-  const g = group(w, root);
-  part(w, g, ["SphereGeometry", 0.18, 8, 6], 0xb49a7a, { y: 0.18, sz: 1.3 });
-  part(w, g, ["SphereGeometry", 0.11, 8, 6], 0xb49a7a, { y: 0.32, z: 0.2 });
-  [-0.04, 0.04].forEach((x) => part(w, g, ["BoxGeometry", 0.04, 0.18, 0.03], 0xb49a7a, { x, y: 0.48, z: 0.18 }));
-  part(w, g, ["SphereGeometry", 0.05, 6, 4], 0xffffff, { y: 0.22, z: -0.24 });
-  shadow(w, g, 0.25);
-  return g;
+// One hiker in camp: the shared hiker model, the things they might hold, a name tag and a shadow.
+function npcView(w, npc) {
+  const g = hikerModel(w, w.dynamic, { shirt: hex(SHIRTS[npc.seed % SHIRTS.length]), hat: hex(HATS[(npc.seed >> 3) % HATS.length]), pack: npc.recent, pose: "walk" });
+  const rig = g.userData.rig;
+  const items = {
+    book: part(w, rig.body, ["BoxGeometry", 0.3, 0.04, 0.22], CREAM, { y: 0.8, z: 0.3, rx: -0.6 }),
+    stick: part(w, rig.armR, ["CylinderGeometry", 0.015, 0.015, 0.9, 4], WOOD_DARK, { y: -0.45, z: 0.35, rx: 1.1 }),
+    jug: part(w, rig.armR, ["BoxGeometry", 0.16, 0.24, 0.14], 0x3a6ea5, { y: -0.52 }),
+    logs: group(w, rig.body, { y: 0.78, z: 0.3 }),
+    axe: group(w, rig.armR, { y: -0.46 }),
+    camera: group(w, rig.body, { y: 1.16, z: 0.22 }),
+    binocs: group(w, rig.body, { y: 1.2, z: 0.2 })
+  };
+  [-0.07, 0.07].forEach((y) => part(w, items.logs, ["CylinderGeometry", 0.07, 0.07, 0.6, 6], WOOD, { y, rz: Math.PI / 2 }));
+  part(w, items.axe, ["CylinderGeometry", 0.025, 0.025, 0.6, 5], WOOD_LIGHT, { z: 0.15, rx: Math.PI / 2 });
+  part(w, items.axe, ["BoxGeometry", 0.05, 0.16, 0.12], 0x8a8a8a, { z: 0.42 });
+  part(w, items.camera, ["BoxGeometry", 0.22, 0.14, 0.1], 0x2a2a2a);
+  part(w, items.camera, ["CylinderGeometry", 0.045, 0.045, 0.08, 8], 0x555555, { z: 0.08, rx: Math.PI / 2 });
+  [-0.06, 0.06].forEach((x) => part(w, items.binocs, ["CylinderGeometry", 0.04, 0.04, 0.16, 8], 0x3a3a3a, { x, rx: Math.PI / 2 }));
+  const tag = labelSprite(w, npc.name, { height: 0.26 });
+  tag.position.y = 1.72;
+  g.add(tag);
+  shadow(w, g, 0.4);
+  w.pickables.push(tagPick(g, "hiker", npc.id));
+  w.occluders.push(g);
+  return { g, rig, items, tag };
 }
 
-function foxModel(w, root) {
-  const g = group(w, root);
-  const c = 0xd4703a;
-  part(w, g, ["BoxGeometry", 0.24, 0.24, 0.6], c, { y: 0.4 });
-  part(w, g, ["BoxGeometry", 0.2, 0.2, 0.22], c, { y: 0.55, z: 0.36 });
-  part(w, g, ["ConeGeometry", 0.06, 0.2, 4], 0x3b2f25, { y: 0.55, z: 0.52, rx: Math.PI / 2 });
-  part(w, g, ["CylinderGeometry", 0.03, 0.1, 0.5, 6], c, { y: 0.45, z: -0.48, rx: -1.2 });
-  [[-0.08, 0.2], [0.08, 0.2], [-0.08, -0.2], [0.08, -0.2]].forEach(([x, z]) => part(w, g, ["BoxGeometry", 0.05, 0.3, 0.05], 0x3b2f25, { x, y: 0.15, z }));
-  shadow(w, g, 0.35);
-  return g;
+const SEATED = new Set(["sit", "read"]);
+
+// Put a hiker's limbs in their pose; walking swings them, working poses move a little.
+function applyPose(view, npc, t, reduced) {
+  if (!view || !npc) return;
+  const { g, rig, items, tag } = view;
+  const { body, legL, legR, armL, armR } = rig;
+  g.position.set(npc.x, npc.y || 0, npc.z);
+  g.rotation.y = npc.heading;
+  body.position.set(0, 0, 0);
+  body.rotation.set(0, 0, 0);
+  [legL, legR, armL, armR].forEach((l) => l.rotation.set(0, 0, 0));
+  const pose = npc.moving ? "walk" : npc.pose;
+  const ph = t + (npc.seed % 17) * 0.7;
+  const wave = (speed, size) => (reduced ? 0 : Math.sin(ph * speed) * size);
+  tag.position.y = 1.72;
+  if (SEATED.has(pose)) {
+    body.position.y = -0.1;
+    legL.rotation.x = legR.rotation.x = -1.45;
+  }
+  switch (pose) {
+    case "walk": {
+      const swing = Math.sin(ph * 8) * 0.55;
+      legL.rotation.x = swing;
+      legR.rotation.x = -swing;
+      if (npc.item === "logs") armL.rotation.x = armR.rotation.x = -1.1;
+      else { armL.rotation.x = -swing * 0.8; armR.rotation.x = npc.item === "jug" ? 0.1 : swing * 0.8; }
+      break;
+    }
+    case "sit": armL.rotation.x = -0.5; armR.rotation.x = -0.5 + wave(1.3, 0.12); break;
+    case "read": armL.rotation.x = armR.rotation.x = -1; armL.rotation.z = -0.25; armR.rotation.z = 0.25; break;
+    case "sleep":
+      body.rotation.x = -Math.PI / 2;
+      body.position.set(0, 0.13 + wave(0.8, 0.008), 0.6);
+      tag.position.y = 0.9;
+      break;
+    case "warm": armL.rotation.x = armR.rotation.x = -1.25; armL.rotation.z = -0.15; armR.rotation.z = 0.15 + wave(2, 0.05); break;
+    case "cook": armL.rotation.x = -0.4; armR.rotation.x = -0.9; armR.rotation.z = wave(2.4, 0.25); break;
+    case "pump": armR.rotation.x = -0.9 + wave(5, 0.35); armL.rotation.x = -0.3; break;
+    case "crouch": body.position.y = -0.2; legL.rotation.x = -1.1; legR.rotation.x = -0.4; armL.rotation.x = armR.rotation.x = -1.1 + wave(1.6, 0.15); break;
+    case "chop": {
+      const lift = reduced ? 0.5 : (Math.sin(ph * 3.2) + 1) / 2;
+      armL.rotation.x = armR.rotation.x = -0.8 - lift * 2;
+      break;
+    }
+    case "lean": body.rotation.x = 0.35; armL.rotation.x = armR.rotation.x = -0.7; break;
+    case "stretch": armL.rotation.z = -2.7; armR.rotation.z = 2.7; body.rotation.z = wave(0.8, 0.15); break;
+    case "binoculars": case "photo": armL.rotation.x = armR.rotation.x = -1.9; armL.rotation.z = -0.45; armR.rotation.z = 0.45; break;
+    case "write": armL.rotation.x = -0.9; armR.rotation.x = -0.9 + wave(4, 0.08); break;
+    case "wave": armR.rotation.z = 2.5 + wave(5, 0.35); break;
+    default: armR.rotation.x = wave(0.7, 0.06); body.rotation.z = wave(0.5, 0.03);
+  }
+  items.book.visible = pose === "read" || pose === "write";
+  items.book.position.set(0, pose === "write" ? 0.85 : 0.8, 0.3);
+  items.stick.visible = pose === "cook" && !npc.item;
+  items.jug.visible = npc.item === "jug";
+  items.logs.visible = npc.item === "logs";
+  items.axe.visible = npc.item === "axe" || pose === "chop";
+  items.camera.visible = pose === "photo";
+  items.binocs.visible = pose === "binoculars";
+}
+
+// A low-poly visitor in the species' own colours (from expedition-themes.js). Faces +z.
+function visitorModel(w, v) {
+  const s = v.species || {};
+  const [main, dark] = (s.colors || ["#8a6a4a", "#5b4636"]).map(hex);
+  const pale = hex(s.light || "#f4ead5");
+  const g = group(w, w.dynamic);
+  const b = group(w, g);
+  const legs = (pairs, len, width, color) => pairs.forEach(([x, z]) => part(w, b, ["BoxGeometry", width, len, width], color, { x, y: len / 2, z }));
+  const wings = [];
+  const wing = (x, y, z, len, width, color) => {
+    const hinge = group(w, b, { x, y, z });
+    part(w, hinge, ["BoxGeometry", len, 0.02, width], color, { x: Math.sign(x) * len / 2 });
+    wings.push(hinge);
+  };
+  switch (v.visitor.model) {
+    case "squirrel":
+      part(w, b, ["BoxGeometry", 0.12, 0.12, 0.22], main, { y: 0.1 });
+      part(w, b, ["SphereGeometry", 0.07, 8, 6], main, { y: 0.17, z: 0.13 });
+      part(w, b, ["BoxGeometry", 0.1, 0.26, 0.08], pale, { y: 0.24, z: -0.15, rx: 0.35 });
+      break;
+    case "chipmunk":
+      part(w, b, ["BoxGeometry", 0.09, 0.09, 0.16], main, { y: 0.07 });
+      part(w, b, ["BoxGeometry", 0.03, 0.095, 0.15], dark, { y: 0.075 });
+      part(w, b, ["SphereGeometry", 0.05, 8, 6], main, { y: 0.12, z: 0.09 });
+      part(w, b, ["BoxGeometry", 0.03, 0.12, 0.03], dark, { y: 0.12, z: -0.1, rx: 0.5 });
+      break;
+    case "rabbit":
+      part(w, b, ["SphereGeometry", 0.15, 8, 6], main, { y: 0.15, sz: 1.3 });
+      part(w, b, ["SphereGeometry", 0.09, 8, 6], main, { y: 0.27, z: 0.17 });
+      [-0.035, 0.035].forEach((x) => part(w, b, ["BoxGeometry", 0.035, 0.16, 0.025], main, { x, y: 0.41, z: 0.15 }));
+      part(w, b, ["SphereGeometry", 0.045, 6, 4], 0xffffff, { y: 0.19, z: -0.2 });
+      break;
+    case "songbird": {
+      const k = (v.visitor.size || 0.25) / 0.25;
+      part(w, b, ["SphereGeometry", 0.07 * k, 8, 6], main, { y: 0.07 * k, sz: 1.4 });
+      part(w, b, ["SphereGeometry", 0.05 * k, 8, 6], dark, { y: 0.13 * k, z: 0.07 * k });
+      part(w, b, ["ConeGeometry", 0.015 * k, 0.05 * k, 4], 0x3b2f25, { y: 0.13 * k, z: 0.13 * k, rx: Math.PI / 2 });
+      part(w, b, ["BoxGeometry", 0.05 * k, 0.015 * k, 0.09 * k], dark, { y: 0.08 * k, z: -0.12 * k, rx: -0.3 });
+      wing(-0.05 * k, 0.09 * k, 0, 0.12 * k, 0.08 * k, dark);
+      wing(0.05 * k, 0.09 * k, 0, 0.12 * k, 0.08 * k, dark);
+      break;
+    }
+    case "owl":
+      part(w, b, ["SphereGeometry", 0.17, 10, 8], main, { y: 0.22, sy: 1.35 });
+      part(w, b, ["SphereGeometry", 0.13, 10, 8], pale, { y: 0.48 });
+      [-0.05, 0.05].forEach((x) => part(w, b, ["SphereGeometry", 0.025, 6, 4], 0x1a1410, { x, y: 0.5, z: 0.11 }));
+      wing(-0.15, 0.3, 0, 0.32, 0.18, dark);
+      wing(0.15, 0.3, 0, 0.32, 0.18, dark);
+      break;
+    case "turkey":
+      part(w, b, ["SphereGeometry", 0.24, 10, 8], main, { y: 0.48, sz: 1.3 });
+      part(w, b, ["CylinderGeometry", 0.035, 0.05, 0.3, 6], 0x7a8aa0, { y: 0.72, z: 0.24, rx: 0.3 });
+      part(w, b, ["SphereGeometry", 0.06, 8, 6], 0xc0392b, { y: 0.88, z: 0.3 });
+      part(w, b, ["CylinderGeometry", 0.3, 0.3, 0.03, 12, 1, false, 0, Math.PI], dark, { y: 0.6, z: -0.28, rx: Math.PI / 2 - 0.3, ry: Math.PI / 2 });
+      legs([[-0.07, 0.02], [0.07, 0.02]], 0.28, 0.03, 0x8a6a3a);
+      break;
+    case "fox": case "coyote": {
+      const k = v.visitor.model === "coyote" ? 1.2 : 1;
+      part(w, b, ["BoxGeometry", 0.22 * k, 0.22 * k, 0.56 * k], main, { y: 0.36 * k });
+      part(w, b, ["BoxGeometry", 0.18 * k, 0.18 * k, 0.2 * k], main, { y: 0.5 * k, z: 0.34 * k });
+      part(w, b, ["ConeGeometry", 0.06 * k, 0.18 * k, 4], dark, { y: 0.48 * k, z: 0.5 * k, rx: Math.PI / 2 });
+      [-0.06, 0.06].forEach((x) => part(w, b, ["ConeGeometry", 0.04 * k, 0.1 * k, 4], dark, { x: x * k, y: 0.64 * k, z: 0.32 * k }));
+      part(w, b, ["CylinderGeometry", 0.03 * k, 0.09 * k, 0.46 * k, 6], main, { y: 0.4 * k, z: -0.44 * k, rx: -1.2 });
+      part(w, b, ["SphereGeometry", 0.05 * k, 6, 4], pale, { y: 0.24 * k, z: -0.64 * k });
+      legs([[-0.07, 0.18], [0.07, 0.18], [-0.07, -0.18], [0.07, -0.18]].map(([x, z]) => [x * k, z * k]), 0.26 * k, 0.05 * k, dark);
+      break;
+    }
+    case "deer":
+      part(w, b, ["BoxGeometry", 0.34, 0.4, 0.9], main, { y: 0.84 });
+      part(w, b, ["BoxGeometry", 0.15, 0.45, 0.15], main, { y: 1.2, z: 0.42, rx: -0.4 });
+      part(w, b, ["BoxGeometry", 0.17, 0.17, 0.3], main, { y: 1.42, z: 0.58 });
+      [-0.07, 0.07].forEach((x) => part(w, b, ["ConeGeometry", 0.04, 0.14, 4], main, { x, y: 1.56, z: 0.5, rz: x * 4 }));
+      part(w, b, ["BoxGeometry", 0.1, 0.14, 0.05], pale, { y: 0.98, z: -0.47 });
+      legs([[-0.11, 0.33], [0.11, 0.33], [-0.11, -0.33], [0.11, -0.33]], 0.64, 0.07, dark);
+      break;
+    case "bear":
+      part(w, b, ["BoxGeometry", 0.62, 0.58, 1.15], main, { y: 0.66 });
+      part(w, b, ["BoxGeometry", 0.4, 0.38, 0.36], main, { y: 0.86, z: 0.68 });
+      part(w, b, ["BoxGeometry", 0.2, 0.16, 0.18], pale, { y: 0.8, z: 0.92 });
+      [-0.14, 0.14].forEach((x) => part(w, b, ["SphereGeometry", 0.07, 6, 4], main, { x, y: 1.07, z: 0.64 }));
+      legs([[-0.2, 0.4], [0.2, 0.4], [-0.2, -0.4], [0.2, -0.4]], 0.42, 0.18, dark);
+      break;
+    case "moose":
+      part(w, b, ["BoxGeometry", 0.6, 0.72, 1.5], main, { y: 1.46 });
+      part(w, b, ["BoxGeometry", 0.24, 0.5, 0.3], main, { y: 1.8, z: 0.74, rx: -0.5 });
+      part(w, b, ["BoxGeometry", 0.24, 0.26, 0.56], main, { y: 1.9, z: 1.02, rx: 0.3 });
+      part(w, b, ["BoxGeometry", 0.06, 0.26, 0.06], dark, { y: 1.58, z: 0.9 });
+      [-1, 1].forEach((sx) => part(w, b, ["BoxGeometry", 0.5, 0.05, 0.3], pale, { x: sx * 0.36, y: 2.18, z: 0.86, rz: sx * 0.35 }));
+      legs([[-0.2, 0.55], [0.2, 0.55], [-0.2, -0.55], [0.2, -0.55]], 1.1, 0.1, dark);
+      break;
+    default:
+      part(w, b, ["SphereGeometry", 0.15, 8, 6], main, { y: 0.15 });
+  }
+  if (!v.visitor.bird) shadow(w, g, Math.max(0.15, (v.visitor.size || 0.5) * 0.4));
+  w.pickables.push(tagPick(g, "visitor", v.key));
+  return { g, b, wings };
+}
+
+function addVisitorView(w, v) {
+  if (w.visitorViews.has(v.key)) return;
+  const view = visitorModel(w, v);
+  view.v = v;
+  w.visitorViews.set(v.key, view);
+  animateVisitor(view, w.clock, true);
+}
+
+function removeVisitorView(w, v) {
+  const view = w.visitorViews.get(v.key);
+  if (!view) return;
+  view.g.removeFromParent();
+  w.pickables = w.pickables.filter((o) => o !== view.g);
+  w.visitorViews.delete(v.key);
+}
+
+// Follow the simulation: hop or trot while moving, flap while flying, glide when perched.
+function animateVisitor(view, t, still) {
+  const { g, b, wings, v } = view;
+  g.position.set(v.x, v.y || 0, v.z);
+  g.rotation.y = v.heading;
+  const k = still ? 0 : 1;
+  const hop = v.visitor.model === "rabbit" || v.visitor.model === "squirrel" || v.visitor.model === "chipmunk";
+  b.position.y = v.moving && !v.flying ? k * Math.abs(Math.sin(t * (hop ? 12 : 8) + v.x)) * (hop ? 0.08 : 0.03) : 0;
+  const flap = v.flying ? Math.sin(t * 22) * 0.9 * k : 0.15;
+  wings.forEach((hinge) => { hinge.rotation.z = Math.sign(hinge.position.x || 1) * flap; });
+}
+
+// ---- Around Camp Now and Camp Photos (the text version of camp life) -------------------------------
+
+function lifePanel(w) {
+  const list = h("ul", { class: "camp3d-life-list", "aria-labelledby": "camp-life-title" });
+  const photos = h("div", { class: "camp3d-photos" });
+  const count = h("span", { class: "camp3d-photo-count" });
+  w.lifeUi = { list, photos, count, sig: null, photoSig: null };
+  const roll = h("details", { class: "timeline-wrap camp3d-roll", open: Boolean(w.rollOpen), onToggle: (e) => { w.rollOpen = e.target.open; } },
+    h("summary", {}, "Camp Photos", count),
+    h("p", { class: "hint" }, "Photos stay on this device until you close the page."),
+    photos);
+  renderLife(w);
+  return h("div", { class: "camp3d-life" }, h("h3", { id: "camp-life-title" }, "Around Camp Now"), list, roll);
+}
+
+function renderLife(w) {
+  const ui = w.lifeUi;
+  if (!ui) return;
+  w.lifeDirty = false;
+  w.lifeAt = w.clock;
+  const time = (w.lastCtx && w.lastCtx.time) || "day";
+  const visitors = ((w.visitors && w.visitors.list) || []).map((v) => ({ v, text: describeVisitor(v) }));
+  const hikers = ((w.life && w.life.npcs) || []).map((n) => describeNpc(n, time));
+  const sig = JSON.stringify([visitors.map((x) => [x.v.key, x.text]), hikers]);
+  if (sig !== ui.sig) {
+    ui.sig = sig;
+    const focusKey = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.visitor;
+    fill(ui.list,
+      visitors.map(({ v, text }) => h("li", { class: "camp3d-life-visitor" }, h("span", {}, text), " ",
+        h("button", { type: "button", class: "btn small", "data-visitor": v.key, "aria-label": `Aim the camera at ${v.photographed ? `the ${v.species.name}` : "the visitor"}`,
+          onClick: () => aimAt(w, v) }, "Aim camera"))),
+      hikers.map((text) => h("li", {}, text)),
+      !visitors.length && !hikers.length ? h("li", {}, "Camp is quiet right now.") : null);
+    if (focusKey) ui.list.querySelector(`[data-visitor="${CSS.escape(focusKey)}"]`)?.focus();
+  }
+  const photoSig = session.photos.map((p) => p.at).join(",");
+  if (photoSig !== ui.photoSig) {
+    ui.photoSig = photoSig;
+    ui.count.textContent = session.photos.length ? `(${session.photos.length})` : "";
+    fill(ui.photos, session.photos.length
+      ? session.photos.map((p) => h("figure", { class: "camp3d-photo" },
+        p.src ? h("img", { src: p.src, alt: p.caption, width: "320", height: "180", loading: "lazy" }) : null,
+        h("figcaption", {}, p.caption)))
+      : h("p", { class: "hint" }, "No photos yet. Press C or the 📷 Camera button in camp to take one."));
+  }
+}
+
+// ---- The photo camera ------------------------------------------------------------------------------
+// First person from the hiker's eyes: aim (drag, arrows or WASD), zoom (wheel, + and -) and shoot (Space,
+// Enter, a tap or the shutter). framePhoto (camp-life.js) decides what the picture is of.
+
+function enterCamera(w) {
+  const ph = w.photo;
+  if (!ph.on) {
+    ph.on = true;
+    ph.track = null;
+    ph.yaw = w.cam.yaw + Math.PI;
+    ph.pitch = 0;
+    ph.fov = FOV;
+  }
+  w.held.clear();
+  endJoystick(w);
+  dismissHint(w);
+  w.near = null;
+  w.ui.prompt.hidden = true;
+  w.ui.finder.hidden = false;
+  w.ui.camBar.hidden = false;
+  w.ui.cameraBtn.hidden = true;
+  w.root.classList.add("is-camera");
+  w.playerMesh.visible = false;
+  updateZoom(w);
+  w.ui.status.textContent = "Photo camera on. Aim with the arrow keys or by dragging, zoom with plus and minus, then press Space or the shutter. Escape puts the camera away.";
+  if (document.activeElement !== w.canvas) w.ui.shutter.focus({ preventScroll: true });
+}
+
+function exitCamera(w, { focus = false } = {}) {
+  const ph = w.photo;
+  if (!ph.on) return;
+  ph.on = false;
+  ph.track = null;
+  ph.fov = FOV;
+  w.camera.fov = FOV;
+  w.camera.updateProjectionMatrix();
+  w.cam.yaw = ph.yaw - Math.PI; // the follow camera looks where you were aiming
+  w.cam.pos = w.camera.position.clone();
+  w.held.clear();
+  w.drag = null;
+  w.ui.finder.hidden = true;
+  w.ui.camBar.hidden = true;
+  w.ui.cameraBtn.hidden = false;
+  w.root.classList.remove("is-camera");
+  w.playerMesh.visible = true;
+  w.ui.status.textContent = "Photo camera put away.";
+  if (focus) w.canvas.focus({ preventScroll: true });
+}
+
+function zoomCamera(w, dir) {
+  const ph = w.photo;
+  ph.fov = Math.max(MIN_FOV, Math.min(FOV, ph.fov + dir * 7));
+  updateZoom(w);
+}
+
+function updateZoom(w) {
+  w.ui.zoom.textContent = `×${(FOV / w.photo.fov).toFixed(1)}`;
+}
+
+// Where a visitor's body is, for aiming and framing.
+const visitorPoint = (v) => ({ x: v.x, y: (v.y || 0) + (v.visitor.size || 0.5) * 0.4, z: v.z });
+
+// Point the photo camera from the hiker's eyes at `target`.
+function aimAngles(w, target) {
+  const dx = target.x - w.player.x;
+  const dz = target.z - w.player.z;
+  w.photo.yaw = Math.atan2(dx, dz);
+  w.photo.pitch = Math.max(-1.2, Math.min(1.2, Math.atan2(target.y - EYE, Math.hypot(dx, dz))));
+  return Math.hypot(dx, dz);
+}
+
+// "Aim camera" in Around Camp Now, the text route to a photo: step to the nearest spot with a clear view
+// of the visitor (vantagePoints), raise the camera, zoom in a little and follow the animal until the
+// player aims by hand.
+function aimAt(w, v) {
+  const target = visitorPoint(v);
+  const colliders = w.playerColliders && w.playerColliders.length ? w.playerColliders : w.colliders;
+  const near = Math.ceil(waryDistance(v) + 0.5);
+  const spot = vantagePoints(target, w.player, colliders, { near, far: near + 4 }).find((s) => lineClear(w, { x: s.x, y: EYE, z: s.z }, target));
+  if (spot) { w.player.x = spot.x; w.player.z = spot.z; w.playerMesh.position.set(spot.x, 0, spot.z); }
+  enterCamera(w);
+  const dist = aimAngles(w, target);
+  w.photo.track = v;
+  // Zoom so the animal fills about a fifth of the frame.
+  const want = (2 * Math.atan((v.visitor.size || 0.5) / (2 * 0.2 * Math.max(dist, 0.5))) * 180) / Math.PI;
+  w.photo.fov = Math.max(MIN_FOV, Math.min(FOV, want));
+  updateZoom(w);
+  w.root.scrollIntoView?.({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+  w.ui.shutter.focus({ preventScroll: true });
+}
+
+const PROP_NAMES = {
+  shelter: ["trail shelter", 1.3, 4], pump: ["water pump", 0.6, 0.9], "bear-bags": ["bear bag line", 2.6, 2.6], signpost: ["trail signpost", 1.6, 1.2],
+  woodpile: ["woodpile", 0.4, 1], "chopping-block": ["chopping block", 0.3, 0.6], "supply-crates": ["supply crates", 0.4, 1],
+  "overlook-bench": ["overlook bench", 0.4, 1.2], "fallen-log": ["mossy fallen log", 0.3, 1.6]
+};
+
+// Everything a photo could be of, as framePhoto subjects.
+function photoSubjects(w) {
+  const time = (w.lastCtx && w.lastCtx.time) || "day";
+  const out = [];
+  ((w.life && w.life.npcs) || []).forEach((n) => out.push({ kind: "hiker", id: n.id, name: n.name, x: n.x, y: (n.y || 0) + (n.pose === "sleep" ? 0.2 : 0.9), z: n.z,
+    size: n.pose === "sleep" ? 1.2 : 1.6, detail: activityLabel(n.activity, time) }));
+  ((w.visitors && w.visitors.list) || []).forEach((v) => out.push({ kind: "wildlife", id: v.id, key: v.key, name: v.species.name, x: v.x,
+    y: visitorPoint(v).y, z: v.z, size: v.visitor.size || 0.5 }));
+  out.push({ kind: "fire", id: "fire", name: "campfire", x: 0, y: 0.5, z: 0, size: 1.6 });
+  CAMP_LOCATIONS.filter((l) => l.id !== "roster").forEach((l) => out.push({ kind: "place", id: l.id, name: l.name, x: l.x, y: 1, z: l.z, size: 2.2 }));
+  CAMP_PROPS.forEach((p) => { const n = PROP_NAMES[p.id]; if (n) out.push({ kind: "prop", id: p.id, name: n[0], x: p.x, y: n[1], z: p.z, size: n[2] }); });
+  return out;
+}
+
+// Nothing in w.occluders (tents, trees, the shelter…) between `from` and `to`, ignoring `own`.
+function lineClear(w, from, to, own = null) {
+  const dir = w.rayDir.set(to.x - from.x, to.y - from.y, to.z - from.z);
+  const dist = dir.length();
+  if (dist < 0.5) return true;
+  w.raycaster.set(w.rayFrom.set(from.x, from.y, from.z), dir.normalize());
+  w.raycaster.far = dist;
+  const hit = w.raycaster.intersectObjects(w.occluders, true).find((x) => {
+    let o = x.object;
+    while (o && o !== own) o = o.parent;
+    return !o && x.distance < dist - 0.6;
+  });
+  w.raycaster.far = Infinity;
+  return !hit;
+}
+
+// Hikers and animals hidden behind a tent, a tree or the shelter aren't in the picture.
+function markBlocked(w, subjects, cam) {
+  subjects.forEach((s) => {
+    if (s.kind !== "wildlife" && s.kind !== "hiker") return;
+    const own = s.kind === "hiker" ? w.npcViews.get(s.id)?.g : null;
+    s.blocked = !lineClear(w, cam, s, own);
+  });
+}
+
+function takePhoto(w) {
+  if (!w.photo.on) return;
+  const ph = w.photo;
+  const p = w.player;
+  const cam = { x: p.x, y: EYE, z: p.z, yaw: ph.yaw, pitch: ph.pitch, fov: (ph.fov * Math.PI) / 180, aspect: w.camera.aspect };
+  const subjects = photoSubjects(w);
+  markBlocked(w, subjects, cam);
+  const result = framePhoto(subjects, cam);
+  const ctx = w.lastCtx || {};
+  const caption = photoCaption(result, { time: ctx.time, weather: ctx.weather });
+  if (result && result.subject.kind === "wildlife") {
+    const v = w.visitors && w.visitors.list.find((x) => x.key === result.subject.key);
+    if (v) v.photographed = true;
+  }
+  let src = "";
+  try {
+    w.renderer.render(w.scene, w.camera);
+    src = w.canvas.toDataURL("image/jpeg", 0.7);
+  } catch (e) { /* a tainted or lost canvas: keep the caption */ }
+  session.photos.unshift({ src, caption, at: Date.now() + Math.random() });
+  if (session.photos.length > MAX_PHOTOS) session.photos.length = MAX_PHOTOS;
+  showToast(w, caption);
+  w.ui.status.textContent = `Photo taken. ${caption}`;
+  if (!reducedMotion()) {
+    w.ui.flash.classList.remove("is-on");
+    void w.ui.flash.offsetWidth;
+    w.ui.flash.classList.add("is-on");
+  }
+  renderLife(w);
+}
+
+function showToast(w, text) {
+  const t = w.ui.toast;
+  t.textContent = text;
+  t.hidden = false;
+  clearTimeout(w.toastTimer);
+  w.toastTimer = setTimeout(() => { t.hidden = true; }, 3800);
 }
 
 // ---- Input ----------------------------------------------------------------------------------------
@@ -768,6 +1333,15 @@ function bindInput(w) {
   const c = w.canvas;
   c.addEventListener("keydown", (e) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (w.photo.on) {
+      if (e.key === "Escape" || e.code === "KeyC") { e.preventDefault(); exitCamera(w, { focus: true }); }
+      else if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (!e.repeat) takePhoto(w); }
+      else if (e.code === "Equal" || e.code === "NumpadAdd") { e.preventDefault(); zoomCamera(w, -1); }
+      else if (e.code === "Minus" || e.code === "NumpadSubtract") { e.preventDefault(); zoomCamera(w, 1); }
+      else if (MOVE_KEYS.includes(e.code)) { e.preventDefault(); w.held.add(e.code); }
+      return;
+    }
+    if (e.code === "KeyC") { e.preventDefault(); enterCamera(w); return; }
     if (MOVE_KEYS.includes(e.code) || TURN_KEYS[e.code]) { w.held.add(e.code); e.preventDefault(); dismissHint(w); }
     else if (e.code === "ShiftLeft" || e.code === "ShiftRight") w.held.add("Shift");
     else if ((e.code === "KeyE" || e.key === "Enter" || e.key === " ") && w.near) { e.preventDefault(); interact(w, w.near.id); }
@@ -775,13 +1349,18 @@ function bindInput(w) {
   c.addEventListener("keyup", (e) => { w.held.delete(e.code === "ShiftLeft" || e.code === "ShiftRight" ? "Shift" : e.code); });
   c.addEventListener("blur", () => w.held.clear());
   c.addEventListener("contextmenu", (e) => e.preventDefault());
+  c.addEventListener("wheel", (e) => {
+    if (!w.photo.on) return;
+    e.preventDefault();
+    zoomCamera(w, Math.sign(e.deltaY));
+  }, { passive: false });
   c.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     c.focus({ preventScroll: true });
     const r = c.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    if (e.pointerType !== "mouse" && !w.joy && x < r.width * 0.45) {
+    if (e.pointerType !== "mouse" && !w.joy && !w.photo.on && x < r.width * 0.45) {
       w.joy = { id: e.pointerId, ox: x, oy: y, dx: 0, dy: 0, sx: e.clientX, sy: e.clientY, moved: false };
       Object.assign(w.ui.joy.style, { left: `${x}px`, top: `${y}px` });
       w.ui.knob.style.transform = "translate(-50%, -50%)";
@@ -805,8 +1384,16 @@ function bindInput(w) {
       w.ui.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     } else if (w.drag && e.pointerId === w.drag.id) {
       const k = session.sensitivity;
-      w.cam.yaw -= (e.clientX - w.drag.x) * 0.006 * k;
-      w.cam.pitch = clampPitch(w.cam.pitch + (e.clientY - w.drag.y) * 0.004 * k);
+      if (w.photo.on) {
+        const ph = w.photo;
+        const z = ph.fov / FOV; // aim finer when zoomed in
+        ph.track = null;
+        ph.yaw -= (e.clientX - w.drag.x) * 0.004 * k * z;
+        ph.pitch = Math.max(-1.2, Math.min(1.2, ph.pitch - (e.clientY - w.drag.y) * 0.004 * k * z));
+      } else {
+        w.cam.yaw -= (e.clientX - w.drag.x) * 0.006 * k;
+        w.cam.pitch = clampPitch(w.cam.pitch + (e.clientY - w.drag.y) * 0.004 * k);
+      }
       w.drag.x = e.clientX;
       w.drag.y = e.clientY;
       if (Math.hypot(e.clientX - w.drag.sx, e.clientY - w.drag.sy) > 8) w.drag.moved = true;
@@ -820,7 +1407,8 @@ function bindInput(w) {
     } else if (w.drag && e.pointerId === w.drag.id) {
       const tap = !w.drag.moved && e.type === "pointerup";
       w.drag = null;
-      if (tap) pick(w, e.clientX, e.clientY);
+      if (tap && w.photo.on) takePhoto(w);
+      else if (tap) pick(w, e.clientX, e.clientY);
     }
   };
   c.addEventListener("pointerup", end);
@@ -837,7 +1425,7 @@ function dismissHint(w) {
   if (w.ui.hint.isConnected) w.ui.hint.remove();
 }
 
-// Tap or click: a place opens its panel, a hiker shows their page below.
+// Tap or click: a place opens its panel, a hiker shows their page below, a visitor raises the camera.
 function pick(w, cx, cy) {
   const r = w.canvas.getBoundingClientRect();
   w.ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
@@ -849,6 +1437,10 @@ function pick(w, cx, cy) {
   const { type, id } = o.userData.pick;
   if (type === "location") interact(w, id);
   else if (type === "hiker") w.opts.onSelectHiker?.(id);
+  else if (type === "visitor") {
+    const v = w.visitors && w.visitors.list.find((x) => x.key === id);
+    if (v) aimAt(w, v);
+  }
 }
 
 function interact(w, id) {
@@ -883,7 +1475,8 @@ function settingsPanel(w) {
       h("li", {}, "Walk: W A S D or the arrow keys (hold Shift to jog). On a touchscreen, drag on the left side of the camp."),
       h("li", {}, "Look around: drag with the mouse, or a finger on the right side. The comma and period keys turn the camera too."),
       h("li", {}, "Visit a place: walk up to it and press E or the button that appears, or click or tap it."),
-      h("li", {}, "Tap a hiker by the fire to see their badges below.")),
+      h("li", {}, "Photo camera: press C or 📷, aim, then press Space or the shutter. Escape puts it away."),
+      h("li", {}, "Tap a hiker in camp to see their badges below.")),
     h("div", { class: "camp3d-fields" },
       h("div", { class: "field" }, h("label", { for: "camp3d-sensitivity" }, "Camera sensitivity"), sensitivity,
         h("p", { class: "hint", id: "camp3d-sensitivity-hint" }, "How fast dragging turns the camera.")),
@@ -941,39 +1534,64 @@ function update(w, dt) {
   w.clock += dt;
   const t = w.clock;
   const p = w.player;
+  const ph = w.photo;
   const keys = keysVector(w.held);
-  const input = w.joy ? joystickVector(w.joy.dx, w.joy.dy) : keys;
-  const turn = (w.held.has("Comma") ? 1 : 0) - (w.held.has("Period") ? 1 : 0);
-  if (turn) w.cam.yaw += turn * 1.8 * dt * session.sensitivity;
-  if (input.strength > 0) {
-    const run = w.held.has("Shift") || (w.joy && input.strength > 0.92);
-    const step = stepFromInput(input, w.cam.yaw, run ? RUN_SPEED : WALK_SPEED, dt);
-    const next = moveActor(p, step.dx, step.dz, w.colliders);
-    p.heading = turnToward(p.heading, headingOf(step.dx, step.dz), dt * 12);
-    p.x = next.x;
-    p.z = next.z;
-    p.speed = input.strength * (run ? 1.6 : 1);
-    p.phase += dt * 9 * p.speed;
-  } else p.speed = Math.max(0, p.speed - dt * 6);
-  w.playerMesh.position.set(p.x, 0, p.z);
-  w.playerMesh.rotation.y = p.heading;
-  const rig = w.playerMesh.userData.rig;
-  const swing = Math.sin(p.phase) * 0.6 * Math.min(p.speed, 1);
-  rig.legL.rotation.x = swing;
-  rig.legR.rotation.x = -swing;
-  rig.armL.rotation.x = -swing * 0.8;
-  rig.armR.rotation.x = swing * 0.8;
+  if (ph.on) {
+    // Photo camera: the arrow keys and WASD aim instead of walking.
+    const k = dt * 1.4 * session.sensitivity * (ph.fov / FOV);
+    const has = (...codes) => codes.some((c) => w.held.has(c));
+    if (MOVE_KEYS.some((c) => w.held.has(c))) ph.track = null;
+    if (ph.track) {
+      if (w.visitors && w.visitors.list.includes(ph.track)) aimAngles(w, visitorPoint(ph.track));
+      else ph.track = null;
+    }
+    ph.yaw += ((has("KeyA", "ArrowLeft") ? 1 : 0) - (has("KeyD", "ArrowRight") ? 1 : 0)) * k;
+    ph.pitch = Math.max(-1.2, Math.min(1.2, ph.pitch + ((has("KeyW", "ArrowUp") ? 1 : 0) - (has("KeyS", "ArrowDown") ? 1 : 0)) * k));
+    p.speed = 0;
+    w.camera.position.set(p.x, EYE, p.z);
+    w.camera.lookAt(w.camLook.set(p.x + Math.sin(ph.yaw) * Math.cos(ph.pitch), EYE + Math.sin(ph.pitch), p.z + Math.cos(ph.yaw) * Math.cos(ph.pitch)));
+    if (Math.abs(w.camera.fov - ph.fov) > 0.01) {
+      w.camera.fov += (ph.fov - w.camera.fov) * Math.min(1, dt * 12);
+      w.camera.updateProjectionMatrix();
+    }
+  } else {
+    const input = w.joy ? joystickVector(w.joy.dx, w.joy.dy) : keys;
+    const turn = (w.held.has("Comma") ? 1 : 0) - (w.held.has("Period") ? 1 : 0);
+    if (turn) w.cam.yaw += turn * 1.8 * dt * session.sensitivity;
+    if (input.strength > 0) {
+      const run = w.held.has("Shift") || (w.joy && input.strength > 0.92);
+      const step = stepFromInput(input, w.cam.yaw, run ? RUN_SPEED : WALK_SPEED, dt);
+      const next = moveActor(p, step.dx, step.dz, w.playerColliders.length ? w.playerColliders : w.colliders);
+      p.heading = turnToward(p.heading, headingOf(step.dx, step.dz), dt * 12);
+      p.x = next.x;
+      p.z = next.z;
+      p.speed = input.strength * (run ? 1.6 : 1);
+      p.phase += dt * 9 * p.speed;
+    } else p.speed = Math.max(0, p.speed - dt * 6);
+    w.playerMesh.position.set(p.x, 0, p.z);
+    w.playerMesh.rotation.y = p.heading;
+    const rig = w.playerMesh.userData.rig;
+    const swing = Math.sin(p.phase) * 0.6 * Math.min(p.speed, 1);
+    rig.legL.rotation.x = swing;
+    rig.legR.rotation.x = -swing;
+    rig.armL.rotation.x = -swing * 0.8;
+    rig.armR.rotation.x = swing * 0.8;
 
-  const view = followCamera(p, w.cam.yaw, w.cam.pitch, w.colliders);
-  const target = w.camPos.set(view.x, view.y, view.z);
-  if (!w.cam.pos) w.cam.pos = target.clone();
-  else w.cam.pos.lerp(target, 1 - Math.exp(-dt * 10));
-  w.camera.position.copy(w.cam.pos);
-  w.camera.lookAt(w.camLook.set(view.look.x, view.look.y, view.look.z));
+    const view = followCamera(p, w.cam.yaw, w.cam.pitch, w.colliders);
+    const target = w.camPos.set(view.x, view.y, view.z);
+    if (!w.cam.pos) w.cam.pos = target.clone();
+    else w.cam.pos.lerp(target, 1 - Math.exp(-dt * 10));
+    w.camera.position.copy(w.cam.pos);
+    w.camera.lookAt(w.camLook.set(view.look.x, view.look.y, view.look.z));
+    if (w.camera.fov !== FOV) { w.camera.fov = FOV; w.camera.updateProjectionMatrix(); }
+    setNear(w, nearestLocation(p));
+  }
+  w.playerCollider.x = p.x;
+  w.playerCollider.z = p.z;
 
-  setNear(w, nearestLocation(p));
   const a = w.anim;
   if (!a) return;
+  stepLife(w, dt, t, a.reduced);
   a.rings.forEach((ring) => { ring.material.opacity = w.near && w.near.id === ring.userData.id ? 0.85 : 0.45; });
   if (a.reduced) return;
   a.flames.forEach((f) => {
@@ -991,7 +1609,6 @@ function update(w, dt) {
     puff.scale.set(s, s, 1);
     puff.material.opacity = 0.32 * (1 - u) * Math.min(u * 6, 1);
   });
-  a.wavers.forEach((m) => { m.userData.rig.armR.rotation.z = 2.4 + Math.sin(t * 5) * 0.35; });
   if (a.fireflies) {
     const attr = a.fireflies.points.geometry.getAttribute("position");
     a.fireflies.seeds.forEach((s) => {
@@ -1012,13 +1629,27 @@ function update(w, dt) {
     attr.needsUpdate = true;
     a.precip.points.position.set(p.x, 0, p.z);
   }
-  a.wanderers.forEach((c) => {
-    const pause = c.graze && Math.sin(t * 0.4) > 0.55;
-    if (!pause) c.a += c.speed * dt;
-    const x = Math.sin(c.a) * c.r;
-    const z = Math.cos(c.a) * c.r;
-    c.g.position.set(x, c.graze && !pause ? Math.abs(Math.sin(t * 6)) * 0.03 : 0, z);
-    c.g.rotation.y = headingOf(Math.cos(c.a) * Math.sign(c.speed), -Math.sin(c.a) * Math.sign(c.speed));
-    if (!c.graze) c.g.position.y = Math.abs(Math.sin(t * 7 + c.r)) * 0.12;
+}
+
+// Move the hikers and visitors on, then pose them. The text list catches up at most once a second.
+function stepLife(w, dt, t, reduced) {
+  if (!w.life) return;
+  const changed = stepCampLife(w.life, dt, w.npcBlockers);
+  const npcs = w.life.npcs;
+  npcs.forEach((n, i) => {
+    const c = w.npcColliders[i];
+    if (c) { c.x = n.x; c.z = n.z; }
+    applyPose(w.npcViews.get(n.id), n, t, reduced);
   });
+  if (changed.length) w.lifeDirty = true;
+  if (w.visitors) {
+    const { arrived, left } = stepVisitors(w.visitors, dt, { player: w.player, colliders: w.playerColliders });
+    left.forEach((v) => removeVisitorView(w, v));
+    arrived.forEach((v) => addVisitorView(w, v));
+    if (arrived.length || left.length) w.lifeDirty = true;
+    w.visitorViews.forEach((view) => animateVisitor(view, t, reduced));
+  }
+  if (w.anim && w.anim.blockAxe) w.anim.blockAxe.visible = !npcs.some((n) => n.item === "axe" || n.pose === "chop");
+  placeSelection(w);
+  if (w.lifeDirty && t - (w.lifeAt || 0) > 1) renderLife(w);
 }

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, CAMERA, PLAYER_RADIUS, QUALITY, TENT_SPOTS, WORLD_RADIUS,
-  bulletinBoard, campColliders, campLighting, campSeats, followCamera, forestRing, joystickVector, keysVector,
+  BENCH_SEATS, CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, CAMERA, FIRE_BENCHES, PLAYER_RADIUS, QUALITY, TENT_SPOTS, WORLD_RADIUS,
+  bulletinBoard, campColliders, campLighting, followCamera, forestRing, joystickVector, keysVector,
   lowerQuality, moveActor, nearestLocation, qualityTier, rosterCampfire, stepFromInput, turnToward
 } from "../../assets/js/at/engine/camp-world.js";
 
@@ -95,7 +95,7 @@ test("quality follows the device and can step down", () => {
   assert.equal(qualityTier({ cores: 16, memory: 16, saveData: true }).id, "low");
   assert.equal(lowerQuality(QUALITY.high), QUALITY.medium);
   assert.equal(lowerQuality(QUALITY.low), null);
-  for (const q of Object.values(QUALITY)) assert.ok(q.pixelRatio <= 2 && q.trees > 0);
+  for (const q of Object.values(QUALITY)) assert.ok(q.pixelRatio <= 2 && q.trees > 0 && q.visitors >= 1 && q.visitors <= 3 && q.flora > 0 && q.ground <= 1024);
 });
 
 test("lighting follows the time of day and the weather", () => {
@@ -114,10 +114,20 @@ test("lighting follows the time of day and the weather", () => {
 test("scenery is deterministic and stays out of the walkable camp", () => {
   assert.deepEqual(forestRing(20), forestRing(20));
   for (const t of forestRing(40)) assert.ok(Math.hypot(t.x, t.z) > WORLD_RADIUS);
-  const seats = campSeats(5);
-  assert.equal(seats.length, 5);
-  for (const s of seats) close(Math.hypot(s.x, s.z), 3.2);
-  assert.deepEqual(campSeats(0), []);
+  const seats = BENCH_SEATS;
+  assert.equal(seats.length, FIRE_BENCHES.length * 2);
+  for (const s of seats) {
+    assert.ok(Math.hypot(s.x, s.z) > 2.8 && Math.hypot(s.x, s.z) < 3.8, `${s.id} sits by the fire`);
+    close(Math.cos(s.heading), Math.cos(Math.atan2(-s.x, -s.z)), 1e-9);
+  }
+  for (const b of FIRE_BENCHES) {
+    for (const o of FIRE_BENCHES) if (o !== b) assert.ok(Math.hypot(o.x - b.x, o.z - b.z) > b.radius + o.radius + PLAYER_RADIUS * 2, `${b.id} leaves a gap`);
+    for (const o of [...CAMP_LOCATIONS, ...CAMP_PROPS, ...TENT_SPOTS]) {
+      if (o.id !== "roster") assert.ok(Math.hypot(o.x - b.x, o.z - b.z) > b.radius + o.radius + PLAYER_RADIUS * 2, `${b.id} and ${o.id}`);
+    }
+  }
+  assert.equal(campColliders({ benches: false }).some((c) => c.id.startsWith("bench")), false);
+  assert.equal(campColliders().filter((c) => c.id.startsWith("bench")).every((c) => !c.tall), true, "benches never block the camera");
 });
 
 test("the bulletin board shows recent movement, landmarks, patches and the latest dispatch", () => {

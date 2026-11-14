@@ -14,7 +14,7 @@ export const CAMP_LOCATIONS = Object.freeze([
   { id: "bulletin", name: "Expedition Bulletin Board", x: 5.5, z: -5.5, radius: 0.9, reach: 1.8, verb: "Read the board" },
   { id: "journal", name: "Trail Journal Tent", x: -6.5, z: -4.5, radius: 1.5, reach: 1.6, verb: "Open the journal" },
   { id: "patches", name: "Patch Collection Display", x: -6, z: 5, radius: 0.9, reach: 1.8, verb: "Look at the patches" },
-  { id: "wildlife", name: "Wildlife Observation Area", x: 8.5, z: 3.5, radius: 1, reach: 2, verb: "Scan for wildlife" },
+  { id: "wildlife", name: "Wildlife Observation Area", x: 8.5, z: 3.5, radius: 1, reach: 2, verb: "Check recent sightings" },
   { id: "map", name: "Trail Map Table", x: 2.5, z: 7, radius: 1.2, reach: 1.6, verb: "Study the map" }
 ]);
 
@@ -23,10 +23,32 @@ export const CAMP_PROPS = Object.freeze([
   { id: "shelter", x: 0, z: -11, radius: 2.6, tall: true },
   { id: "pump", x: 4, z: -1.8, radius: 0.35 },
   { id: "bear-bags", x: -10, z: -1, radius: 0.5, tall: true },
-  { id: "signpost", x: 0, z: 12, radius: 0.3, tall: true }
+  { id: "signpost", x: 0, z: 12, radius: 0.3, tall: true },
+  { id: "woodpile", x: -8.5, z: 1.2, radius: 0.7 },
+  { id: "chopping-block", x: -7.4, z: -0.8, radius: 0.35 },
+  { id: "supply-crates", x: 3.2, z: -7.4, radius: 0.6 },
+  { id: "overlook-bench", x: 11.5, z: 6, radius: 0.6, tall: false },
+  { id: "fallen-log", x: -9.5, z: 8.5, radius: 0.8, tall: false }
 ]);
 
+// Log benches around the fire, in the gaps between the paths (headings in degrees, atan2(x, z)).
+// Each seats two, facing the flames.
+const BENCH_RING = 3.3;
+export const FIRE_BENCHES = Object.freeze([43.6, 88, 157.5, -152, -100, -25].map((deg, i) => {
+  const a = (deg * Math.PI) / 180;
+  return Object.freeze({ id: `bench-${i + 1}`, x: Math.sin(a) * BENCH_RING, z: Math.cos(a) * BENCH_RING, radius: 0.5, tall: false, heading: a });
+}));
+export const BENCH_SEATS = Object.freeze(FIRE_BENCHES.flatMap((b) => [-0.35, 0.35].map((off, k) => {
+  const x = b.x + Math.cos(b.heading) * off;
+  const z = b.z - Math.sin(b.heading) * off;
+  return Object.freeze({ id: `${b.id}-${k ? "b" : "a"}`, bench: b.id, x, z, heading: Math.atan2(-x, -z) });
+})));
+
 export const CAMP_START = Object.freeze({ x: 0, z: 4.2, heading: Math.PI });
+
+// Lantern posts (campScale adds them as the miles grow), lit in the evening and at night.
+export const LANTERN_SPOTS = Object.freeze([{ x: -3.6, z: -5.6 }, { x: 3, z: -4.8 }, { x: -4.2, z: 3.6 }, { x: 5.4, z: 4.4 }]
+  .map((spot, i) => Object.freeze({ id: `lantern-${i + 1}`, ...spot, radius: 0.15, tall: false })));
 
 // Where the expedition's tents go as the miles grow (up to campScale's 8), clear of every path.
 export const TENT_SPOTS = Object.freeze([
@@ -35,8 +57,9 @@ export const TENT_SPOTS = Object.freeze([
 ].map((spot, i) => ({ id: `tent-${i + 1}`, ...spot, radius: 1.3, tall: true })));
 
 // Every circle that blocks walking.
-export function campColliders({ tents = 0, extra = [] } = {}) {
-  return [...CAMP_LOCATIONS, ...CAMP_PROPS, ...TENT_SPOTS.slice(0, Math.max(0, Math.min(tents, TENT_SPOTS.length))), ...extra]
+export function campColliders({ tents = 0, benches = true, extra = [] } = {}) {
+  return [...CAMP_LOCATIONS, ...CAMP_PROPS, ...TENT_SPOTS.slice(0, Math.max(0, Math.min(tents, TENT_SPOTS.length))),
+    ...(benches ? FIRE_BENCHES : []), ...extra]
     .map(({ id, x, z, radius, tall }) => ({ id, x, z, radius, tall: tall !== undefined ? Boolean(tall) : id !== "roster" }));
 }
 
@@ -146,11 +169,12 @@ export function followCamera(target, yaw, pitch, colliders = [], { distance = CA
 }
 
 // Rendering budget from what the device tells us. Low keeps phones cool; nothing here is required
-// to enjoy camp. `fps` (measured) can lower a tier later.
+// to enjoy camp. `fps` (measured) can lower a tier later. `visitors` caps the wildlife in camp at
+// once, `flora` the ground plants (ferns, shrubs, flowers, stones) and `ground` the ground texture size.
 export const QUALITY = Object.freeze({
-  low: { id: "low", pixelRatio: 1, antialias: false, trees: 18, fireflies: 10, smoke: 6, wanderers: 1 },
-  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 28, fireflies: 22, smoke: 10, wanderers: 2 },
-  high: { id: "high", pixelRatio: 2, antialias: true, trees: 40, fireflies: 36, smoke: 14, wanderers: 3 }
+  low: { id: "low", pixelRatio: 1, antialias: false, trees: 18, fireflies: 10, smoke: 6, visitors: 1, flora: 40, ground: 512 },
+  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 28, fireflies: 22, smoke: 10, visitors: 2, flora: 80, ground: 1024 },
+  high: { id: "high", pixelRatio: 2, antialias: true, trees: 40, fireflies: 36, smoke: 14, visitors: 3, flora: 130, ground: 1024 }
 });
 
 export function qualityTier({ dpr = 1, cores = 4, memory = 4, mobile = false, saveData = false } = {}) {
@@ -213,23 +237,14 @@ export function seededRandom(seed) {
   };
 }
 
-// The forest ring: trees between the camp edge and the far hills, never on a path.
-export function forestRing(count, seed = 7) {
+// The forest ring: trees between the camp edge and the far hills, never on a path. `pineShare` is the
+// section's share of evergreens (engine/camp-life.js REGION_FLORA).
+export function forestRing(count, seed = 7, pineShare = 0.6) {
   const rand = seededRandom(seed);
   return Array.from({ length: count }, (_, i) => {
     const angle = (i / count) * Math.PI * 2 + rand() * 0.25;
     const r = WORLD_RADIUS + 1.5 + rand() * 9;
-    return { x: Math.sin(angle) * r, z: Math.cos(angle) * r, scale: 0.8 + rand() * 0.7, kind: rand() < 0.6 ? "pine" : "broadleaf" };
-  });
-}
-
-// Where the expedition's hikers sit: around the fire, spaced evenly, facing it.
-export function campSeats(count, radius = 3.2) {
-  return Array.from({ length: count }, (_, i) => {
-    const angle = (i / Math.max(count, 1)) * Math.PI * 2 + 0.4;
-    const x = Math.sin(angle) * radius;
-    const z = Math.cos(angle) * radius;
-    return { x, z, heading: headingOf(-x, -z) };
+    return { x: Math.sin(angle) * r, z: Math.cos(angle) * r, scale: 0.8 + rand() * 0.7, kind: rand() < pineShare ? "pine" : "broadleaf" };
   });
 }
 

@@ -664,3 +664,12 @@ A polish pass, not a feature sprint: the same camp, nicer to be in and quicker t
 - *A fix.* Taking a photo before ever tapping the scene could throw (sprite name tags need the raycaster's camera); the line-of-sight check now sets it and ignores the tags.
 
 **Next (camp tech).** IndexedDB for the camera roll and a download button; `BatchedMesh` for the hikers if the roster grows; a small Meshopt GLB pipeline for a few hero models; optional High-only bloom for fire and lanterns, measured on a phone first.
+
+## 24. An immersive camp, and History as the archive
+
+Camp should feel like arriving somewhere, not opening a widget, and its places should feel like real places. Details are in `docs/camp-3d.md` §1 ("Close-ups and in-world sheets"). No SQL.
+
+- *Camp is the page.* The 3D camp leads the tab and fills the content width at a tall, viewport-based height, with an optional full screen button where the browser supports it. Trail Dispatches moved beneath the camp.
+- *Content inside the world.* Visiting a place moves the camera into a close-up (`view` on each `CAMP_LOCATIONS` entry, `locationView`) and opens its content over the camp as a themed sheet: notes pinned to cork at the Bulletin Board, lined pages in the Journal Tent, patches stitched on a felt blanket at the Patch Display, polaroids and find cards at the Wildlife Area, a parchment trail map on the Map Table, and a calm, slowly circling view of the fire with just a low bar of text. Narrow frames use a bottom sheet, wide ones a side panel; the projection shifts so the place stays centred in what's left. Hikers or visitors in the shot step aside (`blocksView`), as do the place's own sign and ring. The 2D camp shows the same sheets beneath the scene.
+- *History is the archive.* The Expedition Patch Collection, the hikers (badges, Badge Collection bar, species badges, milestones, journey) and the trail register moved from Camp to History, after the Expedition Journal and before Your Activities, with a jump list at the top. `#/patches` opens History at the collection; `#/hikers`, `#/crew` and `#/badges` now open History. Tapping a hiker in camp still chooses them there.
+- *Fixes found in the visual check.* A text encoding slip in `views.js` was undone before it shipped, the felt blanket's background shorthand (colour in a non-final layer) was invalid CSS, and a side panel inset slightly from the top was being measured as a bottom sheet; the sheet's shape now decides.

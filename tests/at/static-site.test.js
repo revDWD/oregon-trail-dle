@@ -129,7 +129,7 @@ test("navigation: Trail, Log Activity, Camp, Wildlife Spotting, History; old tab
   const routes = app.match(/const ROUTES = \{([^}]*)\}/)[1];
   links.forEach((l) => assert.match(routes, new RegExp(`\\b${l}:`)));
   assert.ok(!/\b(profile|crew|hunt|badges):/.test(routes), "removed tabs have no routes of their own");
-  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "camp", badges: "camp", hikers: "camp" \}/, "old bookmarks redirect");
+  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "history", badges: "history", hikers: "history", patches: "history" \}/, "old bookmarks redirect");
   const aliases = app.match(/const ALIASES = \{([^}]*)\}/)[1];
   // Every in-app #/ link points at a route or an alias.
   const views = read("assets/js/at/ui/views.js");
@@ -185,12 +185,16 @@ test("no invite codes or join flow: select a name, log, everything updates", () 
   assert.match(app, /\/\^join\\\/\/\.test\(r\) \? "camp"/, "old invite links open Camp");
 });
 
-test("Trail has no Coming Up card; Camp opens with Trail Dispatches", async () => {
+test("Trail has no Coming Up card; Camp opens with the camp, and History holds the collections", async () => {
   const { readFileSync } = await import("node:fs");
   const views = readFileSync("assets/js/at/ui/views.js", "utf8");
   assert.doesNotMatch(views, /Coming up:/);
   const camp = views.slice(views.indexOf("export function campView"));
-  assert.ok(camp.indexOf("dispatches-title") < camp.indexOf("camp-card"), "dispatches come before the camp scene");
+  assert.ok(camp.indexOf("camp-card") < camp.indexOf("dispatches-title"), "the camp comes first, dispatches below it");
+  assert.doesNotMatch(camp, /patchSection\(|hikersSection\(|registerSection\(/, "Camp is a place, not a collection page");
+  const history = views.slice(views.indexOf("export function historyView"), views.indexOf("const JOURNAL_SHOWN"));
+  for (const part of ["journalSection(s)", "patchSection(s)", "hikersSection(s, a)", "registerSection(s)", "activities-title"]) assert.ok(history.includes(part), `History shows ${part}`);
+  assert.ok(history.indexOf("journalSection(s)") < history.indexOf("patchSection(s)") && history.indexOf("registerSection(s)") < history.indexOf("activities-title"), "journal first, this device's activities last");
 });
 
 test("headings, card titles and section summaries use Title Case", () => {

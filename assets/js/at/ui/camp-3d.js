@@ -1,6 +1,7 @@
 // The explorable 3D camp: a cozy low-poly Appalachian Trail base camp drawn with three.js. Walk a hiker
-// round the fire, the shelter, the tents and six places to visit; each place opens a Camp panel (the
-// view decides what it shows). The expedition's hikers go about their day around camp, wildlife
+// round the fire, the shelter, the tents and six places to visit; using a place moves the camera in
+// close while the view shows that place's notes over the camp (focusCamp3d). The expedition's hikers go
+// about their day around camp, wildlife
 // wanders through now and then, and a photo camera (C) frames whatever you point it at. Everything here
 // is drawing and input: layout, collisions, the camera rig, quality tiers and lighting live in
 // engine/camp-world.js, and hikers' activities, visitors, plants and photo framing in
@@ -15,8 +16,8 @@ import { h, fill } from "./dom.js";
 import { SCENES, SHIRTS, HATS } from "./camp-scene.js";
 import {
   BENCH_SEATS, CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, FIRE_BENCHES, LANTERN_SPOTS, MOVE_KEYS, PLAYER_RADIUS, QUALITY, RUN_SPEED,
-  TENT_SPOTS, WALK_SPEED, WORLD_RADIUS, campColliders, campLighting, clampPitch, followCamera, forestRing, headingOf,
-  joystickVector, keysVector, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
+  TENT_SPOTS, WALK_SPEED, WORLD_RADIUS, blocksView, campColliders, campLighting, clampPitch, followCamera, forestRing, headingOf,
+  joystickVector, keysVector, locationView, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
 } from "../engine/camp-world.js";
 import {
   CAMP_PATHS, FALLEN_LOG, HIKER_GESTURES, NPC_RADIUS, OVERLOOK, activityLabel, allActivitySpots, campFlora, createCampLife, createVisitors,
@@ -96,6 +97,9 @@ const chosenTier = () => (session.quality === "auto" ? autoTier() : QUALITY[sess
  * @param opts.settings           an element to fill with the Controls and Settings panel
  * @param opts.life               an element to fill with Around Camp Now and the Camp Camera Roll (the text version of camp life)
  * @param opts.data               { fraction, toKatahdin, patches: [{ id, color }], explorers, notes, selectedId }
+ * @param opts.focus              the location whose close-up is showing (its sheet is open), or null
+ * @param opts.focusInset()       { right, bottom }: px of the camp covered by that sheet, so the place stays in view
+ * @param opts.onLeave()          Escape (or the photo camera) asked to leave the close-up
  */
 export function mountCamp3d(holder, ctx, opts = {}) {
   const token = ++mountToken;
@@ -117,11 +121,21 @@ export function pauseCamp3d() {
   endJoystick(world);
 }
 
-// Move the gold ring to the hiker chosen in "The Hikers".
+// Move the gold ring to the chosen hiker.
 export function markCampHiker(id) {
   if (!world) return;
   world.selectedId = id;
   placeSelection(world);
+}
+
+// The camera moves in close to a camp location while its in-world sheet is open (null: walk again).
+export function focusCamp3d(id) {
+  if (world) setFocus(world, id);
+}
+
+// This session's camp photos, newest first (they live in memory only).
+export function campPhotos() {
+  return session.photos.slice();
 }
 
 function attach(THREE, token, holder, ctx, opts, tries = 0) {
@@ -141,6 +155,7 @@ function attach(THREE, token, holder, ctx, opts, tries = 0) {
     if (opts.settings) fill(opts.settings, settingsPanel(world));
     if (opts.life) fill(opts.life, lifePanel(world));
     resize(world);
+    setFocus(world, opts.focus || null, { instant: true });
     start(world);
   } catch (e) {
     console.warn("3D camp unavailable", e);
@@ -409,8 +424,9 @@ function createWorld(THREE) {
     playerCollider: { id: "player", x: CAMP_START.x, z: CAMP_START.z, radius: PLAYER_RADIUS, tall: false },
     playerColliders: [], npcBlockers: [],
     visible: true, selectedId: null, opts: {},
+    focus: null, inset: { r: 0, b: 0 }, size: { w: 1, h: 1 }, lookEase: 0,
     raycaster: new THREE.Raycaster(), ndc: new THREE.Vector2(), camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
-    rayFrom: new THREE.Vector3(), rayDir: new THREE.Vector3()
+    lookAt: new THREE.Vector3(0, 1, 0), rayFrom: new THREE.Vector3(), rayDir: new THREE.Vector3()
   };
   scene.add(w.dynamic);
   w.playerMesh = hikerModel(w, scene, { shirt: 0xd4703a, hat: 0x2f5d46, pack: true, pose: "walk" });
@@ -436,11 +452,104 @@ function createWorld(THREE) {
 }
 
 function resize(w) {
-  const width = Math.max(1, w.root.clientWidth);
-  const height = Math.max(1, w.root.clientHeight);
-  w.renderer.setSize(width, height, false);
-  w.camera.aspect = width / height;
-  w.camera.updateProjectionMatrix();
+  w.size.w = Math.max(1, w.root.clientWidth);
+  w.size.h = Math.max(1, w.root.clientHeight);
+  w.renderer.setSize(w.size.w, w.size.h, false);
+  if (w.focus) measureInset(w);
+  applyView(w);
+}
+
+// The projection. While a sheet covers part of the camp (w.inset, px from the right and bottom), the
+// view is shifted with setViewOffset so the place sits in the middle of what is still visible, and a
+// bottom sheet widens the field of view so the place keeps its size. Picking still works: the canvas
+// maps to the shifted window.
+function applyView(w) {
+  const cam = w.camera;
+  const { w: W, h: H } = w.size;
+  const r = Math.min(w.inset.r, W * 0.7);
+  const b = Math.min(w.inset.b, H * 0.7);
+  if (r < 0.5 && b < 0.5) {
+    cam.clearViewOffset();
+    cam.aspect = W / H;
+    if (!w.photo.on) cam.fov = FOV;
+  } else {
+    cam.aspect = (W + r) / (H + b);
+    cam.setViewOffset(W + r, H + b, r, b, W, H);
+    cam.fov = (2 * Math.atan(Math.tan((FOV * Math.PI) / 360) * ((H + b) / (H - b))) * 180) / Math.PI;
+  }
+  cam.updateProjectionMatrix();
+}
+
+function measureInset(w) {
+  const got = (w.opts.focusInset && w.opts.focusInset()) || {};
+  w.focus.inset = { r: Math.max(0, got.right || 0), b: Math.max(0, got.bottom || 0) };
+  w.focus.measuredAt = w.clock;
+}
+
+// Close in on a camp location (its sheet is open) or, with null, hand the camera back to the walker.
+function setFocus(w, id, { instant = false } = {}) {
+  const loc = (id && CAMP_LOCATIONS.find((l) => l.id === id)) || null;
+  const was = w.focus;
+  if (loc) {
+    if (w.photo.on) exitCamera(w);
+    if (!was || was.loc !== loc) {
+      // The campfire view circles on from wherever the camera is now.
+      const angle = Math.atan2(w.camera.position.x - loc.x, w.camera.position.z - loc.z);
+      w.focus = { loc, angle: Number.isFinite(angle) ? angle : 0, inset: was ? was.inset : { r: 0, b: 0 }, measuredAt: 0 };
+    }
+    w.held.clear();
+    endJoystick(w);
+    dismissHint(w);
+    setNear(w, null);
+    w.root.classList.add("is-focus");
+    w.playerMesh.visible = false;
+    measureInset(w);
+    if (instant && !was) {
+      w.inset = { ...w.focus.inset };
+      const v = locationView(loc, { angle: w.focus.angle });
+      w.camera.position.set(v.x, v.y, v.z);
+      w.lookAt.set(v.look.x, v.look.y, v.look.z);
+      applyView(w);
+    }
+    w.ui.status.textContent = `At the ${loc.name}. Press Escape to walk again.`;
+  } else if (was) {
+    w.focus = null;
+    w.root.classList.remove("is-focus");
+    w.playerMesh.visible = true;
+    // The follow camera picks up from where the close-up left it.
+    const p = w.player;
+    w.cam.pos = w.camera.position.clone();
+    w.cam.yaw = Math.atan2(w.camera.position.x - p.x, w.camera.position.z - p.z);
+    w.lookEase = 1;
+    if (instant) { w.inset = { r: 0, b: 0 }; applyView(w); }
+  }
+}
+
+// The close-up: ease the camera to the place's view (the campfire slowly circles) and the projection
+// to the sheet's inset.
+function updateFocus(w, dt, reduced) {
+  const f = w.focus;
+  const v = f.loc.view || {};
+  if (v.orbit !== undefined && !reduced) f.angle += v.orbit * dt;
+  if (w.clock - f.measuredAt > 0.25) measureInset(w);
+  const view = locationView(f.loc, { angle: f.angle });
+  const k = 1 - Math.exp(-dt * 3.5);
+  w.camera.position.lerp(w.camPos.set(view.x, view.y, view.z), k);
+  w.lookAt.lerp(w.camLook.set(view.look.x, view.look.y, view.look.z), k);
+  w.camera.lookAt(w.lookAt);
+  w.player.speed = 0;
+}
+
+function easeInset(w, dt) {
+  const goal = w.focus && !w.photo.on ? w.focus.inset : { r: 0, b: 0 };
+  const i = w.inset;
+  if (i.r === goal.r && i.b === goal.b) return;
+  const k = 1 - Math.exp(-dt * 7);
+  i.r += (goal.r - i.r) * k;
+  i.b += (goal.b - i.b) * k;
+  if (Math.abs(goal.r - i.r) < 0.5) i.r = goal.r;
+  if (Math.abs(goal.b - i.b) < 0.5) i.b = goal.b;
+  applyView(w);
 }
 
 function setTier(w, tier) {
@@ -532,7 +641,7 @@ function build(w, ctx, data) {
   const look = SCENES[ctx.scene] || SCENES["southern-ridges"];
   const light = campLighting(ctx.time, ctx.weather);
   const reduced = reducedMotion();
-  const anim = { flames: [], smoke: [], fireflies: null, precip: null, rings: [], fireLight: null, blockAxe: null, reduced };
+  const anim = { flames: [], smoke: [], fireflies: null, precip: null, rings: [], signs: [], fireLight: null, blockAxe: null, reduced };
   w.anim = anim;
 
   // Sky, fog and light. The sun casts real soft shadows on Medium and High (QUALITY.shadows); Low keeps
@@ -901,6 +1010,8 @@ function build(w, ctx, data) {
     anim.rings.push(ring);
     const tag = labelSprite(w, SIGN[l.id], { height: 0.3, bg: "rgba(47,93,70,0.9)", ink: "#f4ead5" });
     tag.position.set(l.x, l.id === "roster" ? 2.5 : 2.75, l.z);
+    tag.userData.id = l.id;
+    anim.signs.push(tag);
     root.add(tag);
   });
 
@@ -1380,6 +1491,8 @@ const photoTime = (at) => new Date(at).toLocaleTimeString("en-US", { hour: "nume
 
 function enterCamera(w) {
   const ph = w.photo;
+  if (w.focus) { w.opts.onLeave?.(); setFocus(w, null); }
+  if (w.inset.r || w.inset.b) { w.inset = { r: 0, b: 0 }; applyView(w); }
   if (!ph.on) {
     ph.on = true;
     ph.track = null;
@@ -1410,7 +1523,7 @@ function exitCamera(w, { focus = false } = {}) {
   ph.track = null;
   ph.fov = FOV;
   w.camera.fov = FOV;
-  w.camera.updateProjectionMatrix();
+  applyView(w);
   w.cam.yaw = ph.yaw - Math.PI; // the follow camera looks where you were aiming
   w.cam.pos = w.camera.position.clone();
   w.held.clear();
@@ -1642,6 +1755,11 @@ function bindInput(w) {
   const c = w.canvas;
   c.addEventListener("keydown", (e) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (w.focus) {
+      // In a close-up the sheet does the talking; Escape walks away again.
+      if (e.key === "Escape") { e.preventDefault(); w.opts.onLeave?.(); }
+      return;
+    }
     if (w.photo.on) {
       if (e.key === "Escape" || e.code === "KeyC") { e.preventDefault(); exitCamera(w, { focus: true }); }
       else if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (!e.repeat) takePhoto(w); }
@@ -1669,7 +1787,7 @@ function bindInput(w) {
     const r = c.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    if (e.pointerType !== "mouse" && !w.joy && !w.photo.on && x < r.width * 0.45) {
+    if (e.pointerType !== "mouse" && !w.joy && !w.photo.on && !w.focus && x < r.width * 0.45) {
       w.joy = { id: e.pointerId, ox: x, oy: y, dx: 0, dy: 0, sx: e.clientX, sy: e.clientY, moved: false };
       Object.assign(w.ui.joy.style, { left: `${x}px`, top: `${y}px` });
       w.ui.knob.style.transform = "translate(-50%, -50%)";
@@ -1699,7 +1817,7 @@ function bindInput(w) {
         ph.track = null;
         ph.yaw -= (e.clientX - w.drag.x) * 0.004 * k * z;
         ph.pitch = Math.max(-1.2, Math.min(1.2, ph.pitch - (e.clientY - w.drag.y) * 0.004 * k * z));
-      } else {
+      } else if (!w.focus) {
         w.cam.yaw -= (e.clientX - w.drag.x) * 0.006 * k;
         w.cam.pitch = clampPitch(w.cam.pitch + (e.clientY - w.drag.y) * 0.004 * k);
       }
@@ -1734,7 +1852,7 @@ function dismissHint(w) {
   if (w.ui.hint.isConnected) w.ui.hint.remove();
 }
 
-// Tap or click: a place opens its panel, a hiker shows their page below, a visitor raises the camera.
+// Tap or click: a place opens its close-up, a hiker is chosen, a visitor raises the camera.
 function pick(w, cx, cy) {
   const r = w.canvas.getBoundingClientRect();
   w.ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
@@ -1783,9 +1901,9 @@ function settingsPanel(w) {
     h("ul", { class: "camp3d-help" },
       h("li", {}, "Walk: W A S D or the arrow keys (hold Shift to jog). On a touchscreen, drag on the left side of the camp."),
       h("li", {}, "Look around: drag with the mouse, or a finger on the right side. The comma and period keys turn the camera too."),
-      h("li", {}, "Visit a place: walk up to it and press E or the button that appears, or click or tap it."),
+      h("li", {}, "Visit a place: walk up to it and press E or the button that appears, or click or tap it. The camera moves in close and the place's notes open in camp; Escape or Close walks away again."),
       h("li", {}, "Photo camera: press C or the 📷 shutter button at the bottom of the camp, aim, then press Space or the shutter. Escape puts it away. Every shot goes to the Camp Camera Roll below."),
-      h("li", {}, "Tap a hiker in camp to see their badges below.")),
+      h("li", {}, "Tap a hiker in camp to choose them. Their badges are in History.")),
     h("div", { class: "camp3d-fields" },
       h("div", { class: "field" }, h("label", { for: "camp3d-sensitivity" }, "Camera sensitivity"), sensitivity,
         h("p", { class: "hint", id: "camp3d-sensitivity-hint" }, "How fast dragging turns the camera.")),
@@ -1863,10 +1981,14 @@ function update(w, dt) {
     p.speed = 0;
     w.camera.position.set(p.x, EYE, p.z);
     w.camera.lookAt(w.camLook.set(p.x + Math.sin(ph.yaw) * Math.cos(ph.pitch), EYE + Math.sin(ph.pitch), p.z + Math.cos(ph.yaw) * Math.cos(ph.pitch)));
+    w.lookAt.copy(w.camLook);
     if (Math.abs(w.camera.fov - ph.fov) > 0.01) {
       w.camera.fov += (ph.fov - w.camera.fov) * Math.min(1, dt * 12);
       w.camera.updateProjectionMatrix();
     }
+  } else if (w.focus) {
+    updateFocus(w, dt, w.anim ? w.anim.reduced : reducedMotion());
+    easeInset(w, dt);
   } else {
     const input = w.joy ? joystickVector(w.joy.dx, w.joy.dy) : keys;
     const turn = (w.held.has("Comma") ? 1 : 0) - (w.held.has("Period") ? 1 : 0);
@@ -1895,8 +2017,12 @@ function update(w, dt) {
     if (!w.cam.pos) w.cam.pos = target.clone();
     else w.cam.pos.lerp(target, 1 - Math.exp(-dt * 10));
     w.camera.position.copy(w.cam.pos);
-    w.camera.lookAt(w.camLook.set(view.look.x, view.look.y, view.look.z));
-    if (w.camera.fov !== FOV) { w.camera.fov = FOV; w.camera.updateProjectionMatrix(); }
+    // Just back from a close-up, the gaze swings round to the hiker instead of jumping.
+    w.camLook.set(view.look.x, view.look.y, view.look.z);
+    if (w.lookEase > 0) { w.lookEase = Math.max(0, w.lookEase - dt * 1.5); w.lookAt.lerp(w.camLook, 1 - Math.exp(-dt * 6)); } else w.lookAt.copy(w.camLook);
+    w.camera.lookAt(w.lookAt);
+    easeInset(w, dt);
+    if (w.camera.fov !== FOV && !w.inset.r && !w.inset.b) applyView(w);
     setNear(w, nearestLocation(p));
   }
   w.playerCollider.x = p.x;
@@ -1905,7 +2031,10 @@ function update(w, dt) {
   const a = w.anim;
   if (!a) return;
   stepLife(w, dt, t, a.reduced);
-  a.rings.forEach((ring) => { ring.material.opacity = w.near && w.near.id === ring.userData.id ? 0.85 : 0.45; });
+  // In a close-up the place's own ring and sign step aside, so it reads as the place itself.
+  const at = w.focus && !ph.on ? w.focus.loc.id : null;
+  a.rings.forEach((ring) => { ring.visible = ring.userData.id !== at; ring.material.opacity = w.near && w.near.id === ring.userData.id ? 0.85 : 0.45; });
+  a.signs.forEach((sign) => { sign.visible = sign.userData.id !== at; });
   if (a.reduced) return;
   a.flames.forEach((f) => {
     const b = f.userData.base;
@@ -1950,10 +2079,15 @@ function stepLife(w, dt, t, reduced) {
   if (!w.life) return;
   const changed = stepCampLife(w.life, dt, w.npcBlockers, { player: w.player });
   const npcs = w.life.npcs;
+  // Whoever wanders between a close-up camera and its place steps out of shot.
+  const shot = w.focus && !w.photo.on ? locationView(w.focus.loc, { angle: w.focus.angle }) : null;
+  const inShot = (o) => Boolean(shot) && blocksView(w.focus.loc, shot, o);
   npcs.forEach((n, i) => {
     const c = w.npcColliders[i];
     if (c) { c.x = n.x; c.z = n.z; }
-    applyPose(w.npcViews.get(n.id), n, t, reduced);
+    const view = w.npcViews.get(n.id);
+    applyPose(view, n, t, reduced);
+    if (view) view.g.visible = !inShot(n);
   });
   if (changed.length) w.lifeDirty = true;
   if (w.visitors) {
@@ -1961,7 +2095,7 @@ function stepLife(w, dt, t, reduced) {
     left.forEach((v) => removeVisitorView(w, v));
     arrived.forEach((v) => addVisitorView(w, v));
     if (arrived.length || left.length) w.lifeDirty = true;
-    w.visitorViews.forEach((view) => animateVisitor(view, t, reduced));
+    w.visitorViews.forEach((view) => { animateVisitor(view, t, reduced); view.g.visible = !inShot(view.v); });
   }
   if (w.anim && w.anim.blockAxe) w.anim.blockAxe.visible = !npcs.some((n) => n.item === "axe" || n.pose === "chop");
   placeSelection(w);

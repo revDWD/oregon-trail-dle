@@ -8,15 +8,24 @@ export const WALK_SPEED = 3.2; // metres per second
 export const RUN_SPEED = 5.2;
 
 // Places you can walk up to. `reach` is how close (from the edge of the object) the prompt appears.
-// Order is the order of the Camp Locations list below the scene.
+// Order is the order of the Camp Locations list below the scene. `view` is the close-up the camera
+// moves to while you use the place (see locationView): `distance` back toward the fire, `side` to the
+// right of that line, the camera's `height`, the height it `look`s at and how far `ahead` past the
+// place it looks. The campfire `orbit`s slowly instead (radians per second).
 export const CAMP_LOCATIONS = Object.freeze([
-  { id: "roster", name: "Hiker Roster Campfire", x: 0, z: 0, radius: 1.5, reach: 2, verb: "Sit by the fire" },
-  { id: "bulletin", name: "Expedition Bulletin Board", x: 5.5, z: -5.5, radius: 0.9, reach: 1.8, verb: "Read the board" },
-  { id: "journal", name: "Trail Journal Tent", x: -6.5, z: -4.5, radius: 1.5, reach: 1.6, verb: "Open the journal" },
-  { id: "patches", name: "Patch Collection Display", x: -6, z: 5, radius: 0.9, reach: 1.8, verb: "Look at the patches" },
-  { id: "wildlife", name: "Wildlife Observation Area", x: 8.5, z: 3.5, radius: 1, reach: 2, verb: "Check recent sightings" },
-  { id: "map", name: "Trail Map Table", x: 2.5, z: 7, radius: 1.2, reach: 1.6, verb: "Study the map" }
-]);
+  { id: "roster", name: "Hiker Roster Campfire", x: 0, z: 0, radius: 1.5, reach: 2, verb: "Sit by the fire",
+    view: { orbit: 0.05, distance: 3.7, height: 2, look: 0.65 } },
+  { id: "bulletin", name: "Expedition Bulletin Board", x: 5.5, z: -5.5, radius: 0.9, reach: 1.8, verb: "Read the board",
+    view: { distance: 2.6, height: 1.55, look: 1.4 } },
+  { id: "journal", name: "Trail Journal Tent", x: -6.5, z: -4.5, radius: 1.5, reach: 1.6, verb: "Open the journal",
+    view: { distance: 4.2, height: 1.9, look: 0.9 } },
+  { id: "patches", name: "Patch Collection Display", x: -6, z: 5, radius: 0.9, reach: 1.8, verb: "Look at the patches",
+    view: { distance: 2.6, side: 0.9, height: 1.45, look: 1.5 } },
+  { id: "wildlife", name: "Wildlife Observation Area", x: 8.5, z: 3.5, radius: 1, reach: 2, verb: "Check recent sightings",
+    view: { distance: 2.4, height: 1.75, look: 1.3, ahead: 7 } },
+  { id: "map", name: "Trail Map Table", x: 2.5, z: 7, radius: 1.2, reach: 1.6, verb: "Study the map",
+    view: { distance: 1.5, height: 2.6, look: 0.86 } }
+].map((loc) => Object.freeze({ ...loc, view: Object.freeze(loc.view) })));
 
 // Scenery you bump into but can't use. `tall` objects block the camera too.
 export const CAMP_PROPS = Object.freeze([
@@ -103,6 +112,40 @@ export function nearestLocation(pos, locations = CAMP_LOCATIONS) {
     if (gap <= loc.reach + PLAYER_RADIUS && gap < bestGap) { best = loc; bestGap = gap; }
   }
   return best;
+}
+
+// The close-up camera for a place: on the fire side of it (the side every place faces), looking at it.
+// The campfire has no "fire side", so its view circles the flames at `angle` (a heading from the fire;
+// the renderer advances it by view.orbit per second for the calm campfire mode).
+export function locationView(loc, { angle = 0 } = {}) {
+  const v = loc.view || { distance: 3, height: 1.6, look: 1 };
+  let ux;
+  let uz;
+  if (v.orbit !== undefined) { ux = Math.sin(angle); uz = Math.cos(angle); } else {
+    const d = Math.hypot(loc.x, loc.z) || 1;
+    ux = -loc.x / d;
+    uz = -loc.z / d;
+  }
+  const side = v.side || 0;
+  const ahead = v.ahead || 0;
+  return {
+    x: loc.x + ux * v.distance + uz * side,
+    y: v.height,
+    z: loc.z + uz * v.distance - ux * side,
+    look: { x: loc.x - ux * ahead, y: v.look, z: loc.z - uz * ahead }
+  };
+}
+
+// True when something at `point` stands between a close-up camera (`view`, from locationView) and its
+// place, so the renderer can step it out of shot as it does the player. The sight line widens towards
+// the place to cover the prop. The campfire view keeps its company: hikers round the fire stay.
+export function blocksView(loc, view, point, clearance = 0.55) {
+  if (!loc || !view || !point || (loc.view && loc.view.orbit !== undefined)) return false;
+  const bx = loc.x - view.x;
+  const bz = loc.z - view.z;
+  const t = ((point.x - view.x) * bx + (point.z - view.z) * bz) / (bx * bx + bz * bz || 1);
+  if (t < -0.1 || t > 0.95) return false;
+  return Math.hypot(point.x - (view.x + bx * t), point.z - (view.z + bz * t)) < clearance + loc.radius * t;
 }
 
 // A virtual joystick's offset (in px) to a direction: y up is forward. Inside the dead zone it is

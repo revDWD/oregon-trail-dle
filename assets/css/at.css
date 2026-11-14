@@ -190,13 +190,22 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .camp-place-head h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; color: var(--forest-dark); }
 .camp-place-head h3:focus { outline: none; }
 .camp-place-card h4 { margin: .8rem 0 .2rem; }
-/* The photo camera */
-.camp3d-camera-btn { position: absolute; right: .6rem; top: .6rem; display: inline-flex; align-items: center; gap: .35rem; min-width: var(--tap); min-height: var(--tap); padding: .3rem .75rem; border: 2px solid var(--bark); border-radius: 999px; background: var(--paper); color: var(--forest-dark); font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(91,70,54,.35); }
-.camp3d-camera-btn[hidden], .camp3d-finder[hidden], .camp3d-cambar[hidden], .camp3d-toast[hidden] { display: none; }
-.camp3d-camera-btn:focus-visible, .camp3d-cam-ctl:focus-visible, .camp3d-shutter:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
-.camp3d:has(.camp3d-hint) .camp3d-camera-btn { top: 3.1rem; }
+/* The photo camera: a round shutter-style button at the bottom centre, like a phone camera app */
+.camp3d::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(20,24,18,.32) 100%); pointer-events: none; }
+.camp3d-camera-btn { position: absolute; left: 50%; bottom: .6rem; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; width: 72px; height: 72px; padding: 0; border: 4px solid #fffaf0; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #3f7a5c, var(--forest-dark) 70%); color: #fff; font: inherit; cursor: pointer; box-shadow: 0 0 0 2px var(--bark), 0 4px 10px rgba(0,0,0,.35); }
+.camp3d-camera-btn:hover { background: radial-gradient(circle at 50% 40%, #4b8a69, var(--forest-dark) 70%); }
+.camp3d-camera-btn:active { transform: translateX(-50%) scale(.94); }
+.camp3d-camera-icon { font-size: 1.55rem; line-height: 1; }
+.camp3d-camera-label { margin-top: .1rem; font: 700 .68rem/1 system-ui, sans-serif; letter-spacing: .02em; }
+.camp3d-camera-btn[hidden], .camp3d-finder[hidden], .camp3d-cambar[hidden], .camp3d-toast[hidden], .camp3d-review[hidden] { display: none; }
+.camp3d-camera-btn:focus-visible, .camp3d-cam-ctl:focus-visible, .camp3d-shutter:focus-visible { outline: 3px solid #0b57d0; outline-offset: 3px; }
+.camp3d-prompt { bottom: calc(.6rem + 84px); }
 .camp3d.is-camera .camp3d-canvas { cursor: crosshair; }
 .camp3d-finder { position: absolute; inset: 0; pointer-events: none; }
+.camp3d-finder.is-snap { animation: camp3d-snap .32s ease-out; }
+.camp3d-finder.is-snap::before { content: ""; position: absolute; inset: 0; animation: camp3d-blades .3s ease-out forwards; }
+@keyframes camp3d-snap { from { transform: scale(.93); } to { transform: none; } }
+@keyframes camp3d-blades { from { box-shadow: inset 0 0 0 min(30vh, 180px) rgba(10,12,10,.92); } to { box-shadow: inset 0 0 0 0 rgba(10,12,10,0); } }
 .camp3d-corner { position: absolute; width: 26px; height: 26px; border: 3px solid rgba(255,250,240,.9); filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
 .camp3d-corner.tl { left: 12%; top: 12%; border-right: 0; border-bottom: 0; }
 .camp3d-corner.tr { right: 12%; top: 12%; border-left: 0; border-bottom: 0; }
@@ -204,16 +213,32 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .camp3d-corner.br { right: 12%; bottom: 22%; border-left: 0; border-top: 0; }
 .camp3d-reticle { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 2px solid rgba(255,250,240,.85); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
 .camp3d-zoom { position: absolute; right: .7rem; top: .7rem; padding: .1rem .5rem; border-radius: 999px; background: rgba(31,42,36,.78); color: #fff; font: 700 .85rem system-ui, sans-serif; }
-.camp3d-cambar { position: absolute; left: .6rem; right: .6rem; bottom: .7rem; display: flex; justify-content: center; align-items: center; gap: .7rem; }
+.camp3d-cambar { position: absolute; left: .6rem; right: .6rem; bottom: .6rem; display: flex; justify-content: center; align-items: center; gap: .7rem; }
 .camp3d-cam-ctl { width: var(--tap); height: var(--tap); border: 2px solid var(--bark); border-radius: 50%; background: var(--paper); color: var(--forest-dark); font: 700 1.3rem/1 system-ui, sans-serif; cursor: pointer; }
-.camp3d-shutter { width: 60px; height: 60px; border: 4px solid #fff; border-radius: 50%; background: #c0392b; box-shadow: 0 0 0 2px var(--bark), 0 3px 6px rgba(0,0,0,.3); cursor: pointer; }
-.camp3d-shutter:active { transform: scale(.94); }
+.camp3d-shutter { width: 72px; height: 72px; border: 5px solid #fff; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #e0533f, #b0301f 70%); box-shadow: 0 0 0 2px var(--bark), 0 4px 10px rgba(0,0,0,.35); cursor: pointer; }
+.camp3d-shutter:active { transform: scale(.92); }
+.camp3d-shutter.is-press { animation: camp3d-press .25s ease-out; }
+@keyframes camp3d-press { 40% { transform: scale(.86); } }
 .camp3d-cam-done { min-height: var(--tap); }
 .camp3d-toast { position: absolute; left: 50%; top: .7rem; max-width: calc(100% - 6rem); margin: 0; padding: .35rem .8rem; transform: translateX(-50%); border-radius: 10px; background: rgba(255,250,240,.95); color: var(--forest-dark); font-size: .9rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.25); pointer-events: none; }
 .camp3d-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .camp3d-flash.is-on { animation: camp3d-flash .35s ease-out; }
 @keyframes camp3d-flash { from { opacity: .8; } to { opacity: 0; } }
-/* Around Camp Now and Camp Photos */
+/* The review after each shot: a small print on a dimmed scene */
+.camp3d-review { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: .5rem; background: rgba(20,24,18,.55); overflow: auto; }
+.camp3d-review-card { width: min(22rem, 100%); max-height: 100%; overflow: auto; margin: auto; padding: .6rem .6rem .7rem; border-radius: 6px; background: #fffaf0; color: var(--ink); box-shadow: 0 6px 18px rgba(0,0,0,.4); transform: rotate(-1deg); animation: camp3d-print .35s ease-out; }
+.camp3d-review-title { margin: 0 0 .35rem; font: 700 1rem Georgia, "Times New Roman", serif; color: var(--forest-dark); }
+.camp3d-review-frame { padding: .35rem; background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.camp3d-review-img { display: block; width: 100%; max-height: 32vh; object-fit: cover; aspect-ratio: 16 / 9; background: var(--sky); animation: camp3d-develop .9s ease-out; }
+.camp3d-review-img[hidden] { display: none; }
+.camp3d-review-caption { margin: .45rem 0 .15rem; font-weight: 600; line-height: 1.3; }
+.camp3d-review-meta, .camp3d-review-wild { margin: 0; font-size: .85rem; color: var(--muted); }
+.camp3d-review-wild.is-wild { color: var(--forest-dark); font-weight: 700; }
+.camp3d-review-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .55rem; }
+.camp3d-review-actions .btn { flex: 1 1 8rem; }
+@keyframes camp3d-print { from { transform: translateY(18px) rotate(-3deg); opacity: 0; } to { transform: rotate(-1deg); opacity: 1; } }
+@keyframes camp3d-develop { from { filter: brightness(2.2) saturate(0); } to { filter: none; } }
+/* Around Camp Now and the Camp Camera Roll */
 .camp3d-life-slot:empty { display: none; }
 .camp3d-life { margin: .7rem .2rem 0; }
 .camp3d-life h3 { font-size: 1rem; margin: .4rem 0; color: var(--forest-dark); }
@@ -227,6 +252,8 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .camp3d-photo { margin: 0; padding: .35rem .35rem .5rem; border-radius: 4px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
 .camp3d-photo img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: var(--sky); }
 .camp3d-photo figcaption { margin-top: .3rem; font-size: .82rem; line-height: 1.3; }
+.camp3d-photo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .4rem; margin-top: .25rem; color: var(--muted); font-size: .78rem; }
+.camp3d-photo-tag { padding: 0 .4rem; border-radius: 999px; background: #e3efe6; color: var(--forest-dark); font-weight: 700; }
 .camp-list { margin: 0; padding-left: 1.2rem; }
 .camp-roster { list-style: none; margin: .5rem 0 0; padding: 0; }
 .camp-roster li { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .5rem; padding: .15rem 0; border-bottom: 1px dashed var(--line); }

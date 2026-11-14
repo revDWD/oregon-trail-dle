@@ -651,3 +651,16 @@ The 3D camp was a place to walk round; this sprint makes it feel lived in. Desig
 - Seasonal visitors (fireflies in June, a snowshoe hare in winter) and seasonal camp themes.
 - Hikers reacting to a visitor (pointing, whispering) and to each other (sharing food at the fire).
 - Download or share a camp photo.
+
+## 23. Camp quality, immersion and performance
+
+A polish pass, not a feature sprint: the same camp, nicer to be in and quicker to draw. Details, the audit and a technology roadmap are in `docs/camp-3d.md` §3, §5 and §8. No SQL.
+
+- *Photography that answers.* The 📷 shutter moved from the top-right corner to the bottom centre (72 px, camera-app style). Every shot gives a flash, a viewfinder snap and a shutter click (WebAudio, no sound file; "Shutter sound" turns it off), then a polaroid **review card** with the picture, caption, time and "Wildlife identified: …". "Continue" goes back to the viewfinder with a "Saved to the Camp Camera Roll" toast; "Return to camp" puts the camera away. Photos are sharper (960 px, JPEG 0.8). **Camp Photos** became the **Camp Camera Roll**, with times and a 🐾 tag for wildlife. It stays in memory for the session; IndexedDB is the recommended next step (`docs/camp-3d.md` §3 compares the options).
+- *A better-lit camp.* Neutral tone mapping with an exposure for each time of day, soft sun shadows on Medium and High, ember glow pulsing in the fire, and a gentle vignette.
+- *A lived-in camp.* A camp kitchen (a table with a stove, pot and mug, facing the fire), folding camp chairs by the overlook, a pack drop, a drying line of socks, and a white-blazed tree where the trail leaves camp, with worn paths to the kitchen and chairs.
+- *Small animations.* Hikers look around, sip coffee, check the map, adjust a pack or stretch between tasks, and wave when you walk up (`HIKER_GESTURES`). Resting wildlife pecks, forages, looks round, grooms or listens (`VISITOR_IDLES`). Both are plain state in `engine/camp-life.js`, tested in Node, and off with reduced motion.
+- *Performance.* Hills, rocks and fire stones are instanced (Low now draws fewer calls than before despite the new props). Real shadows were first tried on every mesh and nearly doubled the draw calls, so only still scenery casts and the shadow map is drawn once per scene build; moving things keep blob shadows. Medium and High cost about what they did before. GLB/Draco, LOD and post-processing were reviewed and aren't needed yet.
+- *A fix.* Taking a photo before ever tapping the scene could throw (sprite name tags need the raycaster's camera); the line-of-sight check now sets it and ignores the tags.
+
+**Next (camp tech).** IndexedDB for the camera roll and a download button; `BatchedMesh` for the hikers if the roster grows; a small Meshopt GLB pipeline for a few hero models; optional High-only bloom for fire and lanterns, measured on a phone first.

@@ -19,14 +19,15 @@ import {
   joystickVector, keysVector, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
 } from "../engine/camp-world.js";
 import {
-  CAMP_PATHS, FALLEN_LOG, NPC_RADIUS, OVERLOOK, activityLabel, allActivitySpots, campFlora, createCampLife, createVisitors,
+  CAMP_PATHS, FALLEN_LOG, HIKER_GESTURES, NPC_RADIUS, OVERLOOK, activityLabel, allActivitySpots, campFlora, createCampLife, createVisitors,
   describeNpc, describeVisitor, floraFor, framePhoto, photoCaption, projectPoint, stepCampLife, stepVisitors, vantagePoints, waryDistance
 } from "../engine/camp-life.js";
 
-// Session-only preferences and the photo roll (localStorage holds only the last-chosen hiker; camp
+// Session-only preferences and the camera roll (localStorage holds only the last-chosen hiker; camp
 // photos live in memory until the page closes and are never uploaded).
-const session = { webgl: null, degraded: false, optOut: false, quality: "auto", sensitivity: 1, photos: [] };
+const session = { webgl: null, degraded: false, optOut: false, quality: "auto", sensitivity: 1, sound: true, photos: [] };
 const MAX_PHOTOS = 12;
+const PHOTO_WIDTH = 960; // camera roll pictures are scaled down to this width to keep memory small
 const EYE = 1.55; // the photo camera's height
 const FOV = 55;
 const MIN_FOV = 20;
@@ -93,7 +94,7 @@ const chosenTier = () => (session.quality === "auto" ? autoTier() : QUALITY[sess
  * @param opts.onSelectHiker(id)  a hiker by the fire was tapped
  * @param opts.onFallback(reason) the 2D camp should come back ("off" | "unavailable" | "load-failed" | "context-lost" | "slow" | "error")
  * @param opts.settings           an element to fill with the Controls and Settings panel
- * @param opts.life               an element to fill with Around Camp Now and Camp Photos (the text version of camp life)
+ * @param opts.life               an element to fill with Around Camp Now and the Camp Camera Roll (the text version of camp life)
  * @param opts.data               { fraction, toKatahdin, patches: [{ id, color }], explorers, notes, selectedId }
  */
 export function mountCamp3d(holder, ctx, opts = {}) {
@@ -238,7 +239,7 @@ function labelSprite(w, text, { height = 0.32, bg = "rgba(255,248,232,0.92)", in
     g.textBaseline = "middle";
     g.fillText(text, cw / 2, ch / 2 + 1);
   });
-  const material = new w.THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const material = new w.THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
   w.disposables.push(material);
   const sprite = new w.THREE.Sprite(material);
   sprite.scale.set((height * width) / 44, height, 1);
@@ -271,8 +272,34 @@ function glowSprite(w, color, size, opacity = 0.8) {
   return sprite;
 }
 
-const shadow = (w, parent, r = 0.45, x = 0, z = 0) =>
-  part(w, parent, ["CircleGeometry", 1, 16], 0x000000, { x, y: 0.025, z, rx: -Math.PI / 2, sx: r, sy: r, basic: true, opacity: 0.22 });
+// A soft blob under people and props. Hidden when the sun casts real shadows (see castShadows).
+function shadow(w, parent, r = 0.45, x = 0, z = 0) {
+  const blob = part(w, parent, ["CircleGeometry", 1, 16], 0x000000, { x, y: 0.025, z, rx: -Math.PI / 2, sx: r, sy: r, basic: true, opacity: 0.22 });
+  blob.userData.blob = true;
+  blob.visible = !w.tier.shadows;
+  return blob;
+}
+
+// Real shadows: solid lit meshes cast and receive. Glows, blobs, labels, see-through things and
+// anything marked `noShadow` (the far hills, the ground's own decals) are left out. Things that move
+// (`userData.moving`: the player, hikers, visitors) keep their blob and only receive, so the shadow
+// map holds still scenery alone and is drawn once per scene build rather than every frame.
+function castShadows(w, object) {
+  const on = Boolean(w.tier.shadows);
+  const visit = (o, moving) => {
+    moving = moving || Boolean(o.userData.moving);
+    if (o.userData.blob) o.visible = moving || !on;
+    else if (o.isMesh && !o.userData.noShadow) {
+      const m = o.material;
+      const solid = m && !m.transparent && !m.isMeshBasicMaterial;
+      o.castShadow = on && solid && !moving && !o.userData.receiveOnly;
+      o.receiveShadow = on && solid;
+    }
+    o.children.forEach((c) => visit(c, moving));
+  };
+  visit(object, false);
+  if (!object.userData.moving) w.shadowDirty = true;
+}
 
 // A hiker: hat, head, shirt, arms and legs on hinges so walking can swing them. Faces +z.
 function hikerModel(w, parent, { shirt, hat, pack = false, seated = false, pose = "sit" }) {
@@ -288,9 +315,10 @@ function hikerModel(w, parent, { shirt, hat, pack = false, seated = false, pose 
   part(w, body, ["BoxGeometry", 0.42, 0.5, 0.26], shirt, { y: 0.75 });
   const armL = limb(-0.28, 0.98, shirt, 0.46, 0.11);
   const armR = limb(0.28, 0.98, shirt, 0.46, 0.11);
-  part(w, body, ["SphereGeometry", 0.17, 10, 8], SKIN, { y: 1.18 });
-  part(w, body, ["CylinderGeometry", 0.17, 0.19, 0.12, 10], hat, { y: 1.33 });
-  part(w, body, ["CylinderGeometry", 0.28, 0.28, 0.03, 12], hat, { y: 1.28 });
+  const head = group(w, body, { y: 1.18 });
+  part(w, head, ["SphereGeometry", 0.17, 10, 8], SKIN);
+  part(w, head, ["CylinderGeometry", 0.17, 0.19, 0.12, 10], hat, { y: 0.15 });
+  part(w, head, ["CylinderGeometry", 0.28, 0.28, 0.03, 12], hat, { y: 0.1 });
   if (pack) {
     part(w, body, ["BoxGeometry", 0.36, 0.46, 0.2], 0x7a5a3c, { y: 0.82, z: -0.22 });
     part(w, body, ["CylinderGeometry", 0.08, 0.08, 0.36, 8], 0x2f5d46, { y: 1.1, z: -0.24, rz: Math.PI / 2 });
@@ -302,7 +330,7 @@ function hikerModel(w, parent, { shirt, hat, pack = false, seated = false, pose 
   if (pose === "wave") armR.rotation.z = 2.5;
   if (pose === "read") part(w, body, ["BoxGeometry", 0.3, 0.04, 0.22], CREAM, { y: 0.78, z: 0.3, rx: -0.6 });
   if (pose === "cook") part(w, armR, ["CylinderGeometry", 0.015, 0.015, 0.9, 4], WOOD_DARK, { y: -0.45, z: 0.35, rx: 1.1 });
-  g.userData.rig = { body, legL, legR, armL, armR, pose };
+  g.userData.rig = { body, head, legL, legR, armL, armR, pose };
   return g;
 }
 
@@ -312,12 +340,19 @@ function createWorld(THREE) {
   const tier = chosenTier();
   const renderer = new THREE.WebGLRenderer({ antialias: tier.antialias, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tier.pixelRatio));
+  // Neutral tone mapping keeps the storybook colours but rolls off bright fire and sky gently; each
+  // time of day sets its own exposure (campLighting). The shadow map is drawn only when the scene is
+  // rebuilt (w.shadowDirty): only still scenery casts, so it never goes stale.
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.shadowMap.enabled = tier.shadows > 0;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.autoUpdate = false;
   const canvas = renderer.domElement;
   canvas.className = "camp3d-canvas";
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "application");
   canvas.setAttribute("aria-roledescription", "3D camp");
-  canvas.setAttribute("aria-label", "Explorable 3D camp. Use W A S D or the arrow keys to walk, comma and period to turn the camera, E to visit the nearest place and C for the photo camera. Every place is also in the Camp Locations list below, and what's happening in camp is in Around Camp Now.");
+  canvas.setAttribute("aria-label", "Explorable 3D camp. Use W A S D or the arrow keys to walk, comma and period to turn the camera, E to visit the nearest place and C (or the camera button at the bottom) for the photo camera. Every place is also in the Camp Locations list below, and what's happening in camp is in Around Camp Now.");
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 170);
   const touch = coarsePointer();
@@ -338,7 +373,21 @@ function createWorld(THREE) {
     h("kbd", { class: "camp3d-key", "aria-hidden": "true" }, "E"), ui.verb, ui.place);
   ui.prompt = h("div", { class: "camp3d-prompt", hidden: true }, ui.act);
   ui.cameraBtn = h("button", { type: "button", class: "camp3d-camera-btn", "aria-label": "Photo camera", onClick: () => enterCamera(w) },
-    h("span", { "aria-hidden": "true" }, "📷"), h("span", { class: "camp3d-camera-label" }, "Camera"));
+    h("span", { class: "camp3d-camera-icon", "aria-hidden": "true" }, "📷"), h("span", { class: "camp3d-camera-label", "aria-hidden": "true" }, "Camera"));
+  // The review after each shot: the picture, its caption, when it was taken and any wildlife in it.
+  ui.reviewImg = h("img", { class: "camp3d-review-img", alt: "" });
+  ui.reviewCaption = h("p", { class: "camp3d-review-caption" });
+  ui.reviewMeta = h("p", { class: "camp3d-review-meta" });
+  ui.reviewWild = h("p", { class: "camp3d-review-wild" });
+  ui.reviewContinue = h("button", { type: "button", class: "btn small primary", onClick: () => closeReview(w) }, "Continue");
+  ui.review = h("div", { class: "camp3d-review", role: "dialog", "aria-modal": "false", "aria-labelledby": "camp3d-review-title", hidden: true,
+    onKeydown: (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeReview(w); } } },
+  h("div", { class: "camp3d-review-card" },
+    h("p", { class: "camp3d-review-title", id: "camp3d-review-title" }, "Photo Saved"),
+    h("div", { class: "camp3d-review-frame" }, ui.reviewImg),
+    ui.reviewCaption, ui.reviewMeta, ui.reviewWild,
+    h("div", { class: "camp3d-review-actions" }, ui.reviewContinue,
+      h("button", { type: "button", class: "btn small", onClick: () => exitCamera(w, { focus: true }) }, "Return to camp"))));
   ui.finder = h("div", { class: "camp3d-finder", hidden: true, "aria-hidden": "true" },
     ["tl", "tr", "bl", "br"].map((c) => h("span", { class: `camp3d-corner ${c}` })), h("span", { class: "camp3d-reticle" }), ui.zoom);
   ui.shutter = h("button", { type: "button", class: "camp3d-shutter", "aria-label": "Take photo", onClick: () => takePhoto(w) });
@@ -366,11 +415,13 @@ function createWorld(THREE) {
   scene.add(w.dynamic);
   w.playerMesh = hikerModel(w, scene, { shirt: 0xd4703a, hat: 0x2f5d46, pack: true, pose: "walk" });
   shadow(w, w.playerMesh, 0.42);
+  w.playerMesh.userData.moving = true;
+  castShadows(w, w.playerMesh);
   const you = labelSprite(w, "You", { height: 0.3, bg: "rgba(224,164,58,0.95)" });
   you.position.y = 1.85;
   w.playerMesh.add(you);
   w.disposables = []; // the player's label lives for the page, never freed on rebuild
-  w.root = h("div", { class: "camp3d" }, canvas, ui.flash, ui.finder, ui.joy, ui.prompt, ui.cameraBtn, ui.camBar, ui.toast, ui.hint, ui.status);
+  w.root = h("div", { class: "camp3d" }, canvas, ui.flash, ui.finder, ui.joy, ui.prompt, ui.cameraBtn, ui.camBar, ui.toast, ui.review, ui.hint, ui.status);
   bindInput(w);
   canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); fallback(w, "context-lost"); });
   w.resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => resize(w)) : null;
@@ -393,8 +444,15 @@ function resize(w) {
 }
 
 function setTier(w, tier) {
+  const shadowsChanged = Boolean(tier.shadows) !== Boolean(w.tier.shadows);
   w.tier = tier;
   w.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tier.pixelRatio));
+  if (shadowsChanged) {
+    // Lit materials compile with or without shadow code, so they must recompile when it flips.
+    w.renderer.shadowMap.enabled = tier.shadows > 0;
+    w.mats.forEach((m) => { m.needsUpdate = true; });
+    castShadows(w, w.playerMesh);
+  }
   resize(w);
   w.key = null;
   if (w.lastCtx) build(w, w.lastCtx, w.lastData || {});
@@ -477,35 +535,67 @@ function build(w, ctx, data) {
   const anim = { flames: [], smoke: [], fireflies: null, precip: null, rings: [], fireLight: null, blockAxe: null, reduced };
   w.anim = anim;
 
-  // Sky, fog and light.
+  // Sky, fog and light. The sun casts real soft shadows on Medium and High (QUALITY.shadows); Low keeps
+  // the cheap blob shadows under people and props instead.
   w.scene.background = new T.Color(light.sky);
   w.scene.fog = new T.Fog(light.fog, light.fogNear, light.fogFar);
+  w.renderer.toneMappingExposure = light.exposure || 1;
   root.add(new T.HemisphereLight(light.ambient, hex(look.ground), light.ambientIntensity));
   const sun = new T.DirectionalLight(light.sun, light.sunIntensity);
   sun.position.set(10, 4 + light.sunHeight * 14, 7);
   root.add(sun);
+  if (w.tier.shadows) {
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(w.tier.shadows, w.tier.shadows);
+    Object.assign(sun.shadow.camera, { left: -19, right: 19, top: 19, bottom: -19, near: 1, far: 60 });
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.shadow.bias = -0.0006;
+    sun.shadow.normalBias = 0.03;
+    sun.shadow.radius = 3;
+    sun.shadow.intensity = light.shadow ?? 0.5;
+    root.add(sun.target);
+    w.disposables.push({ dispose: () => sun.dispose() });
+  }
 
   // Ground: the wide forest floor, then the painted clearing (worn paths, ash, speckles) and the trail
   // running on through the woods either side.
   const ground = hex(look.ground);
   const dirt = mix(ground, 0x9a8462, 0.65);
-  part(w, root, ["CircleGeometry", 1, 48], light.snow ? mix(ground, 0xf4f6fb, 0.5) : ground, { rx: -Math.PI / 2, sx: 80, sy: 80 });
+  const flat = (mesh) => { mesh.userData.receiveOnly = true; return mesh; };
+  flat(part(w, root, ["CircleGeometry", 1, 48], light.snow ? mix(ground, 0xf4f6fb, 0.5) : ground, { rx: -Math.PI / 2, sx: 80, sy: 80 }));
   const floorTex = groundTexture(w, look, light);
   floorTex.anisotropy = Math.min(4, w.renderer.capabilities.getMaxAnisotropy());
-  const floor = new T.Mesh(geo(w, "PlaneGeometry", GROUND_SPAN, GROUND_SPAN), new T.MeshLambertMaterial({ map: floorTex }));
+  const floor = flat(new T.Mesh(geo(w, "PlaneGeometry", GROUND_SPAN, GROUND_SPAN), new T.MeshLambertMaterial({ map: floorTex })));
   w.disposables.push(floor.material);
   floor.position.y = 0.008;
   floor.rotation.x = -Math.PI / 2;
   root.add(floor);
-  [-1, 1].forEach((s) => part(w, root, ["PlaneGeometry", 1, 1], dirt, { y: 0.006, z: s * (GROUND_SPAN / 2 + 12), rx: -Math.PI / 2, sx: 1.2, sy: 24 }));
+  [-1, 1].forEach((s) => flat(part(w, root, ["PlaneGeometry", 1, 1], dirt, { y: 0.006, z: s * (GROUND_SPAN / 2 + 12), rx: -Math.PI / 2, sx: 1.2, sy: 24 })));
+
+  // Repeated scenery is instanced: one draw call per kind of thing, however many there are.
+  const dummy = new T.Object3D();
+  const instanced = (list, geometry, color, place, look = {}) => {
+    if (!list.length) return null;
+    const m = new T.InstancedMesh(geometry, mat(w, color, look), list.length);
+    list.forEach((t, i) => { place(t); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
+    m.computeBoundingSphere();
+    root.add(m);
+    w.disposables.push({ dispose: () => m.dispose() });
+    return m;
+  };
+  const reset = () => { dummy.rotation.set(0, 0, 0); };
+  const placeShape = (s) => { dummy.position.set(s.x, s.y, s.z); dummy.rotation.set(s.rx || 0, s.ry || 0, 0); dummy.scale.set(s.sx, s.sy, s.sz); };
 
   // Hills: a near ridge fades into the fog, a far range stays as a silhouette against the sky.
   const rand = seededRandom(31);
+  const nearHills = [];
+  const farHills = [];
+  const caps = [];
   for (let i = 0; i < 12; i += 1) {
     const a = (i / 12) * Math.PI * 2 + rand() * 0.3;
     const r = 34 + rand() * 6;
     const hgt = 6 + rand() * 6;
-    part(w, root, ["ConeGeometry", 1, 1, 6], mix(hex(look.near), light.fog, 0.15), { x: Math.sin(a) * r, y: hgt / 2, z: Math.cos(a) * r, sx: 9 + rand() * 6, sy: hgt, sz: 9 + rand() * 6, ry: rand() });
+    nearHills.push({ x: Math.sin(a) * r, y: hgt / 2, z: Math.cos(a) * r, sx: 9 + rand() * 6, sy: hgt, sz: 9 + rand() * 6, ry: rand() });
   }
   for (let i = 0; i < 14; i += 1) {
     const a = (i / 14) * Math.PI * 2 + rand() * 0.2;
@@ -513,21 +603,28 @@ function build(w, ctx, data) {
     const hgt = 16 + rand() * 14;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
-    part(w, root, ["ConeGeometry", 1, 1, 7], mix(hex(look.far), light.sky, 0.4), { x, y: hgt / 2, z, sx: 16 + rand() * 10, sy: hgt, sz: 16 + rand() * 10, fog: false });
-    if (look.snowcaps) part(w, root, ["ConeGeometry", 1, 1, 7], mix(0xffffff, light.sky, 0.2), { x, y: hgt * 0.86, z, sx: 4.5, sy: hgt * 0.28, sz: 4.5, fog: false });
+    farHills.push({ x, y: hgt / 2, z, sx: 16 + rand() * 10, sy: hgt, sz: 16 + rand() * 10 });
+    caps.push({ x, y: hgt * 0.86, z, sx: 4.5, sy: hgt * 0.28, sz: 4.5 });
   }
+  [
+    instanced(nearHills, geo(w, "ConeGeometry", 1, 1, 6), mix(hex(look.near), light.fog, 0.15), placeShape),
+    instanced(farHills, geo(w, "ConeGeometry", 1, 1, 7), mix(hex(look.far), light.sky, 0.4), placeShape, { fog: false }),
+    look.snowcaps ? instanced(caps, geo(w, "ConeGeometry", 1, 1, 7), mix(0xffffff, light.sky, 0.2), placeShape, { fog: false }) : null
+  ].forEach((m) => { if (m) m.userData.noShadow = true; });
 
   // Water and boulders where the section has them.
   const water = look.water ? { x: -21, z: 10, r: 7 } : null;
-  if (water) part(w, root, ["CircleGeometry", 1, 32], 0x5d8fb0, { x: water.x, y: 0.03, z: water.z, rx: -Math.PI / 2, sx: water.r, sy: water.r * 0.7 });
+  if (water) flat(part(w, root, ["CircleGeometry", 1, 32], 0x5d8fb0, { x: water.x, y: 0.03, z: water.z, rx: -Math.PI / 2, sx: water.r, sy: water.r * 0.7 }));
   if (look.rocks) {
+    const rocks = [];
     for (let i = 0; i < 9; i += 1) {
       const a = (i / 9) * Math.PI * 2 + 0.3;
       if (Math.abs(Math.sin(a)) < 0.15) continue;
       const r = 15.8 + rand() * 1.5;
       const s = 0.5 + rand() * 0.8;
-      part(w, root, ["DodecahedronGeometry", 1, 0], STONE, { x: Math.sin(a) * r, y: s * 0.4, z: Math.cos(a) * r, sx: s * 1.3, sy: s, sz: s, ry: rand() * 3 });
+      rocks.push({ x: Math.sin(a) * r, y: s * 0.4, z: Math.cos(a) * r, sx: s * 1.3, sy: s, sz: s, ry: rand() * 3 });
     }
+    instanced(rocks, geo(w, "DodecahedronGeometry", 1, 0), STONE, placeShape);
   }
 
   // The forest ring, instanced (two draw calls per kind, however many trees). The section sets the
@@ -538,16 +635,6 @@ function build(w, ctx, data) {
     .filter((t) => !water || Math.hypot(t.x - water.x, t.z - water.z) > water.r + 1);
   const pines = trees.filter((t) => t.kind === "pine");
   const broad = trees.filter((t) => t.kind !== "pine");
-  const dummy = new T.Object3D();
-  const instanced = (list, geometry, color, place) => {
-    if (!list.length) return null;
-    const m = new T.InstancedMesh(geometry, mat(w, color), list.length);
-    list.forEach((t, i) => { place(t); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
-    root.add(m);
-    w.disposables.push({ dispose: () => m.dispose() });
-    return m;
-  };
-  const reset = () => { dummy.rotation.set(0, 0, 0); };
   const near = hex(look.near);
   [
     instanced(trees, geo(w, "CylinderGeometry", 0.14, 0.2, 1, 6), WOOD_DARK, (t) => { reset(); dummy.position.set(t.x, 0.6 * t.scale, t.z); dummy.scale.set(t.scale, 1.2 * t.scale, t.scale); }),
@@ -575,15 +662,26 @@ function build(w, ctx, data) {
     instanced(byKind("needles"), geo(w, "CircleGeometry", 1, 9), mix(0x8a6a3a, hex(look.ground), 0.4), (f) => { reset(); dummy.position.set(f.x, 0.014, f.z); dummy.rotation.set(-Math.PI / 2, 0, f.rot); dummy.scale.set(f.size, f.size * 0.8, 1); })
   ];
   plantMeshes.forEach((m, i) => { if (m && (i === 0 || i === 7)) w.occluders.push(m); });
+  if (plantMeshes[8]) plantMeshes[8].userData.receiveOnly = true;
   const floraColliders = plants.filter((f) => f.solid).map((f, i) => ({ id: `flora-${i}`, x: f.x, z: f.z, radius: f.size * 0.8, tall: false }));
 
-  // The campfire: stones, logs, flames that flicker, a warm light and rising smoke.
+  // The campfire: a stone ring, logs, a cooking grate and an enamel coffee pot, glowing embers, flames
+  // that flicker, a warm light and rising smoke.
   const fire = group(w, root);
-  for (let i = 0; i < 9; i += 1) {
-    const a = (i / 9) * Math.PI * 2;
-    part(w, fire, ["DodecahedronGeometry", 1, 0], STONE, { x: Math.sin(a) * 0.85, y: 0.1, z: Math.cos(a) * 0.85, sx: 0.24, sy: 0.18, sz: 0.24, ry: a });
-  }
+  const stones = Array.from({ length: 9 }, (_, i) => (i / 9) * Math.PI * 2);
+  fire.add(instanced(stones, geo(w, "DodecahedronGeometry", 1, 0), STONE, (a) => { dummy.position.set(Math.sin(a) * 0.85, 0.1, Math.cos(a) * 0.85); dummy.rotation.set(0, a, 0); dummy.scale.set(0.24, 0.18, 0.24); }));
   [0, 1.05, 2.1].forEach((a) => part(w, fire, ["CylinderGeometry", 0.08, 0.08, 1.1, 6], WOOD, { y: 0.12, rz: Math.PI / 2, ry: a }));
+  const embers = part(w, fire, ["CircleGeometry", 0.62, 14], 0xff5a1a, { y: 0.05, rx: -Math.PI / 2, additive: true, opacity: 0.55 });
+  embers.material = embers.material.clone(); // its glow pulses, so it has its own material
+  w.disposables.push(embers.material);
+  anim.embers = embers;
+  const grate = group(w, fire, { x: 0.42, z: 0.42, ry: Math.PI / 4 });
+  [-0.18, 0, 0.18].forEach((x) => part(w, grate, ["BoxGeometry", 0.02, 0.02, 0.62], 0x2e2e2e, { x, y: 0.34 }));
+  [-0.26, 0.26].forEach((z) => part(w, grate, ["BoxGeometry", 0.44, 0.025, 0.025], 0x2e2e2e, { y: 0.34, z }));
+  const pot = group(w, grate, { x: 0.08, y: 0.35 });
+  part(w, pot, ["CylinderGeometry", 0.08, 0.11, 0.2, 10], 0x2f6c8f, { y: 0.1 });
+  part(w, pot, ["ConeGeometry", 0.08, 0.06, 10], 0x2f6c8f, { y: 0.23 });
+  part(w, pot, ["CylinderGeometry", 0.012, 0.02, 0.12, 5], 0x2f6c8f, { x: 0.11, y: 0.13, rz: -0.9 });
   const size = 0.75 + (ctx.scale.fire || 1) * 0.25;
   [[0xff7a1a, 0.42, 1.0], [0xffb52e, 0.3, 0.75], [0xffe08a, 0.16, 0.5]].forEach(([color, r, hgt], i) => {
     const flame = part(w, fire, ["ConeGeometry", 1, 1, 6], color, { y: 0.2 + (hgt * size) / 2, sx: r * size, sy: hgt * size, sz: r * size, basic: true });
@@ -625,6 +723,7 @@ function build(w, ctx, data) {
     const g = group(w, root, { x: t.x, z: t.z, ry: headingOf(-t.x, -t.z) });
     part(w, g, ["ConeGeometry", 1, 1, 4], SHIRTS[(i * 3 + 1) % SHIRTS.length], { y: 0.7, sx: 1.25, sy: 1.4, sz: 1.25, ry: Math.PI / 4 });
     part(w, g, ["BoxGeometry", 0.42, 0.62, 0.03], 0x2a2420, { y: 0.31, z: 0.47, rx: -0.55 });
+    if (i % 2 === 0) [-0.12, 0.12].forEach((x, k) => part(w, g, ["BoxGeometry", 0.11, 0.1, 0.24], 0x5a3d26, { x: x + 0.32, y: 0.05, z: 0.82, ry: 0.2 - k * 0.3 }));
     w.occluders.push(g);
   });
 
@@ -737,6 +836,7 @@ function build(w, ctx, data) {
   part(w, axe, ["CylinderGeometry", 0.025, 0.025, 0.6, 5], WOOD_LIGHT, { y: 0.26, rz: 0.3 });
   part(w, axe, ["BoxGeometry", 0.05, 0.12, 0.18], 0x8a8a8a, { x: 0.02, y: 0.06, rz: 0.3 });
   anim.blockAxe = axe;
+  axe.userData.moving = true;
   const crates = group(w, root, { x: 3.2, z: -7.4, ry: 0.4 });
   part(w, crates, ["BoxGeometry", 0.55, 0.45, 0.45], WOOD_LIGHT, { x: -0.25, y: 0.22 });
   part(w, crates, ["BoxGeometry", 0.45, 0.4, 0.4], WOOD, { x: -0.2, y: 0.65, ry: 0.3 });
@@ -752,6 +852,47 @@ function build(w, ctx, data) {
     part(w, log, ["SphereGeometry", 0.07, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2], 0xb5532c, { x, y: 0.12, z });
   });
   [woodpile, crates, log].forEach((g) => w.occluders.push(g));
+
+  // Signs of a camp in use (CAMP_PROPS): a camp kitchen facing the fire, folding chairs by the overlook,
+  // packs dropped by the trail, a drying line of socks and a tree with the trail's white blaze.
+  const at = (id, ry) => { const p = CAMP_PROPS.find((x) => x.id === id); return group(w, root, { x: p.x, z: p.z, ry: ry ?? headingOf(-p.x, -p.z) }); };
+  const kitchen = at("camp-kitchen");
+  part(w, kitchen, ["BoxGeometry", 1.05, 0.05, 0.55], WOOD_LIGHT, { y: 0.72 });
+  [[-0.46, -0.22], [0.46, -0.22], [-0.46, 0.22], [0.46, 0.22]].forEach(([x, z]) => part(w, kitchen, ["CylinderGeometry", 0.02, 0.02, 0.72, 4], 0x6a6a6a, { x, y: 0.36, z }));
+  part(w, kitchen, ["BoxGeometry", 0.28, 0.08, 0.22], 0x3a3a3a, { x: -0.28, y: 0.79 });
+  part(w, kitchen, ["CylinderGeometry", 0.11, 0.1, 0.13, 10], 0x8a8f94, { x: -0.28, y: 0.89 });
+  part(w, kitchen, ["BoxGeometry", 0.3, 0.025, 0.2], WOOD, { x: 0.12, y: 0.76 });
+  part(w, kitchen, ["BoxGeometry", 0.12, 0.26, 0.12], 0x3a6ea5, { x: 0.4, y: 0.88, z: -0.08 });
+  part(w, kitchen, ["CylinderGeometry", 0.05, 0.045, 0.09, 8], 0xb5452f, { x: 0.18, y: 0.82, z: 0.14 });
+  part(w, kitchen, ["BoxGeometry", 0.34, 0.26, 0.26], 0x2f5d46, { x: 0.25, y: 0.13, z: 0.05 });
+  shadow(w, kitchen, 0.6);
+  const chairs = at("camp-chairs", OVERLOOK.heading + Math.PI);
+  [-0.32, 0.32].forEach((x, i) => {
+    const c = group(w, chairs, { x, ry: (i - 0.5) * 0.4 });
+    part(w, c, ["BoxGeometry", 0.42, 0.04, 0.38], i ? 0x2f5d46 : 0xb5452f, { y: 0.4 });
+    part(w, c, ["BoxGeometry", 0.42, 0.42, 0.04], i ? 0x2f5d46 : 0xb5452f, { y: 0.62, z: -0.2, rx: -0.15 });
+    [-0.19, 0.19].forEach((lx) => part(w, c, ["CylinderGeometry", 0.015, 0.015, 0.55, 4], 0x3a3a3a, { x: lx, y: 0.2, rx: 0.5 }));
+  });
+  part(w, chairs, ["CylinderGeometry", 0.045, 0.045, 0.24, 8], 0x8a8f94, { y: 0.12, z: 0.35 });
+  shadow(w, chairs, 0.6);
+  const packs = at("pack-drop");
+  [[-0.2, 0, 0x7a5a3c, 0.25], [0.22, 0.08, 0x3b5a7a, -0.4]].forEach(([x, z, color, rz]) => {
+    const p = group(w, packs, { x, z, ry: rz });
+    part(w, p, ["BoxGeometry", 0.36, 0.5, 0.22], color, { y: 0.25, rz: rz * 0.3 });
+    part(w, p, ["CylinderGeometry", 0.07, 0.07, 0.34, 8], 0x2f5d46, { y: 0.55, rz: Math.PI / 2 });
+  });
+  [-0.1, 0.06].forEach((x, i) => part(w, packs, ["CylinderGeometry", 0.012, 0.012, 1.2, 4], 0x9a9a9a, { x, y: 0.55, z: -0.18, rz: 0.35 - i * 0.12 }));
+  shadow(w, packs, 0.5);
+  const drying = at("drying-line");
+  [-0.38, 0.38].forEach((x) => part(w, drying, ["CylinderGeometry", 0.035, 0.035, 1.5, 5], WOOD_DARK, { x, y: 0.75 }));
+  part(w, drying, ["CylinderGeometry", 0.006, 0.006, 0.78, 3], 0xd8cfb8, { y: 1.4, rz: Math.PI / 2 });
+  [[-0.2, 0xd8cfb8, 0.22], [-0.04, 0xc0392b, 0.2], [0.14, 0x3b5a7a, 0.3]].forEach(([x, color, len]) =>
+    part(w, drying, ["BoxGeometry", 0.1, len, 0.02], color, { x, y: 1.4 - len / 2 }));
+  const blaze = at("blaze-tree");
+  part(w, blaze, ["CylinderGeometry", 0.2, 0.26, 3.6, 7], WOOD_DARK, { y: 1.8 });
+  part(w, blaze, ["ConeGeometry", 1.3, 3, 7], mix(near, 0x1f3a2a, 0.3), { y: 4.2 });
+  part(w, blaze, ["BoxGeometry", 0.12, 0.3, 0.02], 0xf6f6f0, { y: 1.65, z: 0.21 });
+  [kitchen, blaze].forEach((g) => w.occluders.push(g));
 
   // Gold rings and signs mark the places you can visit.
   CAMP_LOCATIONS.forEach((l) => {
@@ -803,6 +944,8 @@ function build(w, ctx, data) {
   }
   w.colliders = campColliders({ tents: ctx.scale.tents, extra: [...lanternColliders, ...floraColliders] });
   syncLife(w, ctx);
+  castShadows(w, root);
+  w.renderer.shadowMap.needsUpdate = true;
   placeSelection(w);
   w.near = undefined;
 }
@@ -898,8 +1041,17 @@ function npcView(w, npc) {
     logs: group(w, rig.body, { y: 0.78, z: 0.3 }),
     axe: group(w, rig.armR, { y: -0.46 }),
     camera: group(w, rig.body, { y: 1.16, z: 0.22 }),
-    binocs: group(w, rig.body, { y: 1.2, z: 0.2 })
+    binocs: group(w, rig.body, { y: 1.2, z: 0.2 }),
+    mug: part(w, rig.armR, ["CylinderGeometry", 0.055, 0.05, 0.11, 8], 0xb5452f, { y: -0.5, z: 0.04 }),
+    map: group(w, rig.body, { y: 0.98, z: 0.36 }),
+    pack: npc.recent ? null : group(w, rig.body, { y: 0.82, z: -0.22 })
   };
+  part(w, items.map, ["BoxGeometry", 0.46, 0.015, 0.32], 0xe9dcb8, { rx: -0.9 });
+  part(w, items.map, ["BoxGeometry", 0.3, 0.018, 0.03], 0xc0392b, { y: 0.01, rx: -0.9, ry: 0.4 });
+  if (items.pack) {
+    part(w, items.pack, ["BoxGeometry", 0.36, 0.46, 0.2], 0x7a5a3c);
+    part(w, items.pack, ["CylinderGeometry", 0.08, 0.08, 0.36, 8], 0x2f5d46, { y: 0.28, z: -0.02, rz: Math.PI / 2 });
+  }
   [-0.07, 0.07].forEach((y) => part(w, items.logs, ["CylinderGeometry", 0.07, 0.07, 0.6, 6], WOOD, { y, rz: Math.PI / 2 }));
   part(w, items.axe, ["CylinderGeometry", 0.025, 0.025, 0.6, 5], WOOD_LIGHT, { z: 0.15, rx: Math.PI / 2 });
   part(w, items.axe, ["BoxGeometry", 0.05, 0.16, 0.12], 0x8a8a8a, { z: 0.42 });
@@ -910,6 +1062,7 @@ function npcView(w, npc) {
   tag.position.y = 1.72;
   g.add(tag);
   shadow(w, g, 0.4);
+  g.userData.moving = true;
   w.pickables.push(tagPick(g, "hiker", npc.id));
   w.occluders.push(g);
   return { g, rig, items, tag };
@@ -921,11 +1074,12 @@ const SEATED = new Set(["sit", "read"]);
 function applyPose(view, npc, t, reduced) {
   if (!view || !npc) return;
   const { g, rig, items, tag } = view;
-  const { body, legL, legR, armL, armR } = rig;
+  const { body, head, legL, legR, armL, armR } = rig;
   g.position.set(npc.x, npc.y || 0, npc.z);
   g.rotation.y = npc.heading;
   body.position.set(0, 0, 0);
   body.rotation.set(0, 0, 0);
+  head.rotation.set(0, 0, 0);
   [legL, legR, armL, armR].forEach((l) => l.rotation.set(0, 0, 0));
   const pose = npc.moving ? "walk" : npc.pose;
   const ph = t + (npc.seed % 17) * 0.7;
@@ -967,6 +1121,11 @@ function applyPose(view, npc, t, reduced) {
     case "wave": armR.rotation.z = 2.5 + wave(5, 0.35); break;
     default: armR.rotation.x = wave(0.7, 0.06); body.rotation.z = wave(0.5, 0.03);
   }
+  const gesture = !npc.moving && !reduced ? npc.gesture : null;
+  if (gesture) gesturePose(view, npc, gesture, npc.gestureT || 0, SEATED.has(pose));
+  items.mug.visible = gesture === "coffee";
+  items.map.visible = gesture === "check-map";
+  if (items.pack) items.pack.visible = gesture === "adjust-pack";
   items.book.visible = pose === "read" || pose === "write";
   items.book.position.set(0, pose === "write" ? 0.85 : 0.8, 0.3);
   items.stick.visible = pose === "cook" && !npc.item;
@@ -975,6 +1134,53 @@ function applyPose(view, npc, t, reduced) {
   items.axe.visible = npc.item === "axe" || pose === "chop";
   items.camera.visible = pose === "photo";
   items.binocs.visible = pose === "binoculars";
+}
+
+// The small idle gestures (HIKER_GESTURES in camp-life.js), eased in and out over their length `u`.
+function gesturePose(view, npc, gesture, t, seated) {
+  const { g, rig } = view;
+  const { body, head, armL, armR } = rig;
+  const len = HIKER_GESTURES[gesture] || 3;
+  const ease = Math.min(1, t / 0.4, (len - t) / 0.4);
+  const k = Math.max(0, ease);
+  const blend = (from, to) => from + (to - from) * k;
+  switch (gesture) {
+    case "look-around":
+      head.rotation.y = Math.sin(t * 1.9) * 0.75 * k;
+      head.rotation.x = -0.12 * k;
+      break;
+    case "coffee": {
+      const sip = (Math.sin(t * 2.2) + 1) / 2;
+      armR.rotation.set(blend(armR.rotation.x, -1.5 - sip * 0.75), 0, blend(armR.rotation.z, -0.35));
+      head.rotation.x = -0.1 * sip * k;
+      break;
+    }
+    case "check-map":
+      armL.rotation.set(blend(armL.rotation.x, -1.15), 0, blend(armL.rotation.z, 0.3));
+      armR.rotation.set(blend(armR.rotation.x, -1.15), 0, blend(armR.rotation.z, -0.3));
+      head.rotation.x = 0.4 * k;
+      head.rotation.y = Math.sin(t * 0.9) * 0.2 * k;
+      break;
+    case "adjust-pack": {
+      const tug = Math.abs(Math.sin(t * 4));
+      armL.rotation.set(blend(armL.rotation.x, -0.5 - tug * 0.3), 0, blend(armL.rotation.z, 0.45));
+      armR.rotation.set(blend(armR.rotation.x, -0.5 - tug * 0.3), 0, blend(armR.rotation.z, -0.45));
+      if (!seated) body.position.y = tug * 0.04 * k;
+      break;
+    }
+    case "stretch-arms":
+      armL.rotation.set(blend(armL.rotation.x, 0), 0, blend(armL.rotation.z, -2.8));
+      armR.rotation.set(blend(armR.rotation.x, 0), 0, blend(armR.rotation.z, 2.8));
+      body.rotation.x = -0.1 * k;
+      body.rotation.z = Math.sin(t * 1.4) * 0.12 * k;
+      break;
+    case "wave":
+      if (typeof npc.waveAt === "number") g.rotation.y = npc.heading + Math.atan2(Math.sin(npc.waveAt - npc.heading), Math.cos(npc.waveAt - npc.heading)) * k;
+      armR.rotation.set(blend(armR.rotation.x, 0), 0, blend(armR.rotation.z, 2.5 + Math.sin(t * 10) * 0.35));
+      head.rotation.x = -0.08 * k;
+      break;
+    default:
+  }
 }
 
 // A low-poly visitor in the species' own colours (from expedition-themes.js). Faces +z.
@@ -1080,6 +1286,8 @@ function addVisitorView(w, v) {
   const view = visitorModel(w, v);
   view.v = v;
   w.visitorViews.set(v.key, view);
+  view.g.userData.moving = true;
+  castShadows(w, view.g);
   animateVisitor(view, w.clock, true);
 }
 
@@ -1101,9 +1309,21 @@ function animateVisitor(view, t, still) {
   b.position.y = v.moving && !v.flying ? k * Math.abs(Math.sin(t * (hop ? 12 : 8) + v.x)) * (hop ? 0.08 : 0.03) : 0;
   const flap = v.flying ? Math.sin(t * 22) * 0.9 * k : 0.15;
   wings.forEach((hinge) => { hinge.rotation.z = Math.sign(hinge.position.x || 1) * flap; });
+  // Idles while waiting (VISITOR_IDLES in camp-life.js): peck, forage, look round, groom or listen.
+  b.rotation.set(0, 0, 0);
+  const idle = !v.moving && !still ? v.idle : null;
+  const s = (v.visitor.size || 0.5);
+  switch (idle) {
+    case "peck": b.rotation.x = Math.max(0, Math.sin(t * 13 + v.z)) * 0.55; break;
+    case "forage": b.rotation.x = 0.28 + Math.sin(t * 4.5 + v.x) * 0.1; b.rotation.y = Math.sin(t * 1.3) * 0.2; break;
+    case "look": b.rotation.y = Math.sin(t * 1.6 + v.x) * 0.6; break;
+    case "groom": b.rotation.x = 0.18; b.rotation.z = Math.sin(t * 9) * 0.12; break;
+    case "listen": b.rotation.x = -0.1; b.position.y = 0.04 * s; break;
+    default:
+  }
 }
 
-// ---- Around Camp Now and Camp Photos (the text version of camp life) -------------------------------
+// ---- Around Camp Now and the Camp Camera Roll (the text version of camp life) -----------------------
 
 function lifePanel(w) {
   const list = h("ul", { class: "camp3d-life-list", "aria-labelledby": "camp-life-title" });
@@ -1111,8 +1331,8 @@ function lifePanel(w) {
   const count = h("span", { class: "camp3d-photo-count" });
   w.lifeUi = { list, photos, count, sig: null, photoSig: null };
   const roll = h("details", { class: "timeline-wrap camp3d-roll", open: Boolean(w.rollOpen), onToggle: (e) => { w.rollOpen = e.target.open; } },
-    h("summary", {}, "Camp Photos", count),
-    h("p", { class: "hint" }, "Photos stay on this device until you close the page."),
+    h("summary", {}, "Camp Camera Roll", count),
+    h("p", { class: "hint" }, `Your last ${MAX_PHOTOS} camp photos. They stay on this device and disappear when you close the page.`),
     photos);
   renderLife(w);
   return h("div", { class: "camp3d-life" }, h("h3", { id: "camp-life-title" }, "Around Camp Now"), list, roll);
@@ -1138,17 +1358,21 @@ function renderLife(w) {
       !visitors.length && !hikers.length ? h("li", {}, "Camp is quiet right now.") : null);
     if (focusKey) ui.list.querySelector(`[data-visitor="${CSS.escape(focusKey)}"]`)?.focus();
   }
-  const photoSig = session.photos.map((p) => p.at).join(",");
+  const photoSig = session.photos.map((p) => p.id).join(",");
   if (photoSig !== ui.photoSig) {
     ui.photoSig = photoSig;
     ui.count.textContent = session.photos.length ? `(${session.photos.length})` : "";
     fill(ui.photos, session.photos.length
       ? session.photos.map((p) => h("figure", { class: "camp3d-photo" },
         p.src ? h("img", { src: p.src, alt: p.caption, width: "320", height: "180", loading: "lazy" }) : null,
-        h("figcaption", {}, p.caption)))
-      : h("p", { class: "hint" }, "No photos yet. Press C or the 📷 Camera button in camp to take one."));
+        h("figcaption", {}, p.caption,
+          h("span", { class: "camp3d-photo-meta" }, h("time", { datetime: new Date(p.at).toISOString() }, photoTime(p.at)),
+            p.species ? h("span", { class: "camp3d-photo-tag" }, `🐾 ${p.species}`) : null))))
+      : h("p", { class: "hint" }, "No photos yet. Press C or the round 📷 button at the bottom of the camp to take one."));
   }
 }
+
+const photoTime = (at) => new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 // ---- The photo camera ------------------------------------------------------------------------------
 // First person from the hiker's eyes: aim (drag, arrows or WASD), zoom (wheel, + and -) and shoot (Space,
@@ -1181,6 +1405,7 @@ function enterCamera(w) {
 function exitCamera(w, { focus = false } = {}) {
   const ph = w.photo;
   if (!ph.on) return;
+  closeReview(w, { silent: true });
   ph.on = false;
   ph.track = null;
   ph.fov = FOV;
@@ -1244,7 +1469,9 @@ function aimAt(w, v) {
 const PROP_NAMES = {
   shelter: ["trail shelter", 1.3, 4], pump: ["water pump", 0.6, 0.9], "bear-bags": ["bear bag line", 2.6, 2.6], signpost: ["trail signpost", 1.6, 1.2],
   woodpile: ["woodpile", 0.4, 1], "chopping-block": ["chopping block", 0.3, 0.6], "supply-crates": ["supply crates", 0.4, 1],
-  "overlook-bench": ["overlook bench", 0.4, 1.2], "fallen-log": ["mossy fallen log", 0.3, 1.6]
+  "overlook-bench": ["overlook bench", 0.4, 1.2], "fallen-log": ["mossy fallen log", 0.3, 1.6],
+  "camp-kitchen": ["camp kitchen", 0.8, 1.2], "camp-chairs": ["camp chairs", 0.5, 1.2], "pack-drop": ["pile of packs", 0.4, 1],
+  "drying-line": ["drying line", 1.2, 1.3], "blaze-tree": ["white-blazed tree", 1.6, 1.2]
 };
 
 // Everything a photo could be of, as framePhoto subjects.
@@ -1268,7 +1495,10 @@ function lineClear(w, from, to, own = null) {
   if (dist < 0.5) return true;
   w.raycaster.set(w.rayFrom.set(from.x, from.y, from.z), dir.normalize());
   w.raycaster.far = dist;
+  // Sprites (name tags, glows) need the camera to raycast, and never hide anything.
+  w.raycaster.camera = w.camera;
   const hit = w.raycaster.intersectObjects(w.occluders, true).find((x) => {
+    if (x.object.isSprite) return false;
     let o = x.object;
     while (o && o !== own) o = o.parent;
     return !o && x.distance < dist - 0.6;
@@ -1287,7 +1517,7 @@ function markBlocked(w, subjects, cam) {
 }
 
 function takePhoto(w) {
-  if (!w.photo.on) return;
+  if (!w.photo.on || w.reviewing) return;
   const ph = w.photo;
   const p = w.player;
   const cam = { x: p.x, y: EYE, z: p.z, yaw: ph.yaw, pitch: ph.pitch, fov: (ph.fov * Math.PI) / 180, aspect: w.camera.aspect };
@@ -1296,25 +1526,104 @@ function takePhoto(w) {
   const result = framePhoto(subjects, cam);
   const ctx = w.lastCtx || {};
   const caption = photoCaption(result, { time: ctx.time, weather: ctx.weather });
-  if (result && result.subject.kind === "wildlife") {
-    const v = w.visitors && w.visitors.list.find((x) => x.key === result.subject.key);
+  const wild = result && result.subject.kind === "wildlife" ? result.subject : null;
+  if (wild) {
+    const v = w.visitors && w.visitors.list.find((x) => x.key === wild.key);
     if (v) v.photographed = true;
   }
   let src = "";
-  try {
-    w.renderer.render(w.scene, w.camera);
-    src = w.canvas.toDataURL("image/jpeg", 0.7);
-  } catch (e) { /* a tainted or lost canvas: keep the caption */ }
-  session.photos.unshift({ src, caption, at: Date.now() + Math.random() });
+  try { src = snapshot(w); } catch (e) { /* a tainted or lost canvas: keep the caption */ }
+  const photo = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src, caption, at: Date.now(), species: wild ? wild.name : null };
+  session.photos.unshift(photo);
   if (session.photos.length > MAX_PHOTOS) session.photos.length = MAX_PHOTOS;
-  showToast(w, caption);
-  w.ui.status.textContent = `Photo taken. ${caption}`;
+  shutterSound();
   if (!reducedMotion()) {
-    w.ui.flash.classList.remove("is-on");
-    void w.ui.flash.offsetWidth;
-    w.ui.flash.classList.add("is-on");
+    restartClass(w.ui.flash, "is-on");
+    restartClass(w.ui.finder, "is-snap");
+    restartClass(w.ui.shutter, "is-press");
   }
   renderLife(w);
+  openReview(w, photo);
+}
+
+// Render the frame and read it back in the same task (the drawing buffer isn't preserved), scaled down
+// to PHOTO_WIDTH so a dozen photos stay small in memory.
+function snapshot(w) {
+  w.renderer.render(w.scene, w.camera);
+  const c = w.canvas;
+  if (c.width <= PHOTO_WIDTH) return c.toDataURL("image/jpeg", 0.8);
+  const out = document.createElement("canvas");
+  out.width = PHOTO_WIDTH;
+  out.height = Math.round((c.height * PHOTO_WIDTH) / c.width);
+  out.getContext("2d").drawImage(c, 0, 0, out.width, out.height);
+  return out.toDataURL("image/jpeg", 0.8);
+}
+
+function restartClass(el, name) {
+  el.classList.remove(name);
+  void el.offsetWidth;
+  el.classList.add(name);
+}
+
+function openReview(w, photo) {
+  const ui = w.ui;
+  w.reviewing = true;
+  ui.reviewImg.hidden = !photo.src;
+  if (photo.src) { ui.reviewImg.src = photo.src; ui.reviewImg.alt = photo.caption; }
+  ui.reviewCaption.textContent = photo.caption;
+  ui.reviewMeta.textContent = `Taken at ${photoTime(photo.at)} · saved to the Camp Camera Roll`;
+  ui.reviewWild.textContent = photo.species ? `🐾 Wildlife identified: ${photo.species}` : "No wildlife in this shot.";
+  ui.reviewWild.classList.toggle("is-wild", Boolean(photo.species));
+  ui.camBar.hidden = true;
+  ui.review.hidden = false;
+  w.held.clear();
+  w.drag = null;
+  ui.status.textContent = `Photo taken. ${photo.caption}${photo.species ? ` Wildlife identified: ${photo.species}.` : ""}`;
+  ui.reviewContinue.focus({ preventScroll: true });
+}
+
+// Continue: back to the viewfinder for another shot.
+function closeReview(w, { silent = false } = {}) {
+  if (!w.reviewing) return;
+  w.reviewing = false;
+  w.ui.review.hidden = true;
+  w.ui.camBar.hidden = !w.photo.on;
+  if (silent) return;
+  showToast(w, `📸 Saved to the Camp Camera Roll (${session.photos.length})`);
+  w.ui.shutter.focus({ preventScroll: true });
+}
+
+// A short two-part mechanical click made from filtered noise, so there is no audio file to load.
+let audio = null;
+let clickBuffer = null;
+function shutterSound() {
+  if (!session.sound) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audio = audio || new AC();
+    if (audio.state === "suspended") audio.resume();
+    if (!clickBuffer) {
+      const rate = audio.sampleRate;
+      clickBuffer = audio.createBuffer(1, Math.floor(rate * 0.16), rate);
+      const d = clickBuffer.getChannelData(0);
+      for (let i = 0; i < d.length; i++) {
+        const t = i / rate;
+        const env = Math.exp(-t * 90) + (t > 0.075 ? Math.exp(-(t - 0.075) * 120) * 0.6 : 0);
+        d[i] = (Math.random() * 2 - 1) * env;
+      }
+    }
+    const src = audio.createBufferSource();
+    src.buffer = clickBuffer;
+    const filter = audio.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 2600;
+    filter.Q.value = 0.7;
+    const gain = audio.createGain();
+    gain.gain.value = 0.3;
+    src.connect(filter).connect(gain).connect(audio.destination);
+    src.start();
+  } catch (e) { /* the click is a nicety */ }
 }
 
 function showToast(w, text) {
@@ -1475,12 +1784,15 @@ function settingsPanel(w) {
       h("li", {}, "Walk: W A S D or the arrow keys (hold Shift to jog). On a touchscreen, drag on the left side of the camp."),
       h("li", {}, "Look around: drag with the mouse, or a finger on the right side. The comma and period keys turn the camera too."),
       h("li", {}, "Visit a place: walk up to it and press E or the button that appears, or click or tap it."),
-      h("li", {}, "Photo camera: press C or 📷, aim, then press Space or the shutter. Escape puts it away."),
+      h("li", {}, "Photo camera: press C or the 📷 shutter button at the bottom of the camp, aim, then press Space or the shutter. Escape puts it away. Every shot goes to the Camp Camera Roll below."),
       h("li", {}, "Tap a hiker in camp to see their badges below.")),
     h("div", { class: "camp3d-fields" },
       h("div", { class: "field" }, h("label", { for: "camp3d-sensitivity" }, "Camera sensitivity"), sensitivity,
         h("p", { class: "hint", id: "camp3d-sensitivity-hint" }, "How fast dragging turns the camera.")),
-      h("div", { class: "field" }, h("label", { for: "camp3d-quality" }, "Graphics quality"), quality)),
+      h("div", { class: "field" }, h("label", { for: "camp3d-quality" }, "Graphics quality"), quality),
+      h("div", { class: "field check" },
+        h("input", { id: "camp3d-sound", type: "checkbox", checked: session.sound, onChange: (e) => { session.sound = e.target.checked; } }),
+        h("label", { for: "camp3d-sound" }, "Shutter sound"))),
     h("button", { type: "button", class: "btn small", onClick: () => { session.optOut = true; fallback(w, "off"); } }, "Use the 2D camp instead"));
 }
 
@@ -1500,6 +1812,7 @@ function start(w) {
     w.last = now;
     const dt = Math.min(gap / 1000, 0.1);
     update(w, dt);
+    if (w.shadowDirty && w.tier.shadows) { w.shadowDirty = false; w.renderer.shadowMap.needsUpdate = true; }
     w.renderer.render(w.scene, w.camera);
     measure(w, now);
   };
@@ -1602,6 +1915,7 @@ function update(w, dt) {
     f.rotation.y = t * 0.6 + b.phase;
   });
   if (a.fireLight) a.fireLight.intensity = a.fireBase * (1 + Math.sin(t * 11) * 0.07 + Math.sin(t * 17.3) * 0.05);
+  if (a.embers) a.embers.material.opacity = 0.42 + (Math.sin(t * 3.1) + Math.sin(t * 7.7)) * 0.09;
   a.smoke.forEach((puff) => {
     const u = (t * 0.18 + puff.userData.phase) % 1;
     puff.position.set(Math.sin(u * 5 + puff.userData.phase * 9) * 0.3 + u * 0.6, 1 + u * 4.2, Math.cos(u * 4) * 0.2);
@@ -1634,7 +1948,7 @@ function update(w, dt) {
 // Move the hikers and visitors on, then pose them. The text list catches up at most once a second.
 function stepLife(w, dt, t, reduced) {
   if (!w.life) return;
-  const changed = stepCampLife(w.life, dt, w.npcBlockers);
+  const changed = stepCampLife(w.life, dt, w.npcBlockers, { player: w.player });
   const npcs = w.life.npcs;
   npcs.forEach((n, i) => {
     const c = w.npcColliders[i];

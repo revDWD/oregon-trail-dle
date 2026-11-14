@@ -96,6 +96,8 @@ test("quality follows the device and can step down", () => {
   assert.equal(lowerQuality(QUALITY.high), QUALITY.medium);
   assert.equal(lowerQuality(QUALITY.low), null);
   for (const q of Object.values(QUALITY)) assert.ok(q.pixelRatio <= 2 && q.trees > 0 && q.visitors >= 1 && q.visitors <= 3 && q.flora > 0 && q.ground <= 1024);
+  assert.equal(QUALITY.low.shadows, 0, "phones on Low keep the cheap blob shadows");
+  assert.ok(QUALITY.medium.shadows > 0 && QUALITY.high.shadows >= QUALITY.medium.shadows && QUALITY.high.shadows <= 2048);
 });
 
 test("lighting follows the time of day and the weather", () => {
@@ -109,6 +111,8 @@ test("lighting follows the time of day and the weather", () => {
   assert.ok(campLighting("day", { id: "fog" }).fogFar < day.fogFar);
   assert.ok(campLighting("day", { id: "storm" }).sunIntensity < day.sunIntensity);
   assert.equal(campLighting("bogus").sky, day.sky);
+  assert.ok(night.exposure > day.exposure, "night is lifted a little so the camp stays readable");
+  assert.ok(campLighting("day", { id: "fog" }).shadow < day.shadow, "no crisp shadows under cloud");
 });
 
 test("scenery is deterministic and stays out of the walkable camp", () => {

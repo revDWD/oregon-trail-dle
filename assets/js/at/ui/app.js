@@ -9,7 +9,7 @@ import { weekStart } from "../engine/game.js";
 import { timeOfDay } from "../engine/camp.js";
 import { listTitles, speciesBadges } from "../engine/field-guide.js";
 import { PERSONAL_MARKS, expeditionTotals, groupMarks, hikerBadges, trailRegister } from "../engine/hikers.js";
-import { landmarkPatches, patchMarks, patchMilestones, stateCollections } from "../engine/patches.js";
+import { earnedPatchIds, expeditionSummary, landmarkPatches, patchMilestones, stateCollections } from "../engine/patches.js";
 import { h, clear } from "./dom.js";
 import { trailView, logView, historyView, campView, wildlifeView } from "./views.js";
 
@@ -102,7 +102,7 @@ async function loadExpedition(draw = true) {
   try {
     const [hikers, marks, fieldGuide] = await Promise.all([
       layer.expedition.hikers(weekStart(localDateString())),
-      layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: [...PERSONAL_MARKS, ...patchMarks(TRAIL, DIRECTION)] }),
+      layer.expedition.marks({ group: groupMarks(TRAIL, DIRECTION).map((m) => m.miles), personal: PERSONAL_MARKS }),
       // Optional: without the field guide migration (or on a hiccup) keep the last guide we had.
       layer.expedition.fieldGuide().then((rows) => { state.fieldGuideUnavailable = false; return rows; })
         .catch((e) => { if (isMissingFunction(e)) state.fieldGuideUnavailable = true; return state.fieldGuide; })
@@ -153,53 +153,55 @@ async function reloadActivities() {
 
 // Badges a hiker just unlocked (compares before/after a reload). Celebrated once, never nagged.
 // Species badges from one outing are one line, so a good photo walk reads as a single cheer.
-// Landmark patches (and patch collection milestones) are celebrated the same way, with their art, and
-// so are State Explorer patches (every landmark in a state reached).
 function earnedBadges(hk, register) {
-  const patches = landmarkPatches(TRAIL, DIRECTION, hk, state.marks);
   return {
     badges: hikerBadges(hk, { marks: state.marks, register, today: state.today, sightings: state.fieldGuide }).filter((b) => b.earned),
-    species: speciesBadges(state.fieldGuide, { hikerId: hk.id }).filter((b) => b.earned),
-    patches: patches.filter((p) => p.earned),
-    patchMilestones: patchMilestones(patches).filter((m) => m.earned),
-    explorers: stateCollections(patches).filter((c) => c.complete).map((c) => c.explorer)
+    species: speciesBadges(state.fieldGuide, { hikerId: hk.id }).filter((b) => b.earned)
   };
 }
 
+// The expedition's shared Landmark Patch collection. The whole group earns a patch together when
+// its miles reach the landmark, so there is one collection for everyone.
+function expeditionPatches() {
+  return landmarkPatches(TRAIL, DIRECTION, expeditionSummary(state.hikers, expeditionTotals(state.hikers)), state.marks);
+}
+
 // { lines: celebration sentences, patchLines: the same for new patches,
-//   patches: [{ patch, hikerName, hikerId }], explorers: [{ explorer, hikerName, hikerId }] }.
+//   patches: [patch], explorers: [State Explorer patch] }. Patches (and State Explorer patches and
+//   collection milestones) belong to the whole expedition, so they are celebrated once, for everyone.
 function newlyEarned(before) {
   const lines = [];
   const patchLines = [];
-  const patches = [];
-  const explorers = [];
   const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
   state.hikers.forEach((hk) => {
-    const had = new Set(before.get(hk.id) || []);
+    const had = new Set(before.hikers.get(hk.id) || []);
     const now = earnedBadges(hk, register);
     now.badges.filter((b) => !had.has(b.id)).forEach((b) => lines.push(`${hk.name} earned ${b.title}!`));
     const fresh = now.species.filter((b) => !had.has(b.id)).map((b) => b.title).sort();
     if (fresh.length === 1) lines.push(`${hk.name} earned the ${fresh[0]} species badge!`);
     else if (fresh.length) lines.push(`${hk.name} earned ${fresh.length} species badges: ${listTitles(fresh)}!`);
-    const newPatches = now.patches.filter((p) => !had.has(p.id));
-    if (newPatches.length === 1) patchLines.push(`Patch Earned: ${newPatches[0].landmarkName} (${hk.name}). You've reached this Appalachian Trail landmark.`);
-    else if (newPatches.length) patchLines.push(`${hk.name} earned ${newPatches.length} landmark patches: ${listTitles(newPatches.map((p) => p.landmarkName))}!`);
-    newPatches.forEach((patch) => patches.push({ patch, hikerName: hk.name, hikerId: hk.id }));
-    now.explorers.filter((x) => !had.has(x.id)).forEach((explorer) => {
-      patchLines.push(`State Patch Earned: ${explorer.name} (${hk.name}). Every ${explorer.stateName} landmark reached.`);
-      explorers.push({ explorer, hikerName: hk.name, hikerId: hk.id });
-    });
-    now.patchMilestones.filter((m) => !had.has(m.id)).forEach((m) => lines.push(`${hk.name}: ${m.title}!`));
   });
+  const had = new Set(before.patches);
+  const list = expeditionPatches();
+  const patches = list.filter((p) => p.earned && !had.has(p.id));
+  if (patches.length === 1) patchLines.push(`Patch Earned: ${patches[0].landmarkName}. The Expedition reached ${patches[0].landmarkName}.`);
+  else if (patches.length) patchLines.push(`The Expedition reached ${patches.length} landmarks and earned their patches: ${listTitles(patches.map((p) => p.landmarkName))}!`);
+  const explorers = stateCollections(list).filter((c) => c.complete && !had.has(c.explorer.id)).map((c) => c.explorer);
+  explorers.forEach((x) => patchLines.push(`State Patch Earned: ${x.name}. The Expedition reached every ${x.stateName} landmark.`));
+  patchMilestones(list).filter((m) => m.earned && !had.has(m.id)).forEach((m) => lines.push(`The Expedition: ${m.title}!`));
   return { lines, patchLines, patches, explorers };
 }
 
 function earnedSnapshot() {
   const register = trailRegister(TRAIL, DIRECTION, state.marks, state.hikers);
-  return new Map(state.hikers.map((hk) => {
-    const now = earnedBadges(hk, register);
-    return [hk.id, [...now.badges, ...now.species, ...now.patches, ...now.patchMilestones, ...now.explorers].map((b) => b.id)];
-  }));
+  return {
+    size: state.hikers.length,
+    hikers: new Map(state.hikers.map((hk) => {
+      const now = earnedBadges(hk, register);
+      return [hk.id, [...now.badges, ...now.species].map((b) => b.id)];
+    })),
+    patches: earnedPatchIds(expeditionPatches())
+  };
 }
 
 async function afterActivityChange() {
@@ -216,7 +218,7 @@ const actions = {
     try {
       await layer.activities.create(value);
       actions.rememberHiker(value.hikerId);
-      actions.selectHiker(value.hikerId); // the Trail map then shows the logger's patches
+      actions.selectHiker(value.hikerId);
       const unlocked = await afterActivityChange();
       const who = (state.hikers.find((x) => x.id === value.hikerId) || {}).name;
       const logged = `Logged ${value.creditedMiles} trail miles${who ? ` for ${who}` : ""}.`;

@@ -5,10 +5,10 @@ import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian
 import { LANDMARK_PATCHES } from "../../assets/js/at/trail/landmark-patches.js";
 import {
   PATCH_SHAPES, RESOURCE_KINDS, RESOURCE_OFFERS, groupPatchesByState, landmarkPatches, nearbyWildlife, patchCollection, patchFor, patchForecast,
-  patchMarks, patchMilestones, patchRarity, sortPatches, stateCollections
+  earnedPatchIds, expeditionSummary, patchMilestones, sortPatches, stateCollections
 } from "../../assets/js/at/engine/patches.js";
 import { DEFAULT_THEME, themeFor } from "../../assets/js/at/engine/expedition-themes.js";
-import { PERSONAL_MARKS, hikerBadges } from "../../assets/js/at/engine/hikers.js";
+import { hikerBadges } from "../../assets/js/at/engine/hikers.js";
 
 // A minimal SVG DOM, just enough to draw patch art.
 class FakeNode {
@@ -28,8 +28,9 @@ globalThis.document = {
 const { patchArt, explorerArt, PATCH_MOTIFS, motifFor } = await import("../../assets/js/at/ui/patch-art.js");
 const walk = (n, out = []) => { out.push(n); (n.kids || []).forEach((k) => walk(k, out)); return out; };
 
-const hiker = (totalMiles, extra = {}) => ({ id: "h1", name: "Kayla", totalMiles, activityCount: totalMiles > 0 ? 3 : 0, firstActivityDate: totalMiles > 0 ? "2026-03-01" : null, ...extra });
-const markFor = (miles, reachedOn, hikerId = "h1") => ({ kind: "personal", mark: miles, hikerId, reachedOn });
+// The whole expedition (expeditionSummary): shared miles, activities and the day it set out.
+const hiker = (totalMiles, extra = {}) => ({ totalMiles, activityCount: totalMiles > 0 ? 3 : 0, firstActivityDate: totalMiles > 0 ? "2026-03-01" : null, ...extra });
+const markFor = (miles, reachedOn) => ({ kind: "group", mark: miles, reachedOn });
 
 test("every landmark has exactly one patch with complete, valid data", () => {
   const ids = TRAIL.landmarks.map((l) => l.id);
@@ -86,30 +87,43 @@ test("patch art draws every patch with a unique clip, muted when locked and sile
   assert.ok(!walk(mini).some((n) => n.attrs && n.attrs.class === "patch-banner"), "mini patches have no banner");
 });
 
-test("patches unlock from the hiker's own miles, dated by their personal marks", () => {
+test("patches unlock from the expedition's shared miles, dated by its group marks", () => {
   const none = landmarkPatches(TRAIL, "nobo", hiker(0), []);
-  assert.equal(none.filter((p) => p.earned).length, 0, "nobody earns Springer before setting out");
+  assert.equal(none.filter((p) => p.earned).length, 0, "nobody earns Springer before the expedition sets out");
   const second = landmarkPatches(TRAIL, "nobo")[1];
   const miles = second.distance + 1;
-  const marks = [markFor(second.distance, "2026-03-09"), markFor(second.distance, "2026-03-02", "someone-else")];
+  const marks = [markFor(second.distance, "2026-03-09"), { kind: "personal", mark: second.distance, hikerId: "h1", reachedOn: "2026-03-02" }];
   const ps = landmarkPatches(TRAIL, "nobo", hiker(miles), marks);
   const springer = ps.find((p) => p.distance === 0);
-  assert.ok(springer.earned && springer.earnedOn === "2026-03-01", "Springer: the first activity");
+  assert.ok(springer.earned && springer.earnedOn === "2026-03-01", "Springer: the expedition's first activity");
   ps.filter((p) => p.earned).forEach((p) => assert.ok(p.distance <= miles));
-  assert.equal(ps[1].earnedOn, "2026-03-09", "uses this hiker's mark, not someone else's");
+  assert.equal(ps[1].earnedOn, "2026-03-09", "uses the group mark, never a hiker's personal one");
   const next = ps.find((p) => !p.earned);
   assert.equal(next.milesToGo, Math.round((next.distance - miles) * 100) / 100);
-  assert.equal(landmarkPatches(TRAIL, "nobo", null, marks).filter((p) => p.earned).length, 0, "no hiker, no patches");
+  assert.equal(landmarkPatches(TRAIL, "nobo", null, marks).filter((p) => p.earned).length, 0, "no expedition, no patches");
   assert.ok(landmarkPatches(TRAIL, "nobo", hiker(TRAIL.totalMiles), []).every((p) => p.earned), "Katahdin completes the set");
 });
 
-test("patch marks ride along with the personal marks request, within its limit", () => {
-  const marks = patchMarks(TRAIL, "nobo");
-  assert.equal(marks.length, TRAIL.landmarks.length - 1, "every landmark past the start");
-  assert.ok(marks.every((m) => m > 0));
-  assert.ok(PERSONAL_MARKS.length + marks.length <= 100, "at_expedition_marks accepts at most 100 values");
+test("the expedition summary pools the roster, and the trail totals win when given", () => {
+  const crew = [
+    { totalMiles: 10.5, activityCount: 2, firstActivityDate: "2026-03-04" },
+    { totalMiles: 20, activityCount: 3, firstActivityDate: "2026-03-01" },
+    { totalMiles: 0, activityCount: 0, firstActivityDate: null }
+  ];
+  assert.deepEqual(expeditionSummary(crew), { totalMiles: 30.5, activityCount: 5, firstActivityDate: "2026-03-01" });
+  assert.deepEqual(expeditionSummary(crew, { totalMiles: 31, activityCount: 6 }), { totalMiles: 31, activityCount: 6, firstActivityDate: "2026-03-01" });
+  assert.deepEqual(expeditionSummary([]), { totalMiles: 0, activityCount: 0, firstActivityDate: null });
+  // Every hiker shares one collection: it depends only on the expedition, never on who is asking.
+  const a = earnedPatchIds(landmarkPatches(TRAIL, "nobo", expeditionSummary(crew), []));
+  const b = earnedPatchIds(landmarkPatches(TRAIL, "nobo", expeditionSummary([...crew].reverse()), []));
+  assert.deepEqual(a, b);
+});
+
+test("patch dates come from the group marks the app already requests", () => {
   const app = readFileSync("assets/js/at/ui/app.js", "utf8");
-  assert.match(app, /personal: \[\.\.\.PERSONAL_MARKS, \.\.\.patchMarks\(TRAIL, DIRECTION\)\]/);
+  assert.match(app, /personal: PERSONAL_MARKS/);
+  assert.doesNotMatch(app, /patchMarks/);
+  assert.match(app, /expeditionSummary\(/);
 });
 
 test("collection stats: completion, nearest collectible and next state completion", () => {
@@ -162,7 +176,7 @@ test("patches sort by trail order, by state and by date earned", () => {
 });
 
 test("achievement badges are untouched by patches", () => {
-  assert.equal(hikerBadges(hiker(600), { today: "2026-11-20" }).length, 24);
+  assert.equal(hikerBadges({ id: "h1", name: "Kayla", ...hiker(600) }, { today: "2026-11-20" }).length, 24);
 });
 
 test("state collections: border landmarks count for both states, and the Explorer patch is dated by the last landmark", () => {
@@ -183,21 +197,7 @@ test("state collections: border landmarks count for both states, and the Explore
   assert.equal(undated.find((s) => s.code === "GA").explorer.earnedOn, null, "no date unless every landmark has one");
 });
 
-test("patch rarity counts the active roster holding each patch", () => {
-  const ps = landmarkPatches(TRAIL, "nobo", hiker(600), []);
-  const crew = [hiker(600), hiker(100, { id: "h2" }), hiker(0, { id: "h3" }), hiker(2000, { id: "h4", active: false })];
-  const r = patchRarity(ps, crew);
-  assert.equal(r.roster, 3, "retired hikers don't count");
-  assert.equal(r.holders.get(ps[0].id), 2, "Springer: everyone who has set out");
-  assert.equal(r.mostEarned.patch.id, ps[0].id);
-  assert.equal(r.mostEarned.holders, 2);
-  const furthest = ps.filter((p) => p.earned).at(-1);
-  assert.equal(r.rarest.patch.id, furthest.id, "ties go to the furthest along");
-  assert.equal(r.rarest.holders, 1);
-  assert.equal(patchRarity(landmarkPatches(TRAIL, "nobo", hiker(0), []), crew).rarest, null, "nothing earned, nothing rare");
-});
-
-test("the patch forecast follows the hiker's own weekly pace, never sooner than a week", () => {
+test("the patch forecast follows the expedition's weekly pace, never sooner than a week", () => {
   const hk = hiker(100, { firstActivityDate: "2026-03-01" });
   const ps = landmarkPatches(TRAIL, "nobo", hk, []);
   const f = patchForecast(ps, hk, "2026-03-29");
@@ -252,10 +252,16 @@ test("the Trail tab keeps patches off the landmark detail card", () => {
   assert.doesNotMatch(detail, /patch/i);
 });
 
-test("Camp shows each hiker's patch collection, and resource links open safely in a new tab", () => {
+test("Camp shows one shared Expedition collection, and resource links open safely in a new tab", () => {
   const views = readFileSync("assets/js/at/ui/views.js", "utf8");
-  const panel = views.slice(views.indexOf("function hikerPanel"));
-  assert.match(panel, /patchSection\(s, hk\)/);
+  const camp = views.slice(views.indexOf("export function campView"));
+  assert.match(camp, /patchSection\(s\)/);
+  const panel = views.slice(views.indexOf("function hikerPanel"), views.indexOf("function hikersSection"));
+  assert.doesNotMatch(panel, /patch/i, "no per-hiker patches on a hiker's page");
+  assert.doesNotMatch(views, /patch-hiker|Show landmark patches for/, "no per-hiker patch picker on the map");
+  assert.match(views, /Unlocked by the Expedition/);
   assert.match(views, /h\("a", \{ href: r\.url, target: "_blank", rel: "noopener noreferrer" \}/);
   assert.match(views, /opens in a new tab/);
+  const map = readFileSync("assets/js/at/ui/map.js", "utf8");
+  assert.doesNotMatch(map, /hikerName/);
 });

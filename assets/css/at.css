@@ -381,9 +381,9 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .patch-detail-art .date-stamp { position: absolute; right: -.6rem; bottom: -.3rem; }
 .patch-detail-photo .story-photo { margin: .4rem 0; }
 .patch-detail-photo img { max-height: 12rem; width: 100%; object-fit: cover; }
-.patch-detail-card h5 { margin: .6rem 0 0; font-size: 1rem; color: var(--forest-dark); }
-.patch-detail-body > h5:first-child { margin-top: 0; font-family: Georgia, serif; font-size: 1.15rem; }
-.patch-detail-card h5 + .hint { margin-top: .15rem; }
+.patch-detail-card :is(h3, h4) { margin: .6rem 0 0; font-size: 1rem; color: var(--forest-dark); }
+.patch-detail-body > h3:first-child { margin-top: 0; font-family: Georgia, serif; font-size: 1.15rem; }
+.patch-detail-card h3 + .hint { margin-top: .15rem; }
 .patch-detail-card p { margin: .3rem 0; }
 .patch-trivia { margin: .3rem 0; padding-left: 1.2rem; display: grid; gap: .25rem; }
 .patch-links { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .35rem; }
@@ -429,7 +429,6 @@ code { background: #fff; border: 1px solid var(--line); padding: .15rem .4rem; b
 .patch-earned p { margin: .15rem 0; font-weight: 400; color: var(--ink); }
 .patch-earned .patch-earned-title { font-family: Georgia, serif; font-weight: 700; font-size: 1.1rem; color: var(--forest-dark); }
 /* Trail map */
-.map-patch-field { max-width: 20rem; }
 .map-patch-next { margin: 0 0 .4rem; }
 .map-frame { position: relative; }
 .map-patch { cursor: pointer; outline: none; }

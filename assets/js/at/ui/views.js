@@ -554,6 +554,7 @@ function campPlaceBody(s, id, { selectHiker, showPatches }) {
 function campExplorer(s, ctx, { scene, caption, captions, select }) {
   const holder = h("div", { class: "camp-frame" }, scene);
   const settings = h("div", { class: "camp3d-slot" });
+  const life = h("div", { class: "camp3d-life-slot" });
   const panel = h("div", { id: "camp-place", class: "camp-place" });
   const buttons = new Map();
   let returnTo = null;
@@ -607,6 +608,7 @@ function campExplorer(s, ctx, { scene, caption, captions, select }) {
   const mount = () => {
     const going = mountCamp3d(holder, ctx, {
       settings,
+      life,
       data: {
         fraction: (Number(s.progress.percent) || 0) / 100,
         toKatahdin: Math.max(0, TRAIL.totalMiles - (Number(s.progress.creditedMiles) || 0)),
@@ -624,6 +626,7 @@ function campExplorer(s, ctx, { scene, caption, captions, select }) {
       onFallback: (reason) => {
         holder.classList.remove("is-3d", "camp3d-loading");
         fill(holder, scene);
+        fill(life);
         caption.textContent = captions.flat;
         if (reason === "off") {
           fill(settings, h("button", { type: "button", class: "btn small", onClick: () => { enableCamp3d(); fill(settings); mount(); } }, "Explore the 3D camp"));
@@ -635,7 +638,7 @@ function campExplorer(s, ctx, { scene, caption, captions, select }) {
     if (going) caption.textContent = captions.explore;
   };
   mount();
-  return [holder, settings, caption, places, panel];
+  return [holder, settings, caption, places, panel, life];
 }
 
 function registerSection(s) {

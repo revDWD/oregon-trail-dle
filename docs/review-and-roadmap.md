@@ -633,3 +633,21 @@ Regional field guides and expedition wildlife reports (`this_expedition`, `habit
 - visiting hikers on group milestones
 - a camp pet
 - shelter upgrades as the miles grow
+
+## 22. A living camp, a photo camera and wildlife visitors
+
+The 3D camp was a place to walk round; this sprint makes it feel lived in. Design notes, photo-recognition options and a technical review are in `docs/camp-3d.md`. No SQL.
+
+- *The expedition lives in camp.* Every roster hiker is an NPC with a routine (`CAMP_ACTIVITIES` in the new, tested `engine/camp-life.js`): 21 activities weighted by dawn, day, dusk and night, and by the weather, from breakfast, stretching and studying the map, to chopping kindling, carrying firewood, fetching water and birdwatching, to stories by the fire, stargazing at the overlook and the shelter at night. Each hiker has a seeded favourite, never shares a spot, walks round obstacles between activities and carries the right thing (a jug, logs, an axe, a camera). Hikers who logged today are "just back from the trail". Tap one, or read **Around Camp Now**, to see what everyone is up to.
+- *Wildlife visits, sparingly.* `CAMP_VISITORS` lists 12 real species from the Wildlife Spotting catalogue, in four tiers (squirrels and chickadees often, a bear or moose very rarely; moose only up north), shaped by time of day and weather. At most one, two or three are in camp at once, depending on the quality tier. They wander in, perch or graze and leave, and react to the player with their Wildlife Spotting behaviour class. **They stay a mystery until photographed**: the text says "Something is moving at the edge of camp" until you take its picture.
+- *A photo camera.* C (or 📷 Camera) switches to the hiker's eyes, with a viewfinder, zoom, a shutter and a flash. `framePhoto` decides what the photo shows (wildlife first, then hikers, the fire and places), ignoring anything hidden behind a tent, tree or the shelter, and the photo gets a friendly caption. Photos are kept in **Camp Photos** for the session (at most 12), never uploaded, and add no miles, points or discoveries: Wildlife Spotting stays the only way to fill the field guide. "Aim camera" beside each visitor is the keyboard and screen-reader route: it steps to a clear vantage point outside the animal's comfort zone (`vantagePoints`, `waryDistance`), zooms in and follows it.
+- *A richer, regional environment.* Log benches round the fire, a woodpile and chopping block, supply crates, an overlook bench, a mossy fallen log, lanterns and worn footpaths. Each of the eight sections has its own undergrowth and forest mix (`REGION_FLORA`): rhododendron thickets down south, grass and flowers on the balds, boulders in Pennsylvania, spruce, granite and needles up north. Thickets and boulders are solid. Plants are instanced meshes, one per kind, and scale with the quality tier.
+- *Accessibility and motion.* Everything stays in text: the activity list, the visitors (unnamed until photographed), the photo roll with captions and alt text. With reduced motion the hikers hold one activity, up to two visitors stand still, and the camera has no flash.
+
+**Next (camp life).**
+
+- Let camp photos of a visitor count toward the field guide, with server-side checks (`docs/camp-3d.md` §4).
+- Photo missions on the bulletin board ("photograph a bird at dawn").
+- Seasonal visitors (fireflies in June, a snowshoe hare in winter) and seasonal camp themes.
+- Hikers reacting to a visitor (pointing, whispering) and to each other (sharing food at the fire).
+- Download or share a camp photo.

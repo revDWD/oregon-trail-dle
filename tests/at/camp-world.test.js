@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BENCH_SEATS, CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, CAMERA, FIRE_BENCHES, PLAYER_RADIUS, QUALITY, TENT_SPOTS, WORLD_RADIUS,
-  bulletinBoard, campColliders, campLighting, followCamera, forestRing, joystickVector, keysVector,
-  lowerQuality, moveActor, nearestLocation, qualityTier, rosterCampfire, stepFromInput, turnToward
+  bulletinBoard, blocksView, campColliders, campLighting, followCamera, forestRing, joystickVector, keysVector,
+  locationView, lowerQuality, moveActor, nearestLocation, qualityTier, rosterCampfire, stepFromInput, turnToward
 } from "../../assets/js/at/engine/camp-world.js";
 
 const close = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -38,6 +38,46 @@ test("location names are unique Title Case headings with a sentence-case verb", 
     loc.name.split(" ").forEach((w, i) => assert.ok(/^[A-Z]/.test(w) || (i > 0 && minor.has(w)), `${loc.name}: "${w}"`));
     assert.match(loc.verb, /^[A-Z][a-z]+( [a-z]+)*$/, `${loc.id} verb reads as a button label`);
   }
+});
+
+test("every place has a close-up view from inside camp, clear of anything solid, looking at it", () => {
+  const solid = campColliders({ tents: TENT_SPOTS.length }).filter((c) => c.tall);
+  const check = (loc, view, label) => {
+    assert.ok(Math.hypot(view.x, view.z) < WORLD_RADIUS - 0.5, `${label} camera inside camp`);
+    assert.ok(view.y > 0.8 && view.y < 4, `${label} camera at a sensible height`);
+    for (const c of solid) assert.ok(Math.hypot(view.x - c.x, view.z - c.z) > c.radius + 0.2, `${label} camera clear of ${c.id}`);
+    const toPlace = Math.hypot(loc.x - view.x, loc.z - view.z);
+    const toLook = Math.hypot(view.look.x - view.x, view.look.z - view.z);
+    assert.ok(toPlace > 0.8 && toPlace < 5, `${label} camera close to the place`);
+    // Looking toward the place (the wildlife area looks past it into the woods).
+    const dot = ((loc.x - view.x) * (view.look.x - view.x) + (loc.z - view.z) * (view.look.z - view.z)) / (toPlace * toLook);
+    assert.ok(dot > 0.9, `${label} looks at the place`);
+  };
+  for (const loc of CAMP_LOCATIONS) {
+    assert.ok(loc.view, `${loc.id} has a view`);
+    if (loc.view.orbit !== undefined) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 24) check(loc, locationView(loc, { angle: a }), `${loc.id} at ${a.toFixed(2)}`);
+    } else check(loc, locationView(loc), loc.id);
+  }
+  const wild = locationView(CAMP_LOCATIONS.find((l) => l.id === "wildlife"));
+  assert.ok(Math.hypot(wild.look.x, wild.look.z) > Math.hypot(8.5, 3.5), "the observation area looks out into the woods");
+});
+
+test("a close-up steps out of shot only whoever stands between the camera and the place", () => {
+  const board = CAMP_LOCATIONS.find((l) => l.id === "patches");
+  const view = locationView(board);
+  const along = (t, off = 0) => {
+    const dx = board.x - view.x; const dz = board.z - view.z; const d = Math.hypot(dx, dz);
+    return { x: view.x + dx * t - (dz / d) * off, z: view.z + dz * t + (dx / d) * off };
+  };
+  assert.ok(blocksView(board, view, along(0.5)), "in front of the board");
+  assert.ok(blocksView(board, view, along(0.8, 0.6)), "beside the board but covering its edge");
+  assert.ok(!blocksView(board, view, along(0.5, 2)), "off to the side");
+  assert.ok(!blocksView(board, view, along(1.3)), "behind the board");
+  assert.ok(!blocksView(board, view, along(-0.6)), "behind the camera");
+  const fire = CAMP_LOCATIONS.find((l) => l.id === "roster");
+  const fireView = locationView(fire, { angle: 0 });
+  assert.ok(!blocksView(fire, fireView, { x: (fire.x + fireView.x) / 2, z: (fire.z + fireView.z) / 2 }), "the campfire keeps its company");
 });
 
 test("moving slides around colliders and stays inside the camp", () => {

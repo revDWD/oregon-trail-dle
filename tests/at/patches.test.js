@@ -252,10 +252,10 @@ test("the Trail tab keeps patches off the landmark detail card", () => {
   assert.doesNotMatch(detail, /patch/i);
 });
 
-test("Camp shows one shared Expedition collection, and resource links open safely in a new tab", () => {
+test("History shows one shared Expedition collection, and resource links open safely in a new tab", () => {
   const views = readFileSync("assets/js/at/ui/views.js", "utf8");
-  const camp = views.slice(views.indexOf("export function campView"));
-  assert.match(camp, /patchSection\(s\)/);
+  const history = views.slice(views.indexOf("export function historyView"), views.indexOf("const JOURNAL_SHOWN"));
+  assert.match(history, /patchSection\(s\)/);
   const panel = views.slice(views.indexOf("function hikerPanel"), views.indexOf("function hikersSection"));
   assert.doesNotMatch(panel, /patch/i, "no per-hiker patches on a hiker's page");
   assert.doesNotMatch(views, /patch-hiker|Show landmark patches for/, "no per-hiker patch picker on the map");

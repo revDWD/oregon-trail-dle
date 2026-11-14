@@ -15,12 +15,13 @@ import { pauseCamp3d } from "./camp-3d.js";
 import { trailView, logView, historyView, campView, wildlifeView } from "./views.js";
 
 // Unknown routes fall back to the trail. Old bookmarks still work: #/hunt opens Wildlife Spotting;
-// #/crew, #/badges and #/hikers open Camp at "The hikers" (badges now live there, per hiker).
+// #/crew, #/badges and #/hikers open History at "The Hikers" (badges live there, per hiker), and
+// #/patches opens History at the Expedition Patch Collection. History is the expedition's archive.
 // Old #/join/CODE bookmarks are harmless: there is nothing to join any more, so they open Camp.
 const ROUTES = { trail: trailView, log: logView, camp: campView, wildlife: wildlifeView, history: historyView };
 const TITLES = { trail: "Trail", log: "Log Activity", camp: "Camp", wildlife: "Wildlife Spotting", history: "History" };
-const ALIASES = { hunt: "wildlife", crew: "camp", badges: "camp", hikers: "camp" };
-const ANCHORS = { crew: "hikers-title", badges: "hikers-title", hikers: "hikers-title" }; // aliases that focus a section
+const ALIASES = { hunt: "wildlife", crew: "history", badges: "history", hikers: "history", patches: "history" };
+const ANCHORS = { crew: "hikers-title", badges: "hikers-title", hikers: "hikers-title", patches: "patches-title" }; // aliases that focus a section
 const root = document.getElementById("app");
 const nav = document.getElementById("nav");
 const live = document.getElementById("live");

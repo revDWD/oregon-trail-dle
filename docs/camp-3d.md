@@ -1,19 +1,30 @@
 # The 3D Community Camp
 
-How the explorable camp is built, how its life and photo camera work, and where it could go next. For the project as a whole, read `AGENTS.md` first. The history is in `docs/review-and-roadmap.md` §21–23.
+How the explorable camp is built, how its life and photo camera work, and where it could go next. For the project as a whole, read `AGENTS.md` first. The history is in `docs/review-and-roadmap.md` §21–24.
 
 ## 1. Layers
 
 | File | Job | Tested |
 | --- | --- | --- |
-| `engine/camp-world.js` | Layout (`CAMP_LOCATIONS`, `CAMP_PROPS`, benches, lanterns), colliders and `moveActor`, the follow camera, `QUALITY` tiers, `campLighting`, and the bulletin and roster summaries | `tests/at/camp-world.test.js` |
+| `engine/camp-world.js` | Layout (`CAMP_LOCATIONS`, `CAMP_PROPS`, benches, lanterns), colliders and `moveActor`, the follow camera, each place's close-up (`view`, `locationView`, `blocksView`), `QUALITY` tiers, `campLighting`, and the bulletin and roster summaries | `tests/at/camp-world.test.js` |
 | `engine/camp-life.js` | What happens in camp: hikers' activities, wildlife visitors, each section's plants, and photo framing | `tests/at/camp-life.test.js` |
 | `ui/camp-3d.js` | Drawing and input only (three.js, loaded lazily) | Static checks plus a visual check |
-| `ui/views.js` (`campExplorer`, `campPlaceBody`) | The text side: Camp Locations, the place panel, Around Camp Now and the Camp Camera Roll | Static checks |
+| `ui/views.js` (`campExplorer`, `campPlaceBody`) | The text side: Camp Locations, each place's in-world sheet, Around Camp Now and the Camp Camera Roll | Static checks |
 
 The engine files import nothing from the DOM or three.js. Everything the renderer draws is a plain object (`{ x, z, heading, pose, item }`), so rules can be tested in Node and the 2D pixel camp stays a complete fallback.
 
 No SQL and no new tables. The camp reads what the app already loads: the roster, today's logs, the section, the season and the device clock.
+
+### Close-ups and in-world sheets
+
+Camp is the page: the frame fills the content width at a viewport-based height (`.camp-frame`), and a **Full screen** button appears where `requestFullscreen` is supported (sheets, prompts and the shutter all live inside the frame, so they come along).
+
+Visiting a place (E, a tap, or its Camp Locations button) calls `focusCamp3d(id)`. The renderer eases the camera to the place's `view` (`locationView`: back toward the fire by `distance`, at `height`, looking at `look`; the campfire `orbit`s slowly instead, a calm viewing mode) and `campExplorer` fills the sheet from `campPlaceBody`, themed per place (cork notes, journal pages, a felt blanket, polaroids and find cards, a parchment map, a low dark bar by the fire).
+
+- **Where the sheet goes.** In 3D it is drawn over the camp: a bottom sheet in narrow frames, a right-hand panel in wide ones. `focusInset` reports how much of the camp it covers and `applyView` shifts the projection with `setViewOffset`, so the place sits in the middle of what's still visible (a bottom sheet also widens the field of view so the place keeps its size). In the 2D camp the sheet flows beneath the scene.
+- **A clean shot.** The player, the place's floating sign and gold ring, and any hiker or visitor standing between the camera and the place (`blocksView`, pure and tested) are hidden while the close-up lasts. The campfire keeps its company.
+- **Leaving.** Escape, Close or the same button again hands the camera back to the follow camera from where the close-up left it, and focus returns to what opened the sheet.
+- **Collections live in History.** The sheets show recent things and link onward ("Read the whole Expedition Journal in History", "Open the full Expedition Patch Collection"); the patch collection, hikers' badges and trail register themselves are History's.
 
 ## 2. Camp life
 

@@ -151,17 +151,25 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .field.check label { margin: 0; }
 
 /* ---- Camp ---- */
+/* Camp is a place to be: the page widens and the camp fills the screen above the fold. */
+main:has(.camp-page) { max-width: 76rem; }
+.camp-page .dispatches { max-width: 44rem; margin-left: auto; margin-right: auto; }
+.camp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1rem; }
+.camp-head h1 { margin-bottom: .4rem; }
+.camp-head .hint { margin: 0 0 .6rem; }
 .camp-card { padding: .6rem; }
-.camp-frame { border-radius: 10px; overflow: hidden; border: 3px solid var(--bark); background: var(--sky); }
+.camp-frame { position: relative; container-type: inline-size; border-radius: 10px; overflow: hidden; border: 3px solid var(--bark); background: var(--sky); }
+.camp-frame:fullscreen { border: 0; border-radius: 0; }
+.camp-stage { position: relative; }
 .camp-svg { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .camp-caption { min-height: 3em; margin: .6rem .2rem; }
 /* The explorable 3D camp (camp-3d.js); the pixel camp above is its fallback. */
-.camp-frame.is-3d, .camp-frame.camp3d-loading { position: relative; }
-.camp3d { position: relative; width: 100%; height: min(62vh, 440px); min-height: 280px; background: var(--sky); touch-action: none; user-select: none; -webkit-user-select: none; }
+.camp3d { position: relative; width: 100%; height: clamp(320px, calc(100vh - 12rem), 1100px); height: clamp(320px, calc(100svh - 12rem), 1100px); background: var(--sky); touch-action: none; user-select: none; -webkit-user-select: none; }
 .camp3d-canvas { display: block; width: 100%; height: 100%; outline: none; cursor: grab; touch-action: none; }
 .camp3d-canvas:active { cursor: grabbing; }
 .camp3d-canvas:focus-visible { box-shadow: inset 0 0 0 3px #0b57d0, inset 0 0 0 5px #fff; }
-.camp-frame.camp3d-loading::after { content: "Setting up camp…"; position: absolute; left: 50%; bottom: .6rem; transform: translateX(-50%); background: rgba(31,42,36,.8); color: #fff; padding: .2rem .7rem; border-radius: 999px; font-size: .85rem; }
+.camp-frame:fullscreen .camp3d { height: 100vh; height: 100dvh; }
+.camp-stage.camp3d-loading::after { content: "Setting up camp…"; position: absolute; left: 50%; bottom: .6rem; transform: translateX(-50%); background: rgba(31,42,36,.8); color: #fff; padding: .2rem .7rem; border-radius: 999px; font-size: .85rem; }
 .camp3d-joy { position: absolute; width: 104px; height: 104px; margin: -52px 0 0 -52px; border-radius: 50%; background: rgba(255,250,240,.25); border: 2px solid rgba(255,250,240,.75); pointer-events: none; }
 .camp3d-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; border-radius: 50%; background: rgba(255,250,240,.85); box-shadow: 0 2px 6px rgba(0,0,0,.25); transform: translate(-50%, -50%); }
 .camp3d-prompt { position: absolute; left: .6rem; right: .6rem; bottom: .7rem; display: flex; justify-content: center; pointer-events: none; }
@@ -184,12 +192,98 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .camp-place-btn { width: 100%; min-height: var(--tap); padding: .45rem .7rem; border: 2px solid var(--forest); border-radius: 10px; background: var(--paper); color: var(--forest-dark); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .camp-place-btn[aria-pressed="true"] { background: var(--forest); color: #fff; }
 .camp-place-btn:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
-.camp-place:empty { display: none; }
+/* Full screen (where the browser allows it), only for the 3D camp and never over the photo camera */
+.camp-full { position: absolute; left: .6rem; top: .6rem; z-index: 3; display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 2px solid var(--bark); border-radius: 10px; background: rgba(255,250,240,.92); color: var(--forest-dark); cursor: pointer; }
+.camp-full svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.camp-full:focus-visible { outline: 3px solid #0b57d0; outline-offset: 2px; }
+.camp-frame:not(:has(.camp-stage.is-3d)) .camp-full, .camp-frame:has(.camp3d.is-camera) .camp-full { display: none; }
+.camp-frame:has(.camp-full) .camp3d-hint { left: calc(.6rem + var(--tap) + .5rem); }
+/* At a place, the camera comes in close and the walking controls step aside. */
+.camp3d.is-focus .camp3d-prompt, .camp3d.is-focus .camp3d-camera-btn, .camp3d.is-focus .camp3d-hint, .camp3d.is-focus .camp3d-joy { display: none; }
+.camp3d.is-focus .camp3d-canvas { cursor: default; }
+/* The place's sheet: beneath the pixel camp, or drawn over the 3D camp (a side panel when wide, a
+   bottom sheet on a narrow camp, a low bar by the fire). Each is styled as the thing itself. */
+.camp-sheet:empty { display: none; }
 .camp-place-card { margin: .7rem 0 .9rem; padding: .8rem; border: 2px solid var(--bark); border-radius: 12px; background: #fff; scroll-margin: 1rem; }
+.camp-frame:has(.camp-stage.is-3d) .camp-sheet { position: absolute; z-index: 2; top: .6rem; right: .6rem; bottom: .6rem; width: min(26rem, 44%); overflow: auto; overscroll-behavior: contain; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); animation: sheet-in .25s ease-out; }
+.camp-frame:has(.camp-stage.is-3d) .camp-sheet .camp-place-card { margin: 0; min-height: 100%; box-sizing: border-box; }
+@container (max-width: 40rem) {
+  .camp-frame:has(.camp-stage.is-3d) .camp-sheet { top: auto; left: .4rem; right: .4rem; bottom: .4rem; width: auto; max-height: 58%; animation-name: sheet-up; }
+}
+.camp-frame:has(.camp-stage.is-3d) .camp-sheet.sheet-roster { top: auto; left: 50%; right: auto; bottom: .7rem; width: min(30rem, calc(100% - 1.2rem)); max-height: 62%; transform: translateX(-50%); box-shadow: none; animation: none; }
+.camp-frame:fullscreen .camp-sheet:not(:empty) { margin: 0; }
+.camp-frame:fullscreen:not(:has(.camp-stage.is-3d)) { overflow: auto; }
+@keyframes sheet-in { from { transform: translateX(12px); opacity: 0; } }
+@keyframes sheet-up { from { transform: translateY(12px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .camp-sheet { animation: none !important; } }
 .camp-place-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 .camp-place-head h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; color: var(--forest-dark); }
 .camp-place-head h3:focus { outline: none; }
 .camp-place-card h4 { margin: .8rem 0 .2rem; }
+.camp-place-body > :last-child { margin-bottom: 0; }
+/* By the fire: a quiet bar, the flames and the stars doing the talking */
+.sheet-roster .camp-place-card { padding: .55rem .8rem; border-color: rgba(255,250,240,.35); background: rgba(24,28,22,.82); color: #fffaf0; }
+.camp-frame:has(.camp-stage.is-3d) .sheet-roster .camp-place-card { min-height: 0; }
+.sheet-roster .camp-place-head h3 { color: #ffd98a; font-size: 1rem; }
+.sheet-roster .calm-line { margin: .3rem 0; font-style: italic; }
+.sheet-roster .hint, .sheet-roster .stat dt { color: #d9d2c0; }
+.sheet-roster .stat dd { color: #fffaf0; }
+.sheet-roster .camp-roster li { border-bottom-color: rgba(255,250,240,.2); }
+.calm-roster > summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+/* The bulletin board: notes pinned to cork */
+.sheet-bulletin .camp-place-card { background: #c79a66 radial-gradient(circle at 1px 1px, rgba(80,50,20,.25) 1px, transparent 0) 0 0 / 7px 7px; border-color: #7a5230; }
+.sheet-bulletin .camp-place-head h3 { color: #3b2412; }
+.cork-board { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .9rem .7rem; }
+.pinned-note { position: relative; padding: .9rem .7rem .6rem; background: #fffbe6; box-shadow: 0 3px 6px rgba(40,25,10,.35); transform: rotate(-1.2deg); font-size: .92rem; }
+.pinned-note:nth-child(even) { transform: rotate(1.4deg); background: #f2f7ff; }
+.pinned-note:nth-child(3) { background: #fff0ef; }
+.pinned-note::before { content: ""; position: absolute; left: 50%; top: -.35rem; width: .8rem; height: .8rem; margin-left: -.4rem; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8a7a, #b0301f 70%); box-shadow: 0 2px 2px rgba(0,0,0,.35); }
+.pinned-note h4 { margin: 0 0 .3rem; font-family: Georgia, "Times New Roman", serif; }
+.pinned-note p { margin: .2rem 0; }
+.pinned-note .camp-list { padding-left: 1rem; }
+/* The patch blanket: earned patches sewn onto green wool */
+.sheet-patches .camp-place-card { background: #f6efdf; }
+.felt-blanket { list-style: none; margin: .6rem 0; padding: .7rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr)); gap: .6rem; border: 2px dashed rgba(255,250,240,.6); border-radius: 8px; outline: .35rem solid #2f5b43; background: repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 6px, transparent 6px 22px), repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 6px, transparent 6px 22px) #3c6e52; }
+.felt-patch { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .15rem; color: #fffaf0; font-size: .78rem; line-height: 1.2; }
+.felt-patch .patch-art { width: 64px; height: 64px; transform: rotate(-3deg); }
+.felt-patch:nth-child(even) .patch-art { transform: rotate(3deg); }
+.felt-patch.explorer .patch-art { width: 76px; height: 76px; }
+.felt-patch span { color: #d6e6da; }
+.felt-empty { margin: .6rem 0; padding: 1.2rem .8rem; border-radius: 8px; background: #3c6e52; color: #fffaf0; text-align: center; font-style: italic; }
+/* The trail map table: a parchment map */
+.sheet-map .camp-place-card { background: #f3e6c4 radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(120,85,40,.18) 100%); border-color: #8a6a3e; }
+.table-map { display: block; width: 100%; max-width: 22rem; height: auto; margin: .4rem auto; }
+.table-route { fill: none; stroke: #a88b5c; stroke-width: 2; stroke-dasharray: 3 2; stroke-linejoin: round; }
+.table-walked { fill: none; stroke: var(--forest); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.table-landmark { fill: #fffaf0; stroke: #6b5a3e; stroke-width: 1; }
+.table-landmark.passed { fill: var(--forest); stroke: #fffaf0; }
+.table-landmark.next { fill: var(--amber); stroke: #6b3d12; stroke-width: 1.4; }
+.table-label { font: italic 9px Georgia, "Times New Roman", serif; fill: #5b4636; }
+.table-here path { fill: #c0392b; stroke: #fffaf0; stroke-width: 1.2; }
+.table-here-pulse { fill: rgba(192,57,43,.22); }
+@media (prefers-reduced-motion: no-preference) { .table-here-pulse { animation: table-pulse 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; } }
+@keyframes table-pulse { from { transform: scale(.5); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+/* The journal tent: lined pages by lantern light */
+.sheet-journal .camp-place-card { background: #f1e2c2; border-color: #8a6a3e; }
+.journal-pages { margin: .6rem 0; padding: .5rem .7rem .5rem 2.2rem; border-radius: 4px; background: #fffdf5 repeating-linear-gradient(transparent 0 calc(1.75rem - 1px), #cfdcea calc(1.75rem - 1px) 1.75rem); box-shadow: inset 2.2rem 0 0 -2.1rem #e07a6e, 0 2px 6px rgba(60,40,20,.25); font-family: Georgia, "Times New Roman", serif; }
+.journal-pages .journal-entry { border-bottom: 0; }
+/* The wildlife observation area: a wooden board of photos and finds */
+.sheet-wildlife .camp-place-card { background: #8a6a45 repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 2px, transparent 2px 14px); border-color: #5b4636; color: #fffaf0; }
+.sheet-wildlife .camp-place-head h3, .sheet-wildlife h4 { color: #fff3cf; }
+.sheet-wildlife .camp-place-body > .hint, .sheet-wildlife .more-link a { color: #fff3cf; }
+.sheet-wildlife .collection-stats { padding: .6rem; border-radius: 8px; background: #fffaf0; color: var(--ink); }
+.polaroids, .find-cards { list-style: none; margin: .3rem 0 .6rem; padding: 0; display: grid; gap: .6rem; }
+.polaroids { grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); }
+.polaroid { margin: 0; padding: .35rem .35rem .5rem; background: #fff; color: var(--ink); box-shadow: 0 3px 6px rgba(0,0,0,.35); transform: rotate(-1.5deg); }
+.polaroids li:nth-child(even) .polaroid { transform: rotate(1.5deg); }
+.polaroid img, .polaroid-blank { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; background: var(--sky); }
+.polaroid-blank { display: grid; place-items: center; font-size: 1.6rem; }
+.polaroid figcaption { margin-top: .3rem; font: .76rem/1.25 Georgia, "Times New Roman", serif; }
+.find-cards { grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); }
+.find-card { display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .5rem; border-radius: 8px; background: #fffaf0; color: var(--ink); text-align: center; font-size: .85rem; }
+.find-card.is-notable { box-shadow: 0 0 0 3px #2a9d8f; }
+/* History: the expedition's archive, with quick links down the page */
+.archive-jump { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; padding: 0; }
 /* The photo camera: a round shutter-style button at the bottom centre, like a phone camera app */
 .camp3d::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(20,24,18,.32) 100%); pointer-events: none; }
 .camp3d-camera-btn { position: absolute; left: 50%; bottom: .6rem; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; width: 72px; height: 72px; padding: 0; border: 4px solid #fffaf0; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #3f7a5c, var(--forest-dark) 70%); color: #fff; font: inherit; cursor: pointer; box-shadow: 0 0 0 2px var(--bark), 0 4px 10px rgba(0,0,0,.35); }

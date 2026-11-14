@@ -190,16 +190,39 @@ function actTime(life, npc) {
   return (14 + life.rand() * 16) * (life.time === "night" ? 2 : 1);
 }
 
+// Small idle gestures a hiker slips in while doing something calm, with how long each lasts (s).
+// They never change the activity or the spot; they only make the camp look less like a diorama.
+export const HIKER_GESTURES = Object.freeze({
+  "look-around": 3, coffee: 3.5, "check-map": 4, "adjust-pack": 2.5, "stretch-arms": 3, wave: 2.2
+});
+const GESTURES_BY_POSE = {
+  look: ["look-around", "coffee", "check-map", "adjust-pack", "stretch-arms"],
+  lean: ["look-around", "coffee", "stretch-arms"],
+  warm: ["coffee", "look-around"],
+  sit: ["coffee", "look-around", "stretch-arms"],
+  read: ["look-around"],
+  cook: ["look-around"],
+  write: ["look-around", "stretch-arms"]
+};
+// Which gestures suit a pose (none while walking, sleeping or busy with both hands).
+export function gesturesFor(pose) {
+  return GESTURES_BY_POSE[pose] || [];
+}
+const WAVE_RANGE = 3.2;
+const WAVE_COOLDOWN = 25;
+const nextGestureIn = (life) => 4 + life.rand() * 8;
+
 function settle(life, npc) {
   const a = ACTIVITY.get(npc.activity);
   const s = npc.target;
-  Object.assign(npc, { x: s.x, z: s.z, y: s.y || 0, heading: s.heading, state: "act", moving: false, timer: actTime(life, npc) });
+  Object.assign(npc, { x: s.x, z: s.z, y: s.y || 0, heading: s.heading, state: "act", moving: false, timer: actTime(life, npc),
+    gesture: null, gestureT: 0, nextGesture: nextGestureIn(life) });
   if (a && a.route) { npc.pose = a.poses[npc.leg]; npc.item = a.carry[npc.leg]; }
   else { npc.pose = a ? a.pose : "look"; npc.item = (a && a.item) || null; }
 }
 
 function walkTo(npc, target, item = null) {
-  Object.assign(npc, { target, state: "walk", moving: true, pose: "walk", item, y: 0, walked: 0, check: 0, checkDist: Infinity, detour: 0 });
+  Object.assign(npc, { target, state: "walk", moving: true, pose: "walk", item, y: 0, walked: 0, check: 0, checkDist: Infinity, detour: 0, gesture: null, gestureT: 0 });
 }
 
 // Start the next thing: the other end of a route, or a new activity.
@@ -229,7 +252,8 @@ export function createCampLife({ people = [], time = "day", weather = null, tent
   const life = { time, weather, ctx: campContextFor({ tents, lanterns }), rand: seededRandom(seed), taken: new Set(), reduced, npcs: [] };
   for (const p of people) {
     const npc = { id: p.id, name: p.name, seed: p.seed || 0, recent: Boolean(p.recent), favourite: FAVOURITES[(p.seed || 0) % FAVOURITES.length],
-      x: 0, z: 0, y: 0, heading: 0, pose: "look", item: null, moving: false, state: "act", timer: 0, activity: null, claim: null, target: null, leg: 0, trips: 0 };
+      x: 0, z: 0, y: 0, heading: 0, pose: "look", item: null, moving: false, state: "act", timer: 0, activity: null, claim: null, target: null, leg: 0, trips: 0,
+      gesture: null, gestureT: 0, nextGesture: 0, waveCooldown: 0 };
     const next = chooseNext(life, npc, { first: true });
     if (!next) continue;
     claim(life, npc, next.activity, next.spot);
@@ -246,22 +270,44 @@ export function createCampLife({ people = [], time = "day", weather = null, tent
 }
 
 // Advance everyone by dt seconds. Returns the hikers whose activity changed (for the text list).
-export function stepCampLife(life, dt, colliders = []) {
+// With `player`, hikers who are idling nearby look up and wave now and then.
+export function stepCampLife(life, dt, colliders = [], { player = null } = {}) {
   if (life.reduced || !(dt > 0)) return [];
   const changed = [];
   const step = Math.min(dt, 0.1);
   for (const npc of life.npcs) {
     const before = npc.activity;
-    stepNpc(life, npc, step, colliders);
+    stepNpc(life, npc, step, colliders, player);
     if (npc.activity !== before) changed.push(npc);
   }
   return changed;
 }
 
-function stepNpc(life, npc, dt, colliders) {
+function stepGesture(life, npc, dt, player) {
+  npc.waveCooldown = Math.max(0, (npc.waveCooldown || 0) - dt);
+  if (npc.gesture) {
+    npc.gestureT += dt;
+    if (npc.gestureT >= HIKER_GESTURES[npc.gesture]) { npc.gesture = null; npc.gestureT = 0; npc.nextGesture = nextGestureIn(life); }
+    return;
+  }
+  const options = gesturesFor(npc.pose);
+  if (!options.length) return;
+  if (player && npc.waveCooldown <= 0 && Math.hypot(player.x - npc.x, player.z - npc.z) < WAVE_RANGE) {
+    Object.assign(npc, { gesture: "wave", gestureT: 0, waveCooldown: WAVE_COOLDOWN, waveAt: headingOf(player.x - npc.x, player.z - npc.z) });
+    return;
+  }
+  npc.nextGesture -= dt;
+  if (npc.nextGesture <= 0) {
+    npc.gesture = options[Math.floor(life.rand() * options.length)];
+    npc.gestureT = 0;
+  }
+}
+
+function stepNpc(life, npc, dt, colliders, player) {
   if (npc.state === "act") {
     npc.timer -= dt;
-    if (npc.timer <= 0) nextTask(life, npc);
+    if (npc.timer <= 0) { nextTask(life, npc); return; }
+    stepGesture(life, npc, dt, player);
     return;
   }
   const t = npc.target;
@@ -414,7 +460,7 @@ function spawnVisitor(state, pick) {
   const start = route[0];
   state.serial += 1;
   const v = { key: `${pick.visitor.id}-${state.serial}`, id: pick.visitor.id, visitor: pick.visitor, species: pick.species,
-    x: start.x, y: start.y, z: start.z, heading: headingOf(-start.x, -start.z), route, leg: 1, wait: 0, moving: true, flying: Boolean(start.fly), startled: false, photographed: false };
+    x: start.x, y: start.y, z: start.z, heading: headingOf(-start.x, -start.z), route, leg: 1, wait: 0, moving: true, flying: Boolean(start.fly), startled: false, photographed: false, idle: null, idleT: 0 };
   state.list.push(v);
   return v;
 }
@@ -422,7 +468,7 @@ function spawnVisitor(state, pick) {
 // The visitor schedule: the first comes after a few seconds, then one every 12-40 s, never more than
 // `cap` (the quality tier's `visitors`) at once. Reduced motion shows a still visitor or two instead.
 export function createVisitors({ time = "day", weather = null, scene = "southern-ridges", cap = 2, seed = 1, reduced = false, colliders = [] } = {}) {
-  const state = { pool: visitorPool({ time, weather, scene }), cap: Math.max(0, cap), rand: seededRandom(seed), list: [], next: 0, serial: 0, reduced, colliders };
+  const state = { pool: visitorPool({ time, weather, scene }), cap: Math.max(0, cap), rand: seededRandom(seed), idleRand: seededRandom(seed + 7919), list: [], next: 0, serial: 0, reduced, colliders };
   state.next = 4 + state.rand() * 6;
   if (reduced) {
     for (let i = 0; i < Math.min(state.cap, 2) && state.pool.length; i += 1) {
@@ -452,6 +498,31 @@ function startle(v, player) {
   return true;
 }
 
+// While a visitor waits at a stop it doesn't freeze: it forages, pecks, looks round, grooms or stops to
+// listen, as suits the animal. `idle` is null for a still moment.
+export const VISITOR_IDLES = Object.freeze({
+  songbird: ["peck", "look", "groom"],
+  squirrel: ["forage", "look", "groom", "listen"],
+  chipmunk: ["forage", "look", "groom", "listen"],
+  rabbit: ["forage", "listen", "groom"],
+  turkey: ["peck", "look"],
+  fox: ["listen", "look", "forage"],
+  coyote: ["listen", "look", "forage"],
+  deer: ["forage", "listen", "look"],
+  bear: ["forage", "look"],
+  moose: ["forage", "look"],
+  owl: ["look", "groom"]
+});
+export const idlesFor = (v) => VISITOR_IDLES[v.visitor && v.visitor.model] || ["look"];
+
+function stepIdle(state, v, dt) {
+  v.idleT = (v.idleT || 0) - dt;
+  if (v.idleT > 0) return;
+  const options = idlesFor(v);
+  v.idle = state.idleRand() < 0.35 ? null : options[Math.floor(state.idleRand() * options.length)];
+  v.idleT = 1.2 + state.idleRand() * 1.8;
+}
+
 // Advance the visitors. Returns { arrived, left } so the renderer adds and removes their models.
 export function stepVisitors(state, dt, { player = null, colliders = state.colliders } = {}) {
   const arrived = [];
@@ -467,7 +538,9 @@ export function stepVisitors(state, dt, { player = null, colliders = state.colli
   }
   for (const v of state.list) {
     if (player && !v.startled && Math.hypot(v.x - player.x, v.z - player.z) < waryDistance(v)) startle(v, player);
-    if (v.wait > 0) { v.wait -= step; v.moving = false; continue; }
+    if (v.wait > 0) { v.wait -= step; v.moving = false; stepIdle(state, v, step); continue; }
+    v.idle = null;
+    v.idleT = 0;
     const t = v.route[v.leg];
     if (!t) { v.gone = true; continue; }
     const dx = t.x - v.x;
@@ -534,7 +607,9 @@ export const CAMP_PATHS = Object.freeze([
   ...CAMP_LOCATIONS.filter((l) => l.id !== "roster").map((l) => ({ id: `to-${l.id}`, ax: 0, az: 0, bx: l.x, bz: l.z, width: 0.8 })),
   { id: "to-woodpile", ax: 0, az: 0, bx: -8.5, bz: 1.2, width: 0.6 },
   { id: "to-pump", ax: 0, az: 0, bx: 4, bz: -1.8, width: 0.6 },
-  { id: "to-overlook", ax: 8.5, az: 3.5, bx: 11.5, bz: 6, width: 0.5 }
+  { id: "to-overlook", ax: 8.5, az: 3.5, bx: 11.5, bz: 6, width: 0.5 },
+  { id: "to-kitchen", ax: 0, az: 0, bx: -1.8, bz: -5, width: 0.6 },
+  { id: "to-chairs", ax: 8.5, az: 3.5, bx: 7.6, bz: 7.2, width: 0.5 }
 ].map((p) => Object.freeze(p)));
 
 export function pathDistance(x, z, path) {

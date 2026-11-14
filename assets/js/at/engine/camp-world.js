@@ -28,7 +28,14 @@ export const CAMP_PROPS = Object.freeze([
   { id: "chopping-block", x: -7.4, z: -0.8, radius: 0.35 },
   { id: "supply-crates", x: 3.2, z: -7.4, radius: 0.6 },
   { id: "overlook-bench", x: 11.5, z: 6, radius: 0.6, tall: false },
-  { id: "fallen-log", x: -9.5, z: 8.5, radius: 0.8, tall: false }
+  { id: "fallen-log", x: -9.5, z: 8.5, radius: 0.8, tall: false },
+  // Signs of a camp in use: the camp kitchen, folding chairs, packs dropped by the trail, a drying line
+  // of socks and a tree with the trail's white blaze.
+  { id: "camp-kitchen", x: -1.8, z: -5, radius: 0.6 },
+  { id: "camp-chairs", x: 7.6, z: 7.2, radius: 0.6, tall: false },
+  { id: "pack-drop", x: -2.2, z: 8.4, radius: 0.5, tall: false },
+  { id: "drying-line", x: 8.2, z: -2.6, radius: 0.4 },
+  { id: "blaze-tree", x: -1.4, z: 13.6, radius: 0.35, tall: true }
 ]);
 
 // Log benches around the fire, in the gaps between the paths (headings in degrees, atan2(x, z)).
@@ -171,10 +178,11 @@ export function followCamera(target, yaw, pitch, colliders = [], { distance = CA
 // Rendering budget from what the device tells us. Low keeps phones cool; nothing here is required
 // to enjoy camp. `fps` (measured) can lower a tier later. `visitors` caps the wildlife in camp at
 // once, `flora` the ground plants (ferns, shrubs, flowers, stones) and `ground` the ground texture size.
+// `shadows` is the sun's shadow map size for the still scenery (0: soft blob shadows only).
 export const QUALITY = Object.freeze({
-  low: { id: "low", pixelRatio: 1, antialias: false, trees: 18, fireflies: 10, smoke: 6, visitors: 1, flora: 40, ground: 512 },
-  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 28, fireflies: 22, smoke: 10, visitors: 2, flora: 80, ground: 1024 },
-  high: { id: "high", pixelRatio: 2, antialias: true, trees: 40, fireflies: 36, smoke: 14, visitors: 3, flora: 130, ground: 1024 }
+  low: { id: "low", pixelRatio: 1, antialias: false, trees: 18, fireflies: 10, smoke: 6, visitors: 1, flora: 40, ground: 512, shadows: 0 },
+  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 28, fireflies: 22, smoke: 10, visitors: 2, flora: 80, ground: 1024, shadows: 1024 },
+  high: { id: "high", pixelRatio: 2, antialias: true, trees: 40, fireflies: 36, smoke: 14, visitors: 3, flora: 130, ground: 1024, shadows: 2048 }
 });
 
 export function qualityTier({ dpr = 1, cores = 4, memory = 4, mobile = false, saveData = false } = {}) {
@@ -190,11 +198,13 @@ export function lowerQuality(tier) {
 }
 
 // Light and sky for the device clock and the day's weather. Colours are hex numbers for three.js.
+// `exposure` balances the tone mapping per time of day (a touch brighter at night so the camp stays
+// readable, a touch lower at noon so the colours don't wash out); `shadow` is how dark sun shadows get.
 const SKIES = {
-  dawn: { sky: 0xf2c7a5, fog: 0xe7c3a8, ambient: 0xffe2c8, ambientIntensity: 1.2, sun: 0xffc48a, sunIntensity: 1.3, sunHeight: 0.35 },
-  day: { sky: 0x9fd0ee, fog: 0xc4e0ef, ambient: 0xffffff, ambientIntensity: 1.4, sun: 0xfff2d6, sunIntensity: 1.8, sunHeight: 1 },
-  dusk: { sky: 0xd98a6a, fog: 0x9a6f72, ambient: 0xf0b8a0, ambientIntensity: 1, sun: 0xff9a5c, sunIntensity: 1, sunHeight: 0.22 },
-  night: { sky: 0x101a33, fog: 0x141d33, ambient: 0x6a7fb5, ambientIntensity: 0.55, sun: 0x9fb4ff, sunIntensity: 0.35, sunHeight: 0.7 }
+  dawn: { sky: 0xf2c7a5, fog: 0xe7c3a8, ambient: 0xffe2c8, ambientIntensity: 1.2, sun: 0xffc48a, sunIntensity: 1.3, sunHeight: 0.35, exposure: 1.05, shadow: 0.5 },
+  day: { sky: 0x9fd0ee, fog: 0xc4e0ef, ambient: 0xffffff, ambientIntensity: 1.4, sun: 0xfff2d6, sunIntensity: 1.8, sunHeight: 1, exposure: 0.95, shadow: 0.6 },
+  dusk: { sky: 0xd98a6a, fog: 0x9a6f72, ambient: 0xf0b8a0, ambientIntensity: 1, sun: 0xff9a5c, sunIntensity: 1, sunHeight: 0.22, exposure: 1.1, shadow: 0.45 },
+  night: { sky: 0x101a33, fog: 0x141d33, ambient: 0x6a7fb5, ambientIntensity: 0.55, sun: 0x9fb4ff, sunIntensity: 0.35, sunHeight: 0.7, exposure: 1.25, shadow: 0.25 }
 };
 const GREY = { rain: 0.45, storm: 0.6, fog: 0.35, snow: 0.3 };
 
@@ -214,6 +224,7 @@ export function campLighting(time = "day", weather = { id: "clear" }) {
     sky: mix(base.sky, night ? 0x1c2233 : 0x8a949c, grey),
     fog: mix(base.fog, night ? 0x1c2233 : 0x9aa3aa, grey),
     sunIntensity: base.sunIntensity * (1 - grey * 0.6),
+    shadow: base.shadow * (1 - grey), // overcast days have no crisp shadows
     fogNear: weather && weather.id === "fog" ? 6 : 14,
     fogFar: weather && weather.id === "fog" ? 26 : 48,
     fireIntensity: night ? 9 : glow ? 6 : 2.5,

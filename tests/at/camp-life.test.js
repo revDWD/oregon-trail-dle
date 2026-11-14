@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { LANTERN_SPOTS, TENT_SPOTS, WORLD_RADIUS, campColliders } from "../../assets/js/at/engine/camp-world.js";
 import {
-  CAMP_ACTIVITIES, CAMP_PATHS, CAMP_VISITORS, NPC_RADIUS, PERCHES, REGION_FLORA, activityLabel, activityWeight, allActivitySpots,
-  campFlora, createCampLife, createVisitors, describeNpc, describeVisitor, framePhoto, onPath, photoCaption, projectPoint,
+  CAMP_ACTIVITIES, CAMP_PATHS, CAMP_VISITORS, HIKER_GESTURES, NPC_RADIUS, PERCHES, REGION_FLORA, VISITOR_IDLES, activityLabel, activityWeight, allActivitySpots,
+  campFlora, createCampLife, createVisitors, describeNpc, describeVisitor, framePhoto, gesturesFor, onPath, photoCaption, projectPoint,
   stepCampLife, stepVisitors, vantagePoints, visitorPool, visitorRoute, waryDistance
 } from "../../assets/js/at/engine/camp-life.js";
 import { seededRandom } from "../../assets/js/at/engine/camp-world.js";
@@ -162,6 +162,59 @@ test("visitors arrive on a schedule, never beyond the cap, and react to the play
   const pos = JSON.stringify(still.list.map((v) => [v.x, v.z]));
   assert.deepEqual(stepVisitors(still, 1), { arrived: [], left: [] });
   assert.equal(JSON.stringify(still.list.map((v) => [v.x, v.z])), pos);
+});
+
+test("idle hikers slip in small gestures and wave when the player comes close", () => {
+  for (const pose of ["walk", "sleep", "chop", "pump"]) assert.deepEqual(gesturesFor(pose), [], `${pose} has no gestures`);
+  for (const pose of ["look", "sit", "warm", "lean"]) {
+    assert.ok(gesturesFor(pose).length > 0, pose);
+    for (const g of gesturesFor(pose)) assert.ok(HIKER_GESTURES[g] > 0, `${g} has a duration`);
+  }
+  const life = createCampLife({ people: people(8), time: "day", tents: 8, lanterns: 4, seed: 3 });
+  const solid = campColliders({ tents: 8, extra: LANTERN_SPOTS });
+  const seen = new Set();
+  for (let t = 0; t < 300; t += 0.1) {
+    stepCampLife(life, 0.1, solid);
+    for (const n of life.npcs) {
+      if (!n.gesture) continue;
+      seen.add(n.gesture);
+      assert.equal(n.state, "act", "gestures only while settled");
+      assert.ok(gesturesFor(n.pose).includes(n.gesture) || n.gesture === "wave", `${n.gesture} suits ${n.pose}`);
+      assert.ok(n.gestureT <= HIKER_GESTURES[n.gesture] + 0.1, "and ends");
+    }
+  }
+  assert.ok(seen.size >= 3, `a few kinds of gesture (${[...seen].join(", ")})`);
+  assert.ok(!seen.has("wave"), "nobody waves at an empty camp");
+
+  const greet = createCampLife({ people: people(8), time: "day", tents: 8, lanterns: 4, seed: 3 });
+  const npc = greet.npcs.find((n) => gesturesFor(n.pose).length);
+  Object.assign(npc, { timer: 60, gesture: null });
+  const player = { x: npc.x + 1.5, z: npc.z };
+  stepCampLife(greet, 0.1, solid, { player });
+  assert.equal(npc.gesture, "wave");
+  for (let t = 0; t < 3; t += 0.1) stepCampLife(greet, 0.1, solid, { player });
+  assert.notEqual(npc.gesture, "wave", "one wave, then a cooldown");
+  assert.ok(npc.waveCooldown > 0);
+});
+
+test("waiting visitors forage, peck, look round, groom or listen as suits the animal", () => {
+  for (const v of CAMP_VISITORS) assert.ok(VISITOR_IDLES[v.model] && VISITOR_IDLES[v.model].length, `${v.model} has idles`);
+  const species = new Map(themeFor("wildlife").species.map((s) => [s.id, s]));
+  const s = createVisitors({ cap: 1, seed: 9, colliders });
+  s.pool = [{ visitor: CAMP_VISITORS.find((v) => v.id === "chickadee"), species: species.get("chickadee"), weight: 1 }];
+  s.next = 0;
+  const [bird] = stepVisitors(s, 0.05).arrived;
+  Object.assign(bird, { leg: 2, wait: 30 });
+  const idles = new Set();
+  for (let t = 0; t < 25; t += 0.1) {
+    stepVisitors(s, 0.1);
+    assert.equal(bird.moving, false);
+    idles.add(bird.idle);
+  }
+  assert.ok(idles.has(null) && [...idles].filter(Boolean).every((i) => VISITOR_IDLES.songbird.includes(i)) && idles.size >= 3, [...idles].join(", "));
+  bird.wait = 0;
+  stepVisitors(s, 0.1);
+  assert.equal(bird.idle, null, "no idling on the move");
 });
 
 test("visitors stay a mystery in text until photographed", () => {

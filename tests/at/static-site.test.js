@@ -115,21 +115,21 @@ test("every page-level view has an h1 that receives focus on navigation", () => 
   const h1s = [...views.matchAll(/h\("h1"/g)].length;
   const focus = [...views.matchAll(/"data-focus": ""/g)].length;
   assert.equal(h1s, focus);
-  assert.ok(h1s >= 5);
+  assert.ok(h1s >= 4);
 });
 
-test("navigation: Trail, Log Activity, Camp, Wildlife Spotting, History; old tabs redirect; every link has a route", () => {
+test("navigation: Trail, Log Activity, Camp, History; old tabs redirect; every link has a route", () => {
   const html = read("index.html");
   const app = read("assets/js/at/ui/app.js");
   const links = [...html.matchAll(/<a href="#\/([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(links, ["trail", "log", "camp", "wildlife", "history"]);
+  assert.deepEqual(links, ["trail", "log", "camp", "history"]);
   assert.match(html, /<a href="#\/log">Log Activity<\/a>/);
-  assert.match(html, /<a href="#\/wildlife">Wildlife Spotting<\/a>/);
+  assert.doesNotMatch(html, /#\/wildlife/, "Wildlife Spotting is no longer a tab: outings start at Camp");
   assert.ok(!/#\/profile/.test(html + read("assets/js/at/ui/views.js")), "no links to the removed profile page");
   const routes = app.match(/const ROUTES = \{([^}]*)\}/)[1];
   links.forEach((l) => assert.match(routes, new RegExp(`\\b${l}:`)));
-  assert.ok(!/\b(profile|crew|hunt|badges):/.test(routes), "removed tabs have no routes of their own");
-  assert.match(app, /const ALIASES = \{ hunt: "wildlife", crew: "history", badges: "history", hikers: "history", patches: "history" \}/, "old bookmarks redirect");
+  assert.ok(!/\b(profile|crew|hunt|badges|wildlife):/.test(routes), "removed tabs have no routes of their own");
+  assert.match(app, /const ALIASES = \{ hunt: "camp", wildlife: "camp", crew: "history", badges: "history", hikers: "history", patches: "history" \}/, "old bookmarks redirect");
   const aliases = app.match(/const ALIASES = \{([^}]*)\}/)[1];
   // Every in-app #/ link points at a route or an alias.
   const views = read("assets/js/at/ui/views.js");
@@ -189,11 +189,12 @@ test("Trail has no Coming Up card; Camp opens with the camp, and History holds t
   const { readFileSync } = await import("node:fs");
   const views = readFileSync("assets/js/at/ui/views.js", "utf8");
   assert.doesNotMatch(views, /Coming up:/);
-  const camp = views.slice(views.indexOf("export function campView"));
-  assert.ok(camp.indexOf("camp-card") < camp.indexOf("dispatches-title"), "the camp comes first, dispatches below it");
+  const camp = views.slice(views.indexOf("export function campView"), views.indexOf("function dispatchForm"));
+  assert.match(camp, /camp-card/);
+  assert.doesNotMatch(camp, /dispatches-title|dispatchCard\(|h\("dl", \{ class: "stats" \}/, "Camp is the 3D camp only: no dispatches or stats beneath it");
   assert.doesNotMatch(camp, /patchSection\(|hikersSection\(|registerSection\(/, "Camp is a place, not a collection page");
   const history = views.slice(views.indexOf("export function historyView"), views.indexOf("const JOURNAL_SHOWN"));
-  for (const part of ["journalSection(s)", "patchSection(s)", "hikersSection(s, a)", "registerSection(s)", "activities-title"]) assert.ok(history.includes(part), `History shows ${part}`);
+  for (const part of ["journalSection(s)", "patchSection(s)", "wildlifeSection(s)", "hikersSection(s, a)", "statsSection(s, a)", "registerSection(s)", "activities-title"]) assert.ok(history.includes(part), `History shows ${part}`);
   assert.ok(history.indexOf("journalSection(s)") < history.indexOf("patchSection(s)") && history.indexOf("registerSection(s)") < history.indexOf("activities-title"), "journal first, this device's activities last");
 });
 
@@ -233,4 +234,45 @@ test("Camp shows every species badge and a labelled badge-collection bar", () =>
   assert.match(views, /species-badge locked[\s\S]{0,200}"\?\?\?"/, "locked species badges stay a mystery");
   const app = read("assets/js/at/ui/app.js");
   assert.match(app, /speciesBadges\(state\.fieldGuide, \{ hikerId: hk\.id \}\)/, "new species badges are celebrated");
+});
+
+test("Trail is the journey: dispatches live there and This Week is gone", () => {
+  const views = read("assets/js/at/ui/views.js");
+  const trail = views.slice(views.indexOf("export function trailView"), views.indexOf("export function logView"));
+  assert.match(trail, /dispatchSection\(s, a\)/, "Trail Dispatches are on the Trail page");
+  assert.doesNotMatch(trail, /This Week|pickTip|week-hikers/, "no This Week card on Trail");
+  const section = views.slice(views.indexOf("function dispatchSection"), views.indexOf("export function trailView"));
+  assert.match(section, /id: "dispatches-title"/);
+  assert.match(section, /Earlier Dispatches/, "older dispatches fold away");
+});
+
+test("History is the archive: collapsible panels with counts, open state kept in memory", () => {
+  const views = read("assets/js/at/ui/views.js");
+  const panel = views.slice(views.indexOf("function historyPanel"), views.indexOf("const JOURNAL_SHOWN"));
+  assert.match(panel, /h\("details", \{ class: `history-panel/);
+  assert.match(panel, /openPanels\.has\(titleId\)/, "panels remember being opened");
+  assert.match(panel, /e\.target !== e\.currentTarget/, "nested details don't toggle the panel");
+  for (const [id, label] of [["journal-title", "Expedition Journal ("], ["patches-title", "Expedition Patch Collection ("], ["wildlife-title", "Wildlife Discoveries ("],
+    ["hikers-title", "The Hikers ("], ["stats-title", "Expedition Statistics"], ["register-title", "Trail Register ("]]) {
+    assert.ok(views.includes(`historyPanel("${id}", `) && views.includes(label), `${label} is a panel`);
+  }
+  const app = read("assets/js/at/ui/app.js");
+  assert.match(app, /openHistoryPanel\(ANCHORS\[raw\]\)/, "old #/hikers and #/patches links open their panel");
+});
+
+test("photo outings start at Camp's Wildlife Observation Area and hold the 3D camp still", () => {
+  const views = read("assets/js/at/ui/views.js");
+  assert.doesNotMatch(views, /export function wildlifeView/, "no Wildlife Spotting page");
+  const body = views.slice(views.indexOf("function campPlaceBody"), views.indexOf("function campExplorer"));
+  assert.match(body, /onClick: outing \}, "Go on a photo outing"/);
+  const explorer = views.slice(views.indexOf("function campExplorer"), views.indexOf("function registerSection"));
+  assert.match(explorer, /createExpedition\(theme,[\s\S]*?beforeStart/, "an outing needs a hiker before it starts");
+  assert.match(explorer, /a\.recordExpedition\(\{ \.\.\.summary, hikerId: spotter \}\)/);
+  assert.match(explorer, /holdCamp3d\(true\)/);
+  assert.match(explorer, /closeOuting[\s\S]*?game\.stop\(\)[\s\S]*?holdCamp3d\(false\)/);
+  const camp3d = read("assets/js/at/ui/camp-3d.js");
+  assert.match(camp3d, /if \(held \|\| w\.running/, "a held camp never starts drawing");
+  const app = read("assets/js/at/ui/app.js");
+  assert.match(app, /const busy = \(\) => campOutingOpen\(\) \|\|/, "background redraws never replace a running outing");
+  assert.match(app, /openCampPlace\("wildlife"\)/, "old #/wildlife and #/hunt links open the Wildlife Observation Area");
 });

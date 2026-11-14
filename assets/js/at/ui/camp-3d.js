@@ -35,6 +35,7 @@ const MIN_FOV = 20;
 let threeModule = null;
 let world = null;
 let mountToken = 0;
+let held = false; // something (a photo outing) covers the camp, so it stays still
 
 const loadThree = () => {
   threeModule = threeModule || import("../../../vendor/three/three.module.js");
@@ -119,6 +120,14 @@ export function pauseCamp3d() {
   stop(world);
   world.held.clear();
   endJoystick(world);
+}
+
+// Hold the camp still while something covers it (a photo outing); release to draw again.
+export function holdCamp3d(on) {
+  held = Boolean(on);
+  if (!world) return;
+  if (held) pauseCamp3d();
+  else start(world);
 }
 
 // Move the gold ring to the chosen hiker.
@@ -1917,7 +1926,7 @@ function settingsPanel(w) {
 // ---- The loop -------------------------------------------------------------------------------------
 
 function start(w) {
-  if (w.running || !w.root.isConnected || !w.visible || document.hidden) return;
+  if (held || w.running || !w.root.isConnected || !w.visible || document.hidden) return;
   w.running = true;
   w.last = performance.now();
   w.fps = { frames: 0, since: w.last, slow: w.fps.slow || 0, warm: w.last + 2500 };

@@ -1,6 +1,6 @@
 # The 3D Community Camp
 
-How the explorable camp is built, how its life and photo camera work, and where it could go next. For the project as a whole, read `AGENTS.md` first. The history is in `docs/review-and-roadmap.md` §21–24.
+How the explorable camp is built, how its life and photo camera work, and where it could go next. For the project as a whole, read `AGENTS.md` first. The history is in `docs/review-and-roadmap.md` §21–25.
 
 ## 1. Layers
 
@@ -25,6 +25,7 @@ Visiting a place (E, a tap, or its Camp Locations button) calls `focusCamp3d(id)
 - **A clean shot.** The player, the place's floating sign and gold ring, and any hiker or visitor standing between the camera and the place (`blocksView`, pure and tested) are hidden while the close-up lasts. The campfire keeps its company.
 - **Leaving.** Escape, Close or the same button again hands the camera back to the follow camera from where the close-up left it, and focus returns to what opened the sheet.
 - **Collections live in History.** The sheets show recent things and link onward ("Read the whole Expedition Journal in History", "Open the full Expedition Patch Collection"); the patch collection, hikers' badges and trail register themselves are History's.
+- **Photo outings.** Wildlife Spotting has no tab of its own: the Wildlife Observation Area's sheet has "Go on a photo outing", which covers the camp frame with the outing. Meanwhile `holdCamp3d(true)` stops the renderer drawing, the camp's controls are inert and background refreshes wait; "Back to camp", Escape or another place's button ends it. Camp photos and outings stay separate: only outings reach the field guide.
 
 ## 2. Camp life
 

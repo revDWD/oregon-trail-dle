@@ -12,15 +12,16 @@ import { PERSONAL_MARKS, expeditionTotals, groupMarks, hikerBadges, trailRegiste
 import { earnedPatchIds, expeditionSummary, landmarkPatches, patchMilestones, stateCollections } from "../engine/patches.js";
 import { h, clear } from "./dom.js";
 import { pauseCamp3d } from "./camp-3d.js";
-import { trailView, logView, historyView, campView, wildlifeView } from "./views.js";
+import { trailView, logView, historyView, campView, campOutingOpen, openCampPlace, openHistoryPanel } from "./views.js";
 
-// Unknown routes fall back to the trail. Old bookmarks still work: #/hunt opens Wildlife Spotting;
+// Unknown routes fall back to the trail. Old bookmarks still work: #/hunt and #/wildlife open Camp at the
+// Wildlife Observation Area (photo outings start there; the field guide lives in History);
 // #/crew, #/badges and #/hikers open History at "The Hikers" (badges live there, per hiker), and
 // #/patches opens History at the Expedition Patch Collection. History is the expedition's archive.
 // Old #/join/CODE bookmarks are harmless: there is nothing to join any more, so they open Camp.
-const ROUTES = { trail: trailView, log: logView, camp: campView, wildlife: wildlifeView, history: historyView };
-const TITLES = { trail: "Trail", log: "Log Activity", camp: "Camp", wildlife: "Wildlife Spotting", history: "History" };
-const ALIASES = { hunt: "wildlife", crew: "history", badges: "history", hikers: "history", patches: "history" };
+const ROUTES = { trail: trailView, log: logView, camp: campView, history: historyView };
+const TITLES = { trail: "Trail", log: "Log Activity", camp: "Camp", history: "History" };
+const ALIASES = { hunt: "camp", wildlife: "camp", crew: "history", badges: "history", hikers: "history", patches: "history" };
 const ANCHORS = { crew: "hikers-title", badges: "hikers-title", hikers: "hikers-title", patches: "patches-title" }; // aliases that focus a section
 const root = document.getElementById("app");
 const nav = document.getElementById("nav");
@@ -46,8 +47,9 @@ const route = () => { const r = rawRoute(); const name = ALIASES[r] || (/^join\/
 // Background refreshes must not wipe something the hiker is typing (a dispatch, an activity).
 const typing = () => Boolean(state.dispatchEditing || document.activeElement?.closest?.("#app input, #app textarea, #app select"));
 // Redrawing replaces every element, so background redraws wait while focus is on a control in the page
-// (a map button, a landmark, a link): keyboard and screen-reader users keep their place.
-const busy = () => typing() || Boolean(document.activeElement?.closest?.("#app button, #app a, #app summary, #app [tabindex]:not(h1)"));
+// (a map button, a landmark, a link): keyboard and screen-reader users keep their place. A photo
+// outing at Camp is never redrawn over.
+const busy = () => campOutingOpen() || typing() || Boolean(document.activeElement?.closest?.("#app button, #app a, #app summary, #app [tabindex]:not(h1)"));
 const friendly = (e) => (e && e.message) || "Something went wrong.";
 const readHiker = () => { try { return localStorage.getItem(HIKER_KEY); } catch (e) { return null; } };
 const saveHiker = (id) => { try { if (id) localStorage.setItem(HIKER_KEY, id); } catch (e) { /* preference only */ } };
@@ -78,6 +80,9 @@ function render({ focus = false } = {}) {
   } else {
     derived();
     const name = route();
+    const raw = rawRoute();
+    if (raw === "hunt" || raw === "wildlife") openCampPlace("wildlife");
+    if (focus && ANCHORS[raw]) openHistoryPanel(ANCHORS[raw]);
     shownTime = timeOfDay(new Date().getHours());
     root.append(ROUTES[name](state, actions));
     nav.querySelectorAll("a").forEach((a) => (a.getAttribute("href") === `#/${name}` ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
@@ -282,7 +287,7 @@ const actions = {
       const unlocked = [...fresh.lines, ...fresh.patchLines];
       const who = (state.hikers.find((x) => x.id === summary.hikerId) || {}).name || "the hiker";
       const note = saved && saved.discoveriesSaved === false ? " The field guide fills in once the latest database update is applied." : "";
-      return `Saved to ${who}'s field guide and the photo board at Camp: ${summary.score} photo points.${unlocked.length ? ` 🎉 ${unlocked.join(" ")}` : ""}${note}`;
+      return `Saved to ${who}'s field guide and the photo board: ${summary.score} photo points.${unlocked.length ? ` 🎉 ${unlocked.join(" ")}` : ""}${note}`;
     } catch (e) { return friendly(e); }
   }
 };

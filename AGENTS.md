@@ -106,9 +106,9 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 
 ## 4. Key systems
 
-- **Tabs (5):** Trail, Log Activity, Camp, Wildlife Spotting, History. History is the archive and sits last.
-  - There is no Profile, Crew or Badges tab.
-  - Old routes are aliases in `app.js`: `#/hunt` goes to Wildlife Spotting; `#/crew`, `#/badges`, `#/hikers` and `#/patches` go to History (with `#/patches` scrolling to the patch collection). Unknown routes go to Trail.
+- **Tabs (4):** Trail, Log Activity, Camp, History. Each has one job: Trail = the journey, Camp = the experience, History = the archive (sits last).
+  - There is no Profile, Crew, Badges or Wildlife Spotting tab. Photo outings start at Camp; the Field Guide and Photo Board live in History.
+  - Old routes are aliases in `app.js`: `#/hunt` and `#/wildlife` open Camp at the Wildlife Observation Area (`openCampPlace`); `#/crew`, `#/badges`, `#/hikers` and `#/patches` go to History and open that panel (`openHistoryPanel`). Unknown routes go to Trail.
 - **Hikers**
   - `at_hikers` is the official roster. Its order is `sort_order`; retire a hiker with `active = false` (they keep their miles).
   - Every activity and photo outing is logged *for a hiker*. The dropdown remembers the last choice (`at.hiker` in localStorage).
@@ -119,21 +119,20 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - The database trigger computes and stores `conversion_factor` and `credited_miles`, so changing a rule never rewrites history.
   - `engine/activities.js` must match the SQL (tests enforce this).
 - **Trail tab**
-  - Expedition progress card, latest pinned dispatch, and the map card.
+  - In page order: the expedition progress card (with "Log an activity"), **Trail Dispatches** (`dispatchSection`: organizer form, the pinned or latest dispatch featured, the rest under "Earlier Dispatches"), and the map card.
   - The map card contains:
     - **Journey progress**: regions as parents and landmarks as children (✓ passed, ➜ next, ○ ahead).
     - A **Previous / Current / Next** strip.
     - The **landmark detail** panel: a real photo or the pixel-art scene, facts, story and Kevin's notes. **No patch art here** (test-enforced); the Trail tab stays about the trail.
     - The Expedition's earned landmark patches sit on the map as icons (clustered when they'd overlap, splitting as you zoom). Hover, click or Enter opens a preview card with the patch, photo, state, mile, date and description. There is no per-hiker patch picker: patches belong to the whole expedition.
-  - There is no "Coming up" card and no separate Landmarks card.
+  - There is no "Coming up" card, no "This Week" card (its numbers are History's Expedition Statistics) and no separate Landmarks card.
 - **Landmark photos**
   - Shown in the detail panel. Comes from `landmarkStory(id).photo` (a hand-picked override) or the generated `LANDMARK_PHOTOS[id]`. Otherwise the pixel art shows, and it is also the fallback if the image fails to load.
   - Every photo is self-hosted in `assets/img/landmarks/`, openly licensed (public domain, CC0, CC BY, CC BY-SA), and captioned with credit, licence link and source link (test-enforced).
   - Refresh photos from GitHub: Actions › "Landmark photos" › Run, which opens a PR so a person reviews every picture.
-- **Camp (the destination)**: the camp itself is the page. Collections live in History.
-  - In page order:
-    1. The camp card: the **3D camp** (or the pixel camp) filling the content width at a tall, viewport-based height, with an optional **Full screen** button (only where the browser supports it). Beneath it: the **Camp Locations** list, **Around Camp Now** and the **Camp Camera Roll** (3D only), and camp stats.
-    2. **Trail Dispatches**, with the dispatch archive.
+- **Camp (the experience)**: the camp itself is the page, and nothing else. Collections and statistics live in History; dispatches live on Trail.
+  - The camp card: the **3D camp** (or the pixel camp) filling the content width at a tall, viewport-based height, with an optional **Full screen** button (only where the browser supports it). Beneath it: the **Camp Locations** list, **Around Camp Now** and the **Camp Camera Roll** (3D only). No stats or dashboard cards (test-enforced).
+  - **Photo outings** (Wildlife Spotting) start from the Wildlife Observation Area's "Go on a photo outing" button. The game covers the camp frame (`campExplorer`: `startOuting`/`closeOuting`); the 3D camp holds still (`holdCamp3d(true)`, so `start()` does nothing) and its stage, sheet and controls are `inert`. "Back to camp", Escape or choosing another Camp Location ends it. Background refreshes never redraw over an outing (`campOutingOpen()` in `busy`).
   - Time of day follows the device clock: morning 5–9, day 9–17, evening 17–21, night 21–5. There are no buttons.
   - Scenery follows the expedition's section, weather follows the season, and there is one bear bag per hiker.
 - **3D camp** (`ui/camp-3d.js` on top of the pure `engine/camp-world.js` and `engine/camp-life.js`; design notes in `docs/camp-3d.md`)
@@ -144,7 +143,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
     - Expedition Bulletin Board: pinned notes on cork (`bulletinBoard`: recent logs, landmarks, patch unlocks, news).
     - Trail Journal Tent: lined journal pages (recent entries; link to the full journal in History).
     - Patch Collection Display: earned patches stitched on a felt blanket, state explorer patches and progress (link to the collection in History).
-    - Wildlife Observation Area: camp photos as polaroids, recent discoveries as find cards, collector stats (link to Wildlife Spotting).
+    - Wildlife Observation Area: "Go on a photo outing", camp photos as polaroids, recent discoveries as find cards, collector stats (link to the Field Guide in History).
     - Trail Map Table: a parchment map of the whole trail with progress, landmarks reached and the next one (link to Trail).
   - Add a place with one `CAMP_LOCATIONS` entry (including its `view`), a prop in `camp-3d.js` and a branch in `campPlaceBody` (views.js).
   - **The hikers live in camp** (`CAMP_ACTIVITIES`): every roster hiker is an NPC doing something that suits the clock and the weather (breakfast and stretching at dawn, chopping and birdwatching by day, stories by the fire at dusk, the shelter at night, under cover in the rain), with a seeded favourite. Hikers who logged today arrive "just back from the trail". They walk round obstacles between spots, never share a spot, and change activity every so often. Between tasks they look around, sip coffee, check the map, adjust a pack or stretch (`HIKER_GESTURES`, `gesturesFor`), and wave when the player walks up. Tap one to see what they're up to.
@@ -155,7 +154,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Quality tiers (`QUALITY`: low, medium, high) scale pixel ratio, antialiasing, trees, plants, ground texture, particles, visitors and shadows. On Medium and High only still scenery casts real shadows and the map is drawn once per scene build; moving things (`userData.moving`) keep blob shadows. Repeated scenery is instanced; the audit and roadmap are in `docs/camp-3d.md` §5 and §8. The tier is picked from the device (`qualityTier`) and steps down when frames stay slow. Settings (quality, camera sensitivity) live only in the session.
   - Falls back to the pixel camp when WebGL2 is missing, three.js fails to load, the context is lost, frames stay below ~10 fps on Low, or the user picks "Use the 2D camp instead" (an "Explore the 3D camp" button brings it back).
 - **Trail Dispatches**
-  - Rows in `at_dispatches`, posted from Camp by organizers. Organizers are listed in `at_organizers` and added via the SQL editor.
+  - Rows in `at_dispatches`, shown and posted on the Trail page (organizers see "Write a dispatch"). Organizers are listed in `at_organizers` and added via the SQL editor.
   - Limited Markdown is rendered safely (https links only).
   - Evergreen landmark commentary belongs in `kevin` fields in `landmark-stories.js` instead.
 - **Badges**, computed per hiker in `hikerBadges()`. Earn dates come from server-computed marks and are never stored, so renaming badge ids is safe.
@@ -180,19 +179,21 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
   - Celebrated once for everyone after logging: "Patch Earned: X. The Expedition reached X.", "State Patch Earned: X Explorer" and "The Expedition: <milestone>!" lines.
   - Art is original SVG (circle, shield or hexagon, merrow edge, thread texture, a landmark-specific scene, ribbon banner). No ATC logos or real patch designs.
 - **Wildlife Spotting**
-  - The restored Oregon Trail DLE hunt, re-themed as photography with the same pacing and renderer. The data-only theme is in `expedition-themes.js`; rules are in `expedition.js`.
+  - The restored Oregon Trail DLE hunt, re-themed as photography with the same pacing and renderer, played as a photo outing from Camp's Wildlife Observation Area (no tab of its own). The data-only theme is in `expedition-themes.js`; rules are in `expedition.js`.
   - Species follow the section's habitat and the season. Rare finds are rolled at 5% and legends at 0.4% per outing.
   - **Scoring:** each species scores once per outing; repeats score 0 and show "SEEN". Species new to the field guide score ×2. "New" is judged against the chosen spotter's guide, or everyone's if nobody is chosen; with no guide there is no bonus.
   - **Density:** one spawn every 1.8 s, at most 4 animals in view, groups of at most 3.
-  - **Field guide:** groups, "N to go", Trail sections completion (a species counts only when photographed *in* its section) and facts. It **follows the spotter**: choosing who's spotting opens their guide, so it matches what scores "NEW ×2"; its own menu can still show another hiker or the whole expedition. A found entry shows rarity (Uncommon / Rare find / Legend), first and last photographed (and by whom), photos and outings, every finder (whole-expedition view), range, season, how it moves, where it was spotted and its photo points. A "This expedition: N species" line appears when it differs from the lifetime count.
+  - **Field guide** (History's Wildlife Discoveries panel, with the Photo Board): groups, "N to go", Trail sections completion (a species counts only when photographed *in* its section) and facts. It **follows the spotter**: choosing who's spotting opens their guide, so it matches what scores "NEW ×2"; its own menu can still show another hiker or the whole expedition. A found entry shows rarity (Uncommon / Rare find / Legend), first and last photographed (and by whom), photos and outings, every finder (whole-expedition view), range, season, how it moves, where it was spotted and its photo points. A "This expedition: N species" line appears when it differs from the lifetime count.
   - **A hiker is required to play** (`beforeStart` in `expedition-view.js`): no anonymous outings. The spotter is fixed at the start of the round, and the outing saves for them (`recordExpedition` refuses without a hiker). Discoveries register when the outing is saved, not per photo.
   - **Behaviour classes:** every species inherits one of 14 classes in `BEHAVIOR` (`expedition-themes.js`, via `behavior: BEHAVIOR.<class>`): grazer, skittish, predator, largeMammal, groundBird, songbird, raptor, owl, swimmer, butterfly, darter, hoverer, crawler, cryptid. A class sets pace, pauses, wobble (erratic paths), hover, how wary it is, and how it reacts to the camera: `flee` (bolt away at ×`flee`), `flush` (birds burst up and fly off-screen) or `ignore` (bears, moose, crawlers carry on). `react === "ignore"` ⇔ `!skittish` (test-enforced). Grazers freeze head-up before bolting; skittish animals zigzag. The field guide shows the class as "How it moves". Reduced motion still scales every speed by 0.6.
   - **One object per species** (56 today: 50 regular plus 6 legends). Its `where` says where it lives (spawn weights for common/uncommon, a habitat list or `"everywhere"` for rare/legend); `habitatsFrom()` builds every habitat's `animals`/`rare`/`legends` tables from it. `skittish` comes from the behaviour class and rare/legend `value` from `RARITY_VALUE`. `tests/at/species-catalogue.test.js` validates the whole catalogue.
   - Rules: no hunting words (test-enforced). The database caps species *per outing* (40, and never more than photos taken), not the catalogue, so the guide can keep growing without SQL. New activities should be **new theme objects**, not new engines.
-- **History** (the expedition archive). A jump list under the title (Journal, Patches, Hikers & badges, Register, Your activities) moves focus to each section. In page order:
+- **History** (the expedition archive). Every section is a collapsible panel (`historyPanel`: `details.history-panel` whose summary holds the h2 and a count, e.g. "Expedition Patch Collection (12 of 26)"). Panels start closed; the ones opened stay open across re-renders for the session (`openPanels`, in memory: localStorage holds only the hiker). Your Activities opens while an entry is being edited. In page order:
   - **Expedition Journal** (top): one dated record, newest first, of landmarks and group milestones (who carried it), the expedition's first photo of each species (rare and legendary finds flagged), field-guide milestones (10, 25, complete), trail sections completed, and every hiker's badge unlocks (species badges grouped per hiker per day). Built by `expeditionJournal()` from data already loaded; no new tables or RPCs. Wildlife stories cover the current expedition only (`wildlifeSince()`), while collections stay lifetime. 12 entries show, the rest sit under "Older Entries".
   - **The Expedition Patch Collection** (shared by everyone; see Landmark Patches).
+  - **Wildlife Discoveries (N Species)**: the Field Guide and the Photo Board (outing points per hiker).
   - **The Hikers**: picker plus per-hiker panel showing miles, share, week, achievement and species badge counts, the **Badge Collection** bar, achievement badges, a collapsible **Species Badges** grid, milestones and their journey. Tapping a hiker in camp chooses them here.
+  - **Expedition Statistics**: miles together, this week, activities, landmarks passed, hikers on the trail this week, the next group milestone, and This Week by Hiker (each links to their panel).
   - The **Trail Register**.
   - **Your Activities**: this device's own activities, editable and deletable.
   - The "About this device" card (with the Device ID) was removed on request. To make a device an organizer, see `docs/deployment.md` §2b (find its `user_id` on an activity it logged).
@@ -201,7 +202,7 @@ A friends' fitness game. A small group of real people walk, hike, run and cycle 
 
 - **Add or retire a hiker:** write a new migration, e.g. `insert into public.at_hikers (name, sort_order) values ('Name', 12) on conflict (name) do nothing;`, and give the owner the SQL inline. Every dropdown, Camp and the boards pick it up automatically.
 - **Add Kevin's Trail Note or landmark facts:** edit `assets/js/at/trail/landmark-stories.js` (the owner can use the GitHub pencil icon).
-- **Add a dispatch:** post it from Camp as an organizer. No code change.
+- **Add a dispatch:** post it from the Trail page as an organizer. No code change.
 - **Add landmark photos:** run the "Landmark photos" workflow, then review the PR: look at every image (searches sometimes return the wrong place) and rewrite the alt text by hand. Add rejected Commons file titles to `REJECTED` in the script and re-run with those ids. For a hand-picked photo, add `photo` to the landmark's story.
 - **Add a species:** follow `docs/adding-species.md`. In short: one object in `expedition-themes.js` (in `TRAIL_EXPANSION` or a new wave list added to `SPECIES`) with its `where`, `behavior: BEHAVIOR.<class>` (pick the closest class; only add a class if none fits), fact, range and pixel `parts`. Spawn tables, the guide, hints, badges, collector stats and the journal all derive from it; run `npm test`. Never rename or remove a photographed species id. No SQL needed.
 - **Add a landmark (and its patch):** add the landmark to `appalachian-trail.js`, then an entry in `landmark-patches.js` (`shape`, `banner` ≤ 13 characters, `description`, optional `since: { year, note }`, and `resources` each with `kind` and `offers`; a new state also needs a `STATE_EMBLEMS` entry; trivia comes from the landmark's `trivia` in `appalachian-trail.js`) and, ideally, a motif in `patch-art.js` (otherwise a scene for its `kind` is used). Earning, map icons, History's collection, Camp's patch display, sorts and milestones derive from it; `tests/at/patches.test.js` checks every patch. No SQL needed.

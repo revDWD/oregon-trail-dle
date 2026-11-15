@@ -134,11 +134,15 @@ export function locationView(loc, { angle = 0 } = {}) {
   }
   const side = v.side || 0;
   const ahead = v.ahead || 0;
+  const x = loc.x + ux * v.distance + uz * side;
+  const z = loc.z + uz * v.distance - ux * side;
+  // Heights are above the place's own ground; the camera never dips below the slope where it stands.
+  const g = groundHeight(loc.x, loc.z);
   return {
-    x: loc.x + ux * v.distance + uz * side,
-    y: v.height,
-    z: loc.z + uz * v.distance - ux * side,
-    look: { x: loc.x - ux * ahead, y: v.look, z: loc.z - uz * ahead }
+    x,
+    y: Math.max(g + v.height, groundHeight(x, z) + 0.6),
+    z,
+    look: { x: loc.x - ux * ahead, y: g + v.look, z: loc.z - uz * ahead }
   };
 }
 
@@ -206,8 +210,9 @@ export const CAMERA = Object.freeze({ distance: 6.5, minDistance: 1.6, minPitch:
 export const clampPitch = (pitch) => Math.max(CAMERA.minPitch, Math.min(CAMERA.maxPitch, pitch));
 
 // Third-person follow camera. Pulled in when a tall object (or the edge of the camp) would sit between
-// the camera and the hiker, so the view never ends up inside the shelter or a tree.
-export function followCamera(target, yaw, pitch, colliders = [], { distance = CAMERA.distance, bound = WORLD_RADIUS + 6 } = {}) {
+// the camera and the hiker, so the view never ends up inside the shelter or a tree. Heights follow the
+// ground under the hiker (`target.y`, 0 by default), and the camera stays above the slope behind them.
+export function followCamera(target, yaw, pitch, colliders = [], { distance = CAMERA.distance, bound = WORLD_RADIUS + 6, ground = null } = {}) {
   const p = clampPitch(pitch);
   const flat = Math.cos(p);
   const dir = { x: Math.sin(yaw) * flat, y: Math.sin(p), z: Math.cos(yaw) * flat };
@@ -220,8 +225,11 @@ export function followCamera(target, yaw, pitch, colliders = [], { distance = CA
     const hit = Math.hypot(x, z) > bound || colliders.some((c) => c.tall && Math.hypot(x - c.x, z - c.z) < c.radius + 0.25);
     if (hit) { reach = Math.max(CAMERA.minDistance, t - distance / steps); break; }
   }
-  const y = CAMERA.height + dir.y * reach;
-  return { x: target.x + dir.x * reach, y, z: target.z + dir.z * reach, look: { x: target.x, y: CAMERA.height, z: target.z }, distance: reach };
+  const base = (target.y || 0) + CAMERA.height;
+  const x = target.x + dir.x * reach;
+  const z = target.z + dir.z * reach;
+  const y = Math.max(base + dir.y * reach, ground ? ground(x, z) + 0.5 : -Infinity);
+  return { x, y, z, look: { x: target.x, y: base, z: target.z }, distance: reach };
 }
 
 // Rendering budget from what the device tells us. Low keeps phones cool; nothing here is required
@@ -311,15 +319,142 @@ export function seededRandom(seed) {
   };
 }
 
-// The forest ring: trees between the camp edge and the far hills, never on a path. `pineShare` is the
-// section's share of evergreens (engine/camp-life.js REGION_FLORA).
+// ---- Terrain: the camp sits in a clearing on a wooded hillside ----------------------------------
+// groundHeight(x, z) is the ground's height in metres, the same on every device. Inside camp the
+// ground rolls gently and rises toward the shelter (north) so it sits up on a rise; past the clearing's
+// ragged edge the banks climb into wooded slopes, except where the trail notches through (north and
+// south along x = 0) and where the ground falls away below the overlook (the vista, east-south-east).
+// Everything you can use or bump into stands on a level pad (TERRAIN_PADS), so props, seats and spots
+// keep their heights; the fire's pad is at 0. A pond sits in a hollow west of camp.
+const smooth = (a, b, t) => { const k = Math.max(0, Math.min(1, (t - a) / (b - a))); return k * k * (3 - 2 * k); };
+function hash2(ix, iz) {
+  let h = Math.imul(ix, 374761393) + Math.imul(iz, 668265263) + 0x5bd1e995;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+// Smooth value noise, 0..1.
+function noise2(x, z) {
+  const ix = Math.floor(x); const iz = Math.floor(z);
+  const fx = x - ix; const fz = z - iz;
+  const u = fx * fx * (3 - 2 * fx); const v = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz); const b = hash2(ix + 1, iz); const c = hash2(ix, iz + 1); const d = hash2(ix + 1, iz + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (x, z) => noise2(x, z) * 0.62 + noise2(x * 2.1 + 17, z * 2.1 - 9) * 0.26 + noise2(x * 4.3 - 31, z * 4.3 + 5) * 0.12;
+
+export const TERRAIN = Object.freeze({
+  rise: 0.036, // how much the camp climbs per metre toward the shelter
+  roll: 0.3, // gentle rolls inside the clearing (metres, peak to peak)
+  bank: 7.5, // how high the wooded banks climb past the clearing
+  edge: WORLD_RADIUS + 1.5, // where the clearing ends (give or take its ragged edge)
+  vista: { angle: Math.atan2(17, 7), width: 0.5, drop: 4 }, // below the overlook bench
+  pond: { x: -29, z: 13, radius: 8, depth: 0.45 },
+  span: 140 // the terrain mesh's width; the woods beyond fade into fog and the far hills
+});
+
+// How much of the vista lies in direction `angle` (heading atan2(x, z)): 1 straight out, 0 off to the side.
+export function vistaShare(angle) {
+  const d = Math.atan2(Math.sin(angle - TERRAIN.vista.angle), Math.cos(angle - TERRAIN.vista.angle));
+  return 1 - smooth(TERRAIN.vista.width * 0.4, TERRAIN.vista.width, Math.abs(d));
+}
+
+// Where the clearing ends in direction `angle`: a ragged edge, never inside the walkable camp.
+export function clearingEdge(angle) {
+  return Math.max(WORLD_RADIUS + 0.5, TERRAIN.edge + (noise2(Math.cos(angle) * 2.2 + 40, Math.sin(angle) * 2.2 + 40) - 0.5) * 4);
+}
+
+// The camp's broad lie: up toward the shelter (north), with one slow swell. Pads level to this; the
+// slope eases off past the clearing so the banks do the climbing.
+function broadHeight(x, z) {
+  return -Math.max(-16, Math.min(26, z)) * TERRAIN.rise + (noise2(x / 16 + 3, z / 16 - 7) - 0.5) * TERRAIN.roll;
+}
+
+// `fine` scales the small rolls (they fade out over the pads).
+function baseHeight(x, z, fine = 1) {
+  const r = Math.hypot(x, z);
+  const angle = Math.atan2(x, z);
+  const inside = 1 - smooth(TERRAIN.edge - 6, TERRAIN.edge + 2, r);
+  let h = broadHeight(x, z) + (fbm(x / 7 + 13, z / 7 - 2) - 0.5) * TERRAIN.roll * fine;
+  const out = smooth(clearingEdge(angle) - 1, clearingEdge(angle) + 22, r);
+  const trail = 1 - smooth(2.5, 9, Math.abs(x)); // the trail's notch through the banks
+  const vista = vistaShare(angle);
+  const bank = TERRAIN.bank * (0.7 + fbm(x / 9, z / 9) * 0.8) * (1 - 0.55 * trail * (1 - inside));
+  h += out * bank * (1 - vista) - out * TERRAIN.vista.drop * vista;
+  // Knolls and hollows in the woods.
+  h += out * (fbm(x / 6 - 11, z / 6 + 23) - 0.5) * 2.4;
+  return h;
+}
+
+// Pads: the small rolls smooth out under everything you can use or bump into, so nothing rocks on a
+// bump; the broad lie stays (it is gentle, a few centimetres across a tent). The fire circle and the
+// shelter are `flat`: truly level, blending back into the slope by `radius + PAD_BLEND`.
+const PAD_BLEND = 2;
+const FLAT_BLEND = 3.5;
+const padOf = (o, extra) => ({ x: o.x, z: o.z, radius: o.radius + extra });
+export const TERRAIN_PADS = Object.freeze([
+  { x: 0, z: 0, radius: 4, flat: true }, // the fire and its benches
+  ...CAMP_LOCATIONS.filter((l) => l.id !== "roster").map((l) => padOf(l, 0.6)),
+  ...CAMP_PROPS.map((p) => (p.id === "shelter" ? { ...padOf(p, 1.4), flat: true } : padOf(p, 0.4))),
+  ...TENT_SPOTS.map((t) => padOf(t, 0.3)),
+  ...LANTERN_SPOTS.map((l) => padOf(l, 0.35))
+].map((p) => Object.freeze({ ...p, level: broadHeight(p.x, p.z) - broadHeight(0, 0) })));
+
+const ORIGIN = broadHeight(0, 0);
+
+export function groundHeight(x, z) {
+  let fine = 1;
+  let flat = 0;
+  let level = 0;
+  if (Math.hypot(x, z) < TERRAIN.edge + 4) {
+    for (const p of TERRAIN_PADS) {
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (p.flat && d < p.radius + FLAT_BLEND) {
+        const w = 1 - smooth(p.radius, p.radius + FLAT_BLEND, d);
+        if (w > flat) { flat = w; level = p.level; }
+      }
+      if (d < p.radius + PAD_BLEND) fine = Math.min(fine, smooth(p.radius, p.radius + PAD_BLEND, d));
+    }
+  }
+  let h = baseHeight(x, z, fine) - ORIGIN;
+  // The pond's hollow: a flat shore at `level`, dipping under the water in the middle.
+  const pond = TERRAIN.pond;
+  const dp = Math.hypot(x - pond.x, z - pond.z);
+  if (dp < pond.radius + 5) {
+    const shore = 1 - smooth(pond.radius - 1, pond.radius + 5, dp);
+    const dip = dp < pond.radius ? pond.depth * (1 - (dp / pond.radius) ** 2) : 0;
+    h = h + (POND_LEVEL - h) * shore - dip;
+  }
+  return h + (level - h) * flat;
+}
+
+// The pond lies in a hollow a little below the camp's west edge.
+const POND_LEVEL = broadHeight(-20, 9) - ORIGIN - 0.2;
+export const POND_SURFACE = POND_LEVEL - 0.06;
+
+// The forest: thick on the banks, thinning to a few stragglers at the clearing's edge, in groves
+// (noise) rather than a ring, with the trail's corridor (x = 0) and the overlook's vista left open
+// and nothing in the pond. Rejection sampling keeps `count` exact and the result deterministic.
+// `pineShare` is the section's share of evergreens (engine/camp-life.js REGION_FLORA).
 export function forestRing(count, seed = 7, pineShare = 0.6) {
   const rand = seededRandom(seed);
-  return Array.from({ length: count }, (_, i) => {
-    const angle = (i / count) * Math.PI * 2 + rand() * 0.25;
-    const r = WORLD_RADIUS + 1.5 + rand() * 9;
-    return { x: Math.sin(angle) * r, z: Math.cos(angle) * r, scale: 0.8 + rand() * 0.7, kind: rand() < pineShare ? "pine" : "broadleaf" };
-  });
+  const trees = [];
+  const pond = TERRAIN.pond;
+  for (let tries = 0; trees.length < count && tries < count * 60; tries += 1) {
+    const angle = rand() * Math.PI * 2;
+    const edge = clearingEdge(angle);
+    const r = edge + 0.5 + rand() ** 1.4 * 24;
+    const x = Math.sin(angle) * r;
+    const z = Math.cos(angle) * r;
+    const near = 1 - smooth(edge + 0.5, edge + 6, r); // stragglers by the edge are rare
+    const grove = smooth(0.3, 0.68, fbm(x / 11 + 5, z / 11 - 3));
+    const keep = (0.2 + grove * 0.8) * (1 - near * 0.7) * (1 - vistaShare(angle) * 0.85)
+      * smooth(2.4, 4.5, Math.abs(x)) * smooth(pond.radius + 0.5, pond.radius + 2, Math.hypot(x - pond.x, z - pond.z));
+    const roll = rand();
+    if (roll > keep) continue;
+    if (trees.some((t) => Math.hypot(t.x - x, t.z - z) < 1.6)) continue;
+    trees.push({ x, z, scale: 0.75 + rand() * 0.75 + grove * 0.2, kind: rand() < pineShare ? "pine" : "broadleaf" });
+  }
+  return trees;
 }
 
 // ---- Camp boards: what each location shows, built from data already loaded ------------------------

@@ -16,7 +16,7 @@ import { h, fill } from "./dom.js";
 import { SCENES, SHIRTS, HATS } from "./camp-scene.js";
 import {
   BENCH_SEATS, CAMP_LOCATIONS, CAMP_MODELS, CAMP_PROPS, CAMP_START, FIRE_BENCHES, LANTERN_SPOTS, MOVE_KEYS, PLAYER_RADIUS, QUALITY, RUN_SPEED,
-  TENT_SPOTS, WALK_SPEED, WORLD_RADIUS, blocksView, campColliders, campLighting, clampPitch, followCamera, forestRing, headingOf,
+  POND_SURFACE, TENT_SPOTS, TERRAIN, WALK_SPEED, WORLD_RADIUS, blocksView, campColliders, campLighting, clampPitch, followCamera, forestRing, groundHeight, headingOf,
   joystickVector, keysVector, locationView, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
 } from "../engine/camp-world.js";
 import {
@@ -29,7 +29,8 @@ import {
 const session = { webgl: null, degraded: false, optOut: false, quality: "auto", sensitivity: 1, sound: true, photos: [] };
 const MAX_PHOTOS = 12;
 const PHOTO_WIDTH = 960; // camera roll pictures are scaled down to this width to keep memory small
-const EYE = 1.55; // the photo camera's height
+const EYE = 1.55; // the photo camera's height above the ground
+const eyeAt = (p) => groundHeight(p.x, p.z) + EYE;
 const FOV = 55;
 const MIN_FOV = 20;
 let threeModule = null;
@@ -228,19 +229,22 @@ function mat(w, color, { basic = false, opacity = 1, fog = true, emissive = 0, a
   return m;
 }
 
+// Anything placed straight into the scene stands on the terrain: its y is measured from the ground there.
+const lifted = (w, parent, x, y, z, lift) => (lift && parent === w.dynamic ? y + groundHeight(x, z) : y);
+
 // A mesh in `parent` at (x, y, z), turned (rx, ry, rz) and stretched (sx, sy, sz).
-function part(w, parent, [type, ...args], color, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, ...look } = {}) {
+function part(w, parent, [type, ...args], color, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, lift = true, ...look } = {}) {
   const mesh = new w.THREE.Mesh(geo(w, type, ...args), mat(w, color, look));
-  mesh.position.set(x, y, z);
+  mesh.position.set(x, lifted(w, parent, x, y, z, lift), z);
   mesh.rotation.set(rx, ry, rz);
   mesh.scale.set(sx, sy, sz);
   parent.add(mesh);
   return mesh;
 }
 
-function group(w, parent, { x = 0, y = 0, z = 0, ry = 0 } = {}) {
+function group(w, parent, { x = 0, y = 0, z = 0, ry = 0, lift = true } = {}) {
   const g = new w.THREE.Group();
-  g.position.set(x, y, z);
+  g.position.set(x, lifted(w, parent, x, y, z, lift), z);
   g.rotation.y = ry;
   parent.add(g);
   return g;
@@ -713,6 +717,25 @@ function build(w, ctx, data) {
   // the cheap blob shadows under people and props instead.
   w.scene.background = new T.Color(light.sky);
   w.scene.fog = new T.Fog(light.fog, light.fogNear, light.fogFar);
+  // A sky dome fading from the fog's colour at the horizon to the sky overhead, so the far woods melt
+  // into the haze instead of ending against a flat colour. One draw call, no texture.
+  const dome = new T.SphereGeometry(150, 24, 12);
+  const domePos = dome.getAttribute("position");
+  const horizon = new T.Color(light.fog);
+  const zenith = new T.Color(light.sky);
+  const shade = new T.Color();
+  const domeColours = new Float32Array(domePos.count * 3);
+  for (let i = 0; i < domePos.count; i += 1) {
+    const up = Math.max(0, domePos.getY(i) / 150);
+    shade.copy(horizon).lerp(zenith, Math.min(1, Math.sqrt(up) * 1.6));
+    domeColours.set([shade.r, shade.g, shade.b], i * 3);
+  }
+  dome.setAttribute("color", new T.Float32BufferAttribute(domeColours, 3));
+  const sky = new T.Mesh(dome, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide, fog: false, depthWrite: false }));
+  sky.userData.noShadow = true;
+  sky.renderOrder = -1;
+  w.disposables.push(dome, sky.material);
+  root.add(sky);
   w.renderer.toneMappingExposure = light.exposure || 1;
   root.add(new T.HemisphereLight(light.ambient, hex(look.ground), light.ambientIntensity));
   const sun = new T.DirectionalLight(light.sun, light.sunIntensity);
@@ -724,27 +747,61 @@ function build(w, ctx, data) {
     Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 75 });
     sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.bias = -0.0006;
-    sun.shadow.normalBias = 0.03;
+    sun.shadow.normalBias = 0.045;
     sun.shadow.radius = 3;
     sun.shadow.intensity = light.shadow ?? 0.5;
     root.add(sun.target);
     w.disposables.push({ dispose: () => sun.dispose() });
   }
 
-  // Ground: the wide forest floor, then the painted clearing (worn paths, ash, speckles) and the trail
-  // running on through the woods either side.
+  // Ground: one sculpted terrain mesh (groundHeight in camp-world.js). The painted clearing (worn paths,
+  // ash, speckles) is its texture; beyond it, the forest floor is shaded by height and slope so banks,
+  // knolls and the drop below the overlook read even in flat light. The trail runs on through the woods.
   const ground = hex(look.ground);
   const dirt = mix(ground, 0x9a8462, 0.65);
   const flat = (mesh) => { mesh.userData.receiveOnly = true; return mesh; };
-  flat(part(w, root, ["CircleGeometry", 1, 48], light.snow ? mix(ground, 0xf4f6fb, 0.5) : ground, { rx: -Math.PI / 2, sx: 80, sy: 80 }));
   const floorTex = groundTexture(w, look, light);
   floorTex.anisotropy = Math.min(4, w.renderer.capabilities.getMaxAnisotropy());
-  const floor = flat(new T.Mesh(geo(w, "PlaneGeometry", GROUND_SPAN, GROUND_SPAN), new T.MeshLambertMaterial({ map: floorTex })));
-  w.disposables.push(floor.material);
-  floor.position.y = 0.008;
-  floor.rotation.x = -Math.PI / 2;
-  root.add(floor);
-  [-1, 1].forEach((s) => flat(part(w, root, ["PlaneGeometry", 1, 1], dirt, { y: 0.006, z: s * (GROUND_SPAN / 2 + 12), rx: -Math.PI / 2, sx: 1.2, sy: 24 })));
+  const span = TERRAIN.span;
+  const segments = { low: 80, medium: 120, high: 160 }[w.tier.id] || 100;
+  const land = new T.PlaneGeometry(span, span, segments, segments);
+  land.rotateX(-Math.PI / 2);
+  const pos = land.getAttribute("position");
+  const uv = land.getAttribute("uv");
+  const tint = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const y = groundHeight(x, z);
+    pos.setY(i, y);
+    uv.setXY(i, (x + GROUND_SPAN / 2) / GROUND_SPAN, (GROUND_SPAN / 2 - z) / GROUND_SPAN);
+    // Darker in hollows and the deep woods, lighter on crests: a stylised take on ambient occlusion.
+    const out = Math.min(1, Math.max(0, (Math.hypot(x, z) - WORLD_RADIUS) / 20));
+    const relief = y - groundHeight(x * 0.9, z * 0.9);
+    const k = Math.min(1.12, Math.max(0.72, 1 - out * 0.14 + relief * 0.05));
+    tint.set([k, k, k * 0.97], i * 3);
+  }
+  land.setAttribute("color", new T.Float32BufferAttribute(tint, 3));
+  land.computeVertexNormals();
+  const terrain = flat(new T.Mesh(land, new T.MeshLambertMaterial({ map: floorTex, vertexColors: true })));
+  w.disposables.push(land, terrain.material);
+  root.add(terrain);
+  // The trail itself, a ribbon draped over the ground from the clearing's edge into the woods each way.
+  [-1, 1].forEach((s) => {
+    const length = span / 2 - GROUND_SPAN / 2 + 2;
+    const ribbon = new T.PlaneGeometry(1.2, length, 1, 40);
+    ribbon.rotateX(-Math.PI / 2);
+    const rp = ribbon.getAttribute("position");
+    for (let i = 0; i < rp.count; i += 1) {
+      const z = s * (GROUND_SPAN / 2 - 1 + length / 2) + rp.getZ(i);
+      rp.setZ(i, z);
+      rp.setY(i, groundHeight(rp.getX(i), z) + 0.03);
+    }
+    ribbon.computeVertexNormals();
+    const strip = flat(new T.Mesh(ribbon, mat(w, dirt)));
+    w.disposables.push(ribbon);
+    root.add(strip);
+  });
 
   // Repeated scenery is instanced: one draw call per kind of thing, however many there are.
   const dummy = new T.Object3D();
@@ -769,7 +826,7 @@ function build(w, ctx, data) {
     const a = (i / 12) * Math.PI * 2 + rand() * 0.3;
     const r = 46 + rand() * 8;
     const hgt = 6 + rand() * 6;
-    nearHills.push({ x: Math.sin(a) * r, y: hgt / 2, z: Math.cos(a) * r, sx: 9 + rand() * 6, sy: hgt, sz: 9 + rand() * 6, ry: rand() });
+    nearHills.push({ x: Math.sin(a) * r, y: hgt / 2 + groundHeight(Math.sin(a) * r, Math.cos(a) * r) - 1, z: Math.cos(a) * r, sx: 9 + rand() * 6, sy: hgt, sz: 9 + rand() * 6, ry: rand() });
   }
   for (let i = 0; i < 14; i += 1) {
     const a = (i / 14) * Math.PI * 2 + rand() * 0.2;
@@ -777,8 +834,9 @@ function build(w, ctx, data) {
     const hgt = 16 + rand() * 14;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
-    farHills.push({ x, y: hgt / 2, z, sx: 16 + rand() * 10, sy: hgt, sz: 16 + rand() * 10 });
-    caps.push({ x, y: hgt * 0.86, z, sx: 4.5, sy: hgt * 0.28, sz: 4.5 });
+    // Beyond the terrain mesh: their feet sit a little up, level with the wooded banks.
+    farHills.push({ x, y: hgt / 2 + 4, z, sx: 16 + rand() * 10, sy: hgt, sz: 16 + rand() * 10 });
+    caps.push({ x, y: hgt * 0.86 + 4, z, sx: 4.5, sy: hgt * 0.28, sz: 4.5 });
   }
   [
     instanced(nearHills, geo(w, "ConeGeometry", 1, 1, 6), mix(hex(look.near), light.fog, 0.15), placeShape),
@@ -786,22 +844,10 @@ function build(w, ctx, data) {
     look.snowcaps ? instanced(caps, geo(w, "ConeGeometry", 1, 1, 7), mix(0xffffff, light.sky, 0.2), placeShape, { fog: false }) : null
   ].forEach((m) => { if (m) m.userData.noShadow = true; });
 
-  // Terrain: low knolls roll away beyond the walkable clearing, so the camp sits in a hollow of the woods
-  // rather than on a flat disc. One instanced mesh.
-  const knolls = [];
-  for (let i = 0; i < 16; i += 1) {
-    const a = (i / 16) * Math.PI * 2 + rand() * 0.25;
-    if (Math.abs(Math.sin(a)) < 0.12) continue; // keep the trail's gap open
-    const r = WORLD_RADIUS + 5 + rand() * 9;
-    const hgt = 0.7 + rand() * 1.4;
-    knolls.push({ x: Math.sin(a) * r, y: -hgt * 0.35, z: Math.cos(a) * r, sx: 5 + rand() * 4, sy: hgt, sz: 4 + rand() * 3, ry: a });
-  }
-  const knollMesh = instanced(knolls, geo(w, "SphereGeometry", 1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mix(ground, hex(look.near), 0.3), placeShape);
-  if (knollMesh) knollMesh.userData.receiveOnly = true;
-
-  // Water and boulders where the section has them.
-  const water = look.water ? { x: -29, z: 13, r: 8 } : null;
-  if (water) flat(part(w, root, ["CircleGeometry", 1, 32], 0x5d8fb0, { x: water.x, y: 0.03, z: water.z, rx: -Math.PI / 2, sx: water.r, sy: water.r * 0.7 }));
+  // Water and boulders where the section has them. The pond fills its hollow in the terrain.
+  const pond = TERRAIN.pond;
+  const water = look.water ? { x: pond.x, z: pond.z, r: pond.radius } : null;
+  if (water) flat(part(w, root, ["CircleGeometry", 1, 40], 0x5d8fb0, { x: water.x, y: POND_SURFACE, z: water.z, rx: -Math.PI / 2, sx: water.r, sy: water.r, lift: false }));
   if (look.rocks) {
     const rocks = [];
     for (let i = 0; i < 9; i += 1) {
@@ -809,44 +855,47 @@ function build(w, ctx, data) {
       if (Math.abs(Math.sin(a)) < 0.15) continue;
       const r = 21.8 + rand() * 2;
       const s = 0.5 + rand() * 0.8;
-      rocks.push({ x: Math.sin(a) * r, y: s * 0.4, z: Math.cos(a) * r, sx: s * 1.3, sy: s, sz: s, ry: rand() * 3 });
+      const x = Math.sin(a) * r;
+      const z = Math.cos(a) * r;
+      rocks.push({ x, y: s * 0.3 + groundHeight(x, z), z, sx: s * 1.3, sy: s, sz: s, ry: rand() * 3 });
     }
     instanced(rocks, geo(w, "DodecahedronGeometry", 1, 0), STONE, placeShape);
   }
 
-  // The forest ring, instanced (two draw calls per kind, however many trees). The section sets the
+  // The forest, instanced (two draw calls per kind, however many trees): groves climbing the banks,
+  // the trail's corridor and the overlook's view left open (forestRing). The section sets the
   // evergreen share (REGION_FLORA in camp-life.js).
   const flora = floraFor(ctx.scene);
   const trees = forestRing(w.tier.trees, 7, look.spruce ? Math.max(flora.pine, 0.85) : flora.pine)
-    .map((t) => (Math.abs(t.x) < 1.8 ? { ...t, x: t.x + Math.sign(t.x || 1) * 2.4 } : t))
-    .filter((t) => !water || Math.hypot(t.x - water.x, t.z - water.z) > water.r + 1);
+    .map((t) => ({ ...t, y: groundHeight(t.x, t.z) - 0.05 }));
   const pines = trees.filter((t) => t.kind === "pine");
   const broad = trees.filter((t) => t.kind !== "pine");
   const near = hex(look.near);
   [
-    instanced(trees, geo(w, "CylinderGeometry", 0.14, 0.2, 1, 6), WOOD_DARK, (t) => { reset(); dummy.position.set(t.x, 0.6 * t.scale, t.z); dummy.scale.set(t.scale, 1.2 * t.scale, t.scale); }),
-    instanced(pines, geo(w, "ConeGeometry", 1, 1, 7), mix(near, 0x1f3a2a, look.spruce ? 0.45 : 0.25), (t) => { reset(); dummy.position.set(t.x, 1 + 1.4 * t.scale, t.z); dummy.scale.set(1.1 * t.scale, 2.8 * t.scale, 1.1 * t.scale); }),
-    instanced(broad, geo(w, "IcosahedronGeometry", 1, 0), near, (t) => { reset(); dummy.position.set(t.x, 1.3 + 1.1 * t.scale, t.z); dummy.rotation.set(0, t.x, 0); dummy.scale.set(1.3 * t.scale, 1.2 * t.scale, 1.3 * t.scale); })
+    instanced(trees, geo(w, "CylinderGeometry", 0.14, 0.2, 1, 6), WOOD_DARK, (t) => { reset(); dummy.position.set(t.x, t.y + 0.6 * t.scale, t.z); dummy.scale.set(t.scale, 1.2 * t.scale, t.scale); }),
+    instanced(pines, geo(w, "ConeGeometry", 1, 1, 7), mix(near, 0x1f3a2a, look.spruce ? 0.45 : 0.25), (t) => { reset(); dummy.position.set(t.x, t.y + 1 + 1.4 * t.scale, t.z); dummy.scale.set(1.1 * t.scale, 2.8 * t.scale, 1.1 * t.scale); }),
+    instanced(broad, geo(w, "IcosahedronGeometry", 1, 0), near, (t) => { reset(); dummy.position.set(t.x, t.y + 1.3 + 1.1 * t.scale, t.z); dummy.rotation.set(0, t.x, 0); dummy.scale.set(1.3 * t.scale, 1.2 * t.scale, 1.3 * t.scale); })
   ].forEach((m, i) => { if (!m) return; w.occluders.push(m); if (i) varyColours(m, 71 + i, 0.05); });
 
   // The section's undergrowth round the clearing, one instanced mesh per kind of plant. Thickets and
   // boulders are solid, so you (and the hikers) walk round them.
   const plants = campFlora(ctx.scene, w.tier.flora, { seed: ctx.scene.length * 7 + 3,
     colliders: campColliders({ tents: TENT_SPOTS.length, extra: LANTERN_SPOTS }), avoid: allActivitySpots() })
-    .filter((f) => !water || Math.hypot(f.x - water.x, f.z - water.z) > water.r + 0.5);
+    .filter((f) => !water || Math.hypot(f.x - water.x, f.z - water.z) > water.r + 0.5)
+    .map((f) => ({ ...f, y: groundHeight(f.x, f.z) }));
   const byKind = (kind) => plants.filter((f) => f.kind === kind);
   const leaf = mix(near, 0x2c4a2a, 0.3);
   const bloom = { "blue-ridge": 0xe8c547, "high-balds": 0xd986b8, lakes: 0xf0f0f0, "southern-ridges": 0xe58fb4 }[ctx.scene] || 0xf2d05a;
   const plantMeshes = [
-    instanced(byKind("rhododendron"), geo(w, "IcosahedronGeometry", 1, 0), mix(leaf, 0x1f3a2a, 0.3), (f) => { reset(); dummy.position.set(f.x, 0.55 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.75 * f.scale, f.size); }),
-    instanced(byKind("rhododendron"), geo(w, "SphereGeometry", 1, 6, 4), mix(bloom, 0xffffff, 0.2), (f) => { reset(); dummy.position.set(f.x + 0.3 * f.scale, 1.05 * f.scale, f.z + 0.2 * f.scale); dummy.scale.set(0.16 * f.scale, 0.12 * f.scale, 0.16 * f.scale); }),
-    instanced(byKind("shrub"), geo(w, "IcosahedronGeometry", 1, 0), leaf, (f) => { reset(); dummy.position.set(f.x, 0.35 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.45 * f.scale, f.size); }),
-    instanced(byKind("fern"), geo(w, "ConeGeometry", 1, 1, 5), mix(leaf, 0x7fae4a, 0.35), (f) => { reset(); dummy.position.set(f.x, 0.18 * f.scale, f.z); dummy.rotation.set(0, f.rot, Math.PI); dummy.scale.set(f.size, 0.36 * f.scale, f.size); }),
-    instanced(byKind("grass"), geo(w, "ConeGeometry", 1, 1, 4), mix(hex(look.ground), 0x9fbf5a, 0.35), (f) => { reset(); dummy.position.set(f.x, 0.16 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.32 * f.scale, f.size); }),
-    instanced(byKind("flower"), geo(w, "SphereGeometry", 1, 5, 3), bloom, (f) => { reset(); dummy.position.set(f.x, 0.14 * f.scale, f.z); dummy.scale.set(f.size * 0.6, 0.1 * f.scale, f.size * 0.6); }),
-    instanced(byKind("stone"), geo(w, "DodecahedronGeometry", 1, 0), STONE, (f) => { reset(); dummy.position.set(f.x, 0.06 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.5 * f.size, f.size * 0.8); }),
-    instanced(byKind("boulder"), geo(w, "DodecahedronGeometry", 1, 0), mix(STONE, 0x5a5a56, 0.3), (f) => { reset(); dummy.position.set(f.x, 0.3 * f.scale, f.z); dummy.rotation.set(f.rot, f.rot, 0); dummy.scale.set(f.size, 0.7 * f.size, f.size * 0.9); }),
-    instanced(byKind("needles"), geo(w, "CircleGeometry", 1, 9), mix(0x8a6a3a, hex(look.ground), 0.4), (f) => { reset(); dummy.position.set(f.x, 0.014, f.z); dummy.rotation.set(-Math.PI / 2, 0, f.rot); dummy.scale.set(f.size, f.size * 0.8, 1); })
+    instanced(byKind("rhododendron"), geo(w, "IcosahedronGeometry", 1, 0), mix(leaf, 0x1f3a2a, 0.3), (f) => { reset(); dummy.position.set(f.x, f.y + 0.55 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.75 * f.scale, f.size); }),
+    instanced(byKind("rhododendron"), geo(w, "SphereGeometry", 1, 6, 4), mix(bloom, 0xffffff, 0.2), (f) => { reset(); dummy.position.set(f.x + 0.3 * f.scale, f.y + 1.05 * f.scale, f.z + 0.2 * f.scale); dummy.scale.set(0.16 * f.scale, 0.12 * f.scale, 0.16 * f.scale); }),
+    instanced(byKind("shrub"), geo(w, "IcosahedronGeometry", 1, 0), leaf, (f) => { reset(); dummy.position.set(f.x, f.y + 0.35 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.45 * f.scale, f.size); }),
+    instanced(byKind("fern"), geo(w, "ConeGeometry", 1, 1, 5), mix(leaf, 0x7fae4a, 0.35), (f) => { reset(); dummy.position.set(f.x, f.y + 0.18 * f.scale, f.z); dummy.rotation.set(0, f.rot, Math.PI); dummy.scale.set(f.size, 0.36 * f.scale, f.size); }),
+    instanced(byKind("grass"), geo(w, "ConeGeometry", 1, 1, 4), mix(hex(look.ground), 0x9fbf5a, 0.35), (f) => { reset(); dummy.position.set(f.x, f.y + 0.16 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.32 * f.scale, f.size); }),
+    instanced(byKind("flower"), geo(w, "SphereGeometry", 1, 5, 3), bloom, (f) => { reset(); dummy.position.set(f.x, f.y + 0.14 * f.scale, f.z); dummy.scale.set(f.size * 0.6, 0.1 * f.scale, f.size * 0.6); }),
+    instanced(byKind("stone"), geo(w, "DodecahedronGeometry", 1, 0), STONE, (f) => { reset(); dummy.position.set(f.x, f.y + 0.06 * f.scale, f.z); dummy.rotation.set(0, f.rot, 0); dummy.scale.set(f.size, 0.5 * f.size, f.size * 0.8); }),
+    instanced(byKind("boulder"), geo(w, "DodecahedronGeometry", 1, 0), mix(STONE, 0x5a5a56, 0.3), (f) => { reset(); dummy.position.set(f.x, f.y + 0.3 * f.scale, f.z); dummy.rotation.set(f.rot, f.rot, 0); dummy.scale.set(f.size, 0.7 * f.size, f.size * 0.9); }),
+    instanced(byKind("needles"), geo(w, "CircleGeometry", 1, 9), mix(0x8a6a3a, hex(look.ground), 0.4), (f) => { reset(); dummy.position.set(f.x, f.y + 0.03, f.z); dummy.rotation.set(-Math.PI / 2, 0, f.rot); dummy.scale.set(f.size, f.size * 0.8, 1); })
   ];
   plantMeshes.forEach((m, i) => { if (m && (i === 0 || i === 7)) w.occluders.push(m); });
   if (plantMeshes[8]) plantMeshes[8].userData.receiveOnly = true;
@@ -902,7 +951,7 @@ function build(w, ctx, data) {
     shadow(w, g, 0.55);
   });
   const lanternColliders = [];
-  w.selectionRing = part(w, root, ["RingGeometry", 0.5, 0.64, 28], GOLD, { y: 0.03, rx: -Math.PI / 2, basic: true });
+  w.selectionRing = part(w, root, ["RingGeometry", 0.5, 0.64, 28], GOLD, { y: 0.03, rx: -Math.PI / 2, basic: true, lift: false });
   w.selectionRing.visible = false;
 
   // Tents, growing with the miles, doors turned to the fire.
@@ -1120,11 +1169,11 @@ function build(w, ctx, data) {
 
   // Gold rings and signs mark the places you can visit.
   CAMP_LOCATIONS.forEach((l) => {
-    const ring = part(w, root, ["RingGeometry", l.radius + 0.3, l.radius + 0.45, 32], GOLD, { x: l.x, y: 0.035, z: l.z, rx: -Math.PI / 2, basic: true, opacity: 0.45 });
+    const ring = part(w, root, ["RingGeometry", l.radius + 0.3, l.radius + 0.45, 32], GOLD, { x: l.x, y: 0.07, z: l.z, rx: -Math.PI / 2, basic: true, opacity: 0.45 });
     ring.userData.id = l.id;
     anim.rings.push(ring);
     const tag = labelSprite(w, SIGN[l.id], { height: 0.3, bg: "rgba(47,93,70,0.9)", ink: "#f4ead5" });
-    tag.position.set(l.x, l.id === "roster" ? 2.5 : 2.75, l.z);
+    tag.position.set(l.x, groundHeight(l.x, l.z) + (l.id === "roster" ? 2.5 : 2.75), l.z);
     tag.userData.id = l.id;
     anim.signs.push(tag);
     root.add(tag);
@@ -1196,7 +1245,7 @@ function placeSelection(w) {
   if (!w.selectionRing) return;
   const npc = w.selectedId && w.life ? w.life.npcs.find((n) => n.id === w.selectedId) : null;
   w.selectionRing.visible = Boolean(npc);
-  if (npc) w.selectionRing.position.set(npc.x, 0.03, npc.z);
+  if (npc) w.selectionRing.position.set(npc.x, groundHeight(npc.x, npc.z) + 0.05, npc.z);
 }
 
 function trailMapTexture(w, fraction) {
@@ -1302,7 +1351,7 @@ function applyPose(view, npc, t, reduced) {
   if (!view || !npc) return;
   const { g, rig, items, tag } = view;
   const { body, head, legL, legR, armL, armR } = rig;
-  g.position.set(npc.x, npc.y || 0, npc.z);
+  g.position.set(npc.x, groundHeight(npc.x, npc.z) + (npc.y || 0), npc.z);
   g.rotation.y = npc.heading;
   body.position.set(0, 0, 0);
   body.rotation.set(0, 0, 0);
@@ -1529,7 +1578,7 @@ function removeVisitorView(w, v) {
 // Follow the simulation: hop or trot while moving, flap while flying, glide when perched.
 function animateVisitor(view, t, still) {
   const { g, b, wings, v } = view;
-  g.position.set(v.x, v.y || 0, v.z);
+  g.position.set(v.x, groundHeight(v.x, v.z) + (v.y || 0), v.z);
   g.rotation.y = v.heading;
   const k = still ? 0 : 1;
   const hop = v.visitor.model === "rabbit" || v.visitor.model === "squirrel" || v.visitor.model === "chipmunk";
@@ -1664,14 +1713,14 @@ function updateZoom(w) {
 }
 
 // Where a visitor's body is, for aiming and framing.
-const visitorPoint = (v) => ({ x: v.x, y: (v.y || 0) + (v.visitor.size || 0.5) * 0.4, z: v.z });
+const visitorPoint = (v) => ({ x: v.x, y: groundHeight(v.x, v.z) + (v.y || 0) + (v.visitor.size || 0.5) * 0.4, z: v.z });
 
 // Point the photo camera from the hiker's eyes at `target`.
 function aimAngles(w, target) {
   const dx = target.x - w.player.x;
   const dz = target.z - w.player.z;
   w.photo.yaw = Math.atan2(dx, dz);
-  w.photo.pitch = Math.max(-1.2, Math.min(1.2, Math.atan2(target.y - EYE, Math.hypot(dx, dz))));
+  w.photo.pitch = Math.max(-1.2, Math.min(1.2, Math.atan2(target.y - eyeAt(w.player), Math.hypot(dx, dz))));
   return Math.hypot(dx, dz);
 }
 
@@ -1682,8 +1731,8 @@ function aimAt(w, v) {
   const target = visitorPoint(v);
   const colliders = w.playerColliders && w.playerColliders.length ? w.playerColliders : w.colliders;
   const near = Math.ceil(waryDistance(v) + 0.5);
-  const spot = vantagePoints(target, w.player, colliders, { near, far: near + 4 }).find((s) => lineClear(w, { x: s.x, y: EYE, z: s.z }, target));
-  if (spot) { w.player.x = spot.x; w.player.z = spot.z; w.playerMesh.position.set(spot.x, 0, spot.z); }
+  const spot = vantagePoints(target, w.player, colliders, { near, far: near + 4 }).find((s) => lineClear(w, { x: s.x, y: eyeAt(s), z: s.z }, target));
+  if (spot) { w.player.x = spot.x; w.player.z = spot.z; w.playerMesh.position.set(spot.x, groundHeight(spot.x, spot.z), spot.z); }
   enterCamera(w);
   const dist = aimAngles(w, target);
   w.photo.track = v;
@@ -1707,13 +1756,14 @@ const PROP_NAMES = {
 function photoSubjects(w) {
   const time = (w.lastCtx && w.lastCtx.time) || "day";
   const out = [];
-  ((w.life && w.life.npcs) || []).forEach((n) => out.push({ kind: "hiker", id: n.id, name: n.name, x: n.x, y: (n.y || 0) + (n.pose === "sleep" ? 0.2 : 0.9), z: n.z,
+  const up = (x, z, y) => groundHeight(x, z) + y;
+  ((w.life && w.life.npcs) || []).forEach((n) => out.push({ kind: "hiker", id: n.id, name: n.name, x: n.x, y: up(n.x, n.z, (n.y || 0) + (n.pose === "sleep" ? 0.2 : 0.9)), z: n.z,
     size: n.pose === "sleep" ? 1.2 : 1.6, detail: activityLabel(n.activity, time) }));
   ((w.visitors && w.visitors.list) || []).forEach((v) => out.push({ kind: "wildlife", id: v.id, key: v.key, name: v.species.name, x: v.x,
     y: visitorPoint(v).y, z: v.z, size: v.visitor.size || 0.5 }));
   out.push({ kind: "fire", id: "fire", name: "campfire", x: 0, y: 0.5, z: 0, size: 1.6 });
-  CAMP_LOCATIONS.filter((l) => l.id !== "roster").forEach((l) => out.push({ kind: "place", id: l.id, name: l.name, x: l.x, y: 1, z: l.z, size: 2.2 }));
-  CAMP_PROPS.forEach((p) => { const n = PROP_NAMES[p.id]; if (n) out.push({ kind: "prop", id: p.id, name: n[0], x: p.x, y: n[1], z: p.z, size: n[2] }); });
+  CAMP_LOCATIONS.filter((l) => l.id !== "roster").forEach((l) => out.push({ kind: "place", id: l.id, name: l.name, x: l.x, y: up(l.x, l.z, 1), z: l.z, size: 2.2 }));
+  CAMP_PROPS.forEach((p) => { const n = PROP_NAMES[p.id]; if (n) out.push({ kind: "prop", id: p.id, name: n[0], x: p.x, y: up(p.x, p.z, n[1]), z: p.z, size: n[2] }); });
   return out;
 }
 
@@ -1749,7 +1799,7 @@ function takePhoto(w) {
   if (!w.photo.on || w.reviewing) return;
   const ph = w.photo;
   const p = w.player;
-  const cam = { x: p.x, y: EYE, z: p.z, yaw: ph.yaw, pitch: ph.pitch, fov: (ph.fov * Math.PI) / 180, aspect: w.camera.aspect };
+  const cam = { x: p.x, y: eyeAt(p), z: p.z, yaw: ph.yaw, pitch: ph.pitch, fov: (ph.fov * Math.PI) / 180, aspect: w.camera.aspect };
   const subjects = photoSubjects(w);
   markBlocked(w, subjects, cam);
   const result = framePhoto(subjects, cam);
@@ -2095,8 +2145,9 @@ function update(w, dt) {
     ph.yaw += ((has("KeyA", "ArrowLeft") ? 1 : 0) - (has("KeyD", "ArrowRight") ? 1 : 0)) * k;
     ph.pitch = Math.max(-1.2, Math.min(1.2, ph.pitch + ((has("KeyW", "ArrowUp") ? 1 : 0) - (has("KeyS", "ArrowDown") ? 1 : 0)) * k));
     p.speed = 0;
-    w.camera.position.set(p.x, EYE, p.z);
-    w.camera.lookAt(w.camLook.set(p.x + Math.sin(ph.yaw) * Math.cos(ph.pitch), EYE + Math.sin(ph.pitch), p.z + Math.cos(ph.yaw) * Math.cos(ph.pitch)));
+    const eye = eyeAt(p);
+    w.camera.position.set(p.x, eye, p.z);
+    w.camera.lookAt(w.camLook.set(p.x + Math.sin(ph.yaw) * Math.cos(ph.pitch), eye + Math.sin(ph.pitch), p.z + Math.cos(ph.yaw) * Math.cos(ph.pitch)));
     w.lookAt.copy(w.camLook);
     if (Math.abs(w.camera.fov - ph.fov) > 0.01) {
       w.camera.fov += (ph.fov - w.camera.fov) * Math.min(1, dt * 12);
@@ -2119,7 +2170,7 @@ function update(w, dt) {
       p.speed = input.strength * (run ? 1.6 : 1);
       p.phase += dt * 9 * p.speed;
     } else p.speed = Math.max(0, p.speed - dt * 6);
-    w.playerMesh.position.set(p.x, 0, p.z);
+    w.playerMesh.position.set(p.x, groundHeight(p.x, p.z), p.z);
     w.playerMesh.rotation.y = p.heading;
     const rig = w.playerMesh.userData.rig;
     const swing = Math.sin(p.phase) * 0.6 * Math.min(p.speed, 1);
@@ -2128,7 +2179,7 @@ function update(w, dt) {
     rig.armL.rotation.x = -swing * 0.8;
     rig.armR.rotation.x = swing * 0.8;
 
-    const view = followCamera(p, w.cam.yaw, w.cam.pitch, w.colliders);
+    const view = followCamera({ x: p.x, y: groundHeight(p.x, p.z), z: p.z }, w.cam.yaw, w.cam.pitch, w.colliders, { ground: groundHeight });
     const target = w.camPos.set(view.x, view.y, view.z);
     if (!w.cam.pos) w.cam.pos = target.clone();
     else w.cam.pos.lerp(target, 1 - Math.exp(-dt * 10));
@@ -2186,7 +2237,7 @@ function update(w, dt) {
       if (a.precip.snow) attr.setX(i, attr.getX(i) + Math.sin(t + i) * dt * 0.3);
     }
     attr.needsUpdate = true;
-    a.precip.points.position.set(p.x, 0, p.z);
+    a.precip.points.position.set(p.x, groundHeight(p.x, p.z), p.z);
   }
 }
 

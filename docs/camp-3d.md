@@ -6,7 +6,7 @@ How the explorable camp is built, how its life and photo camera work, and where 
 
 | File | Job | Tested |
 | --- | --- | --- |
-| `engine/camp-world.js` | Layout (`CAMP_LOCATIONS`, `CAMP_PROPS`, benches, lanterns), colliders and `moveActor`, the follow camera, each place's close-up (`view`, `locationView`, `blocksView`), `QUALITY` tiers, `campLighting`, and the bulletin and roster summaries | `tests/at/camp-world.test.js` |
+| `engine/camp-world.js` | Layout (`CAMP_LOCATIONS`, `CAMP_PROPS`, benches, lanterns), the terrain (`groundHeight`, `TERRAIN`, `TERRAIN_PADS`, `forestRing`; §10), colliders and `moveActor`, the follow camera, each place's close-up (`view`, `locationView`, `blocksView`), `QUALITY` tiers, `campLighting`, and the bulletin and roster summaries | `tests/at/camp-world.test.js` |
 | `engine/camp-life.js` | What happens in camp: hikers' activities, wildlife visitors, each section's plants, and photo framing | `tests/at/camp-life.test.js` |
 | `ui/camp-3d.js` | Drawing and input only (three.js, loaded lazily) | Static checks plus a visual check |
 | `ui/views.js` (`campExplorer`, `campPlaceBody`) | The text side: Camp Locations, each place's in-world sheet, Around Camp Now and the Camp Camera Roll | Static checks |
@@ -119,6 +119,7 @@ Camp photos give **no** miles, points or discoveries today. Wildlife Spotting is
 
 - *Draco, Meshopt.* The only model file is the 48 KB shelter (§6), so there is nothing worth compressing yet. Draco needs a WASM decoder of a few hundred KB, which would cost more than it saves; Meshopt's decoder is far smaller and is the choice if models ever grow.
 - *Texture compression (KTX2/Basis).* Only two or three small canvas textures exist.
+- *Terrain (Sprint 12).* The ground is one displaced plane (80, 120 or 160 segments by tier: 13k–51k triangles in a single draw call) plus a sky dome: one more draw call each than the flat disc and floor they replaced. Heights are computed once per scene build, not per frame.
 - *LOD.* The clearing is about 40 m across and the far hills are already single cones; there's nothing far enough away to simplify. Frustum culling (three.js default) already skips meshes behind the camera; an instanced kind is culled as a whole, which is fine at this size.
 - *Post-processing.* Bloom, SSAO and FXAA each add one or more full-screen passes. On a phone at pixel ratio 1.5–2 that is the most expensive thing we could add, for a look the tone mapping and vignette mostly give already.
 ## 6. Hero models (GLB)
@@ -173,6 +174,25 @@ Where the camp's tech can reasonably go over the next few sprints, cheapest and 
 | Wildlife | 1–3 visitors | Up to ~6 on High is safe (each is 5–10 meshes and a few-dozen-line step). Keep rarity, not count, as the thrill | Seasonal events (a flock of turkeys) can instance a herd |
 | NPCs | 12 hikers, steering only | ~20 with batching. Beyond that: a coarse grid path planner and hikers avoiding each other | Visiting hikers or a bigger roster |
 | Shadows | Static map, still scenery | Re-render the map every few seconds for slowly moving casters, or contact shadows for hikers on High | If blob shadows ever look wrong in screenshots |
+| Terrain | One sculpted heightfield, vertex-tinted, pads under everything usable (§10) | Grass blades as an instanced, wind-swayed mesh on High; a stream in the trail's notch | When the ground still reads flat in screenshots |
+| Lighting | Lambert materials, hemisphere plus sun, a gradient sky dome | A small generated environment map (`PMREMGenerator` from the sky dome) if materials move to `MeshStandardMaterial` | With PBR hero models only (§10) |
+
+## 10. Terrain and composition
+
+The camp sits in a clearing on a wooded Appalachian hillside rather than on a flat disc. Everything is computed in `engine/camp-world.js` (pure, deterministic, tested) and the renderer just samples it.
+
+- **`groundHeight(x, z)`.** Smooth value noise (`noise2`, layered as `fbm`) over a broad lie: the camp climbs gently toward the shelter, which sits up on a rise, with soft rolls inside the clearing. Past the clearing's ragged edge (`clearingEdge`) the banks climb about 5–12 m into the woods with knolls and hollows, except where the trail notches through north and south (x = 0) and where the ground falls away below the overlook bench (the vista, `vistaShare`). A pond lies in a hollow west of camp (`TERRAIN.pond`, `POND_SURFACE`); in sections without water it is a dry, grassy dip.
+- **Pads.** Everything you can use or bump into stands on a pad (`TERRAIN_PADS`): the small rolls fade out underneath, so nothing rocks on a bump. The fire circle and the shelter are truly flat, and the fire's pad is height 0, so the seats, poses and shelter heights in `camp-life.js` still hold.
+- **Grounding.** Props, tents, lanterns, hikers, visitors, the player, location rings, tags, precipitation and photo subjects add `groundHeight` (`part`/`group` do it for top-level scenery). The follow camera and every close-up keep at least half a metre above the ground; the photo camera's eye height follows it.
+- **Forest.** `forestRing` places trees by rejection sampling: thick in groves (noise) on the banks, thinning to a few stragglers at the clearing's edge, with the trail corridor, the vista and the pond left open. The count is exact per tier and the result is the same on every device.
+- **Drawing.** One `PlaneGeometry` displaced by `groundHeight`, its vertex colours darkened in hollows and the woods and lifted on crests (cheap ambient occlusion), under the existing ground texture. Two trail ribbons follow the slope out of the clearing. A gradient sky dome (fog colour at the horizon to sky above, no fog, drawn first) hides the mesh's edge and makes the fog read as haze.
+
+**Concepts reviewed** (Three.js Journey's *Stylized Nature Scene*, *Procedural Terrain*, *Environment Maps* and *Realistic Render* lessons; ideas only, no course code is used):
+
+- *Stylized nature.* Low-poly shapes, flat shading, vertex colours and instancing over textures. The camp already worked this way; this sprint applied it to the ground (vertex-tinted relief) and to the forest's grouping.
+- *Procedural terrain.* A noise heightfield on a displaced plane, with the shape deliberately designed rather than random: the clearing, banks, notch, vista and pond are all intentional, and pads keep gameplay heights stable. The course computes heights in a vertex shader; we compute them in JavaScript once per build because gameplay (walking, cameras, photos) needs the same heights on the CPU.
+- *Environment maps.* Deferred. They light physically based materials, and the camp uses `MeshLambertMaterial` throughout (cheaper on phones, and the stylised look doesn't need reflections). The sky dome gives the backdrop an environment map would; a generated `PMREM` from it is the step if PBR hero models arrive.
+- *Realistic render.* Already in place: tone mapping with per-time exposure, shadow bias tuned for slopes (`normalBias` raised for the sculpted ground), fog matched to the sky, and sRGB canvas textures. No post-processing (§5).
 | Post-processing | None (tone mapping + CSS vignette) | High tier only: one `EffectComposer` pass with mild bloom on fire and lanterns at night, or a cheap colour grade (LUT) | Only behind the High tier, measured on a mid-range phone first |
 | Photos | In memory, 12 | IndexedDB Blobs, then a download button; Supabase Storage only for sharing (§3) | When hikers ask to keep them |
 

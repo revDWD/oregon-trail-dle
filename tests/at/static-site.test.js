@@ -195,7 +195,9 @@ test("Trail has no Coming Up card; Camp opens with the camp, and History holds t
   assert.doesNotMatch(camp, /patchSection\(|hikersSection\(|registerSection\(/, "Camp is a place, not a collection page");
   const history = views.slice(views.indexOf("export function historyView"), views.indexOf("const JOURNAL_SHOWN"));
   for (const part of ["journalSection(s)", "patchSection(s)", "wildlifeSection(s)", "hikersSection(s, a)", "statsSection(s, a)", "registerSection(s)", "activities-title"]) assert.ok(history.includes(part), `History shows ${part}`);
-  assert.ok(history.indexOf("journalSection(s)") < history.indexOf("patchSection(s)") && history.indexOf("registerSection(s)") < history.indexOf("activities-title"), "journal first, this device's activities last");
+  const order = ["hikersSection(s, a)", "patchSection(s)", "wildlifeSection(s)", "journalSection(s)", "registerSection(s)", "activities-title"].map((part) => history.indexOf(part));
+  assert.deepEqual(order, [...order].sort((x, y) => x - y), "The Hikers, patches, wildlife and the journal lead; this device's activities come last");
+  assert.match(views, /const openPanels = new Set\(\["hikers-title"\]\)/, "The Hikers starts open; the other panels start folded");
 });
 
 test("headings, card titles and section summaries use Title Case", () => {

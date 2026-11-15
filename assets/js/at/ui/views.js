@@ -214,11 +214,11 @@ export function historyView(s, a) {
     : h("p", { class: "card" }, "No activities from this device yet. Log a walk to move the expedition forward.");
   return h("section", { "aria-labelledby": "page-title" },
     h("h1", { id: "page-title", tabindex: "-1", "data-focus": "" }, "History"),
-    h("p", { class: "hint" }, "The expedition's archive: its journal, collections, statistics and the trail register. Open a section to explore it."),
-    journalSection(s),
+    h("p", { class: "hint" }, "The expedition's archive: its hikers, collections, journal, statistics and the trail register. Open a section to explore it."),
+    hikersSection(s, a),
     hasRoster(s) ? patchSection(s) : null,
     wildlifeSection(s),
-    hikersSection(s, a),
+    journalSection(s),
     hasRoster(s) ? statsSection(s, a) : null,
     hasRoster(s) ? registerSection(s) : null,
     historyPanel("activities-title", `Your Activities (${s.activities.length}${s.hasMore ? "+" : ""})`, { open: Boolean(s.editingId), className: "your-activities" },
@@ -228,8 +228,9 @@ export function historyView(s, a) {
 }
 
 // History's sections fold away so the archive is quick to scan. Each opens on tap; which ones are open
-// is remembered (in memory) while the app is open. Old links (#/patches, #/hikers) open their section.
-const openPanels = new Set();
+// is remembered (in memory) while the app is open. The Hikers starts open, since it's who the expedition
+// is; the rest start folded. Old links (#/patches, #/hikers) open their section.
+const openPanels = new Set(["hikers-title"]);
 export function openHistoryPanel(titleId) { if (titleId) openPanels.add(titleId); }
 function historyPanel(titleId, title, { open = false, className = "", note = null } = {}, ...content) {
   return h("details", { class: `history-panel${className ? ` ${className}` : ""}`, open: open || openPanels.has(titleId),

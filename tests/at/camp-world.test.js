@@ -86,7 +86,7 @@ test("moving slides around colliders and stays inside the camp", () => {
   close(Math.hypot(hit.x, hit.z), 1 + PLAYER_RADIUS);
   const slide = moveActor({ x: -1.5, z: -0.2 }, 0.3, 0, rock);
   assert.ok(slide.z < -0.2, "glances off to the side instead of stopping dead");
-  const out = moveActor({ x: 14, z: 0 }, 5, 0, []);
+  const out = moveActor({ x: WORLD_RADIUS - 1, z: 0 }, 5, 0, []);
   close(Math.hypot(out.x, out.z), WORLD_RADIUS - PLAYER_RADIUS);
   const centre = moveActor({ x: 0, z: 0 }, 0, 0, rock);
   close(Math.hypot(centre.x, centre.z), 1 + PLAYER_RADIUS);

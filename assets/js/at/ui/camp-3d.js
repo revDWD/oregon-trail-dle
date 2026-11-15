@@ -578,6 +578,20 @@ function setTier(w, tier) {
 
 // ---- The scene (rebuilt only when what it shows changes) -----------------------------------------
 
+// Gently vary each instance's shade (and a touch of hue) so repeated scenery doesn't look stamped out.
+function varyColours(mesh, seed, hue = 0.04) {
+  const rand = seededRandom(seed);
+  const c = new mesh.material.color.constructor();
+  for (let i = 0; i < mesh.count; i += 1) {
+    const k = 0.8 + rand() * 0.32;
+    const h = (rand() - 0.5) * hue * 2;
+    mesh.setColorAt(i, c.setRGB(k * (1 + h), k * (1 + h * 0.4), k * (1 - h)));
+  }
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
+
+const propAt = (id) => { const p = CAMP_PROPS.find((x) => x.id === id); return { x: p.x, z: p.z }; };
+
 function clearDynamic(w) {
   w.dynamic.clear();
   w.disposables.forEach((d) => d.dispose());
@@ -591,7 +605,7 @@ function clearDynamic(w) {
 
 // The clearing's ground, painted once per build: grass, a worn centre, worn footpaths (CAMP_PATHS),
 // ash round the fire and scattered speckles, so the floor reads as a place and not a flat colour.
-const GROUND_SPAN = 44;
+const GROUND_SPAN = 60;
 function groundTexture(w, look, light) {
   const size = w.tier.ground || 1024;
   return canvasTexture(w, size, size, (g) => {
@@ -610,7 +624,7 @@ function groundTexture(w, look, light) {
     const rand = seededRandom(17);
     for (let i = 0; i < size * 3; i += 1) {
       const a = rand() * Math.PI * 2;
-      const r = Math.sqrt(rand()) * 21;
+      const r = Math.sqrt(rand()) * 29;
       const shade = rand();
       g.fillStyle = css(shade < 0.5 ? mix(ground, 0x22381e, 0.35) : mix(ground, 0xe8dca0, 0.3), 0.5);
       g.fillRect(px(Math.sin(a) * r), px(Math.cos(a) * r), 1 + rand() * k * 0.08, 1 + rand() * k * 0.08);
@@ -665,7 +679,7 @@ function build(w, ctx, data) {
   if (w.tier.shadows) {
     sun.castShadow = true;
     sun.shadow.mapSize.set(w.tier.shadows, w.tier.shadows);
-    Object.assign(sun.shadow.camera, { left: -19, right: 19, top: 19, bottom: -19, near: 1, far: 60 });
+    Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 75 });
     sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.bias = -0.0006;
     sun.shadow.normalBias = 0.03;
@@ -711,7 +725,7 @@ function build(w, ctx, data) {
   const caps = [];
   for (let i = 0; i < 12; i += 1) {
     const a = (i / 12) * Math.PI * 2 + rand() * 0.3;
-    const r = 34 + rand() * 6;
+    const r = 46 + rand() * 8;
     const hgt = 6 + rand() * 6;
     nearHills.push({ x: Math.sin(a) * r, y: hgt / 2, z: Math.cos(a) * r, sx: 9 + rand() * 6, sy: hgt, sz: 9 + rand() * 6, ry: rand() });
   }
@@ -730,15 +744,28 @@ function build(w, ctx, data) {
     look.snowcaps ? instanced(caps, geo(w, "ConeGeometry", 1, 1, 7), mix(0xffffff, light.sky, 0.2), placeShape, { fog: false }) : null
   ].forEach((m) => { if (m) m.userData.noShadow = true; });
 
+  // Terrain: low knolls roll away beyond the walkable clearing, so the camp sits in a hollow of the woods
+  // rather than on a flat disc. One instanced mesh.
+  const knolls = [];
+  for (let i = 0; i < 16; i += 1) {
+    const a = (i / 16) * Math.PI * 2 + rand() * 0.25;
+    if (Math.abs(Math.sin(a)) < 0.12) continue; // keep the trail's gap open
+    const r = WORLD_RADIUS + 5 + rand() * 9;
+    const hgt = 0.7 + rand() * 1.4;
+    knolls.push({ x: Math.sin(a) * r, y: -hgt * 0.35, z: Math.cos(a) * r, sx: 5 + rand() * 4, sy: hgt, sz: 4 + rand() * 3, ry: a });
+  }
+  const knollMesh = instanced(knolls, geo(w, "SphereGeometry", 1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mix(ground, hex(look.near), 0.3), placeShape);
+  if (knollMesh) knollMesh.userData.receiveOnly = true;
+
   // Water and boulders where the section has them.
-  const water = look.water ? { x: -21, z: 10, r: 7 } : null;
+  const water = look.water ? { x: -29, z: 13, r: 8 } : null;
   if (water) flat(part(w, root, ["CircleGeometry", 1, 32], 0x5d8fb0, { x: water.x, y: 0.03, z: water.z, rx: -Math.PI / 2, sx: water.r, sy: water.r * 0.7 }));
   if (look.rocks) {
     const rocks = [];
     for (let i = 0; i < 9; i += 1) {
       const a = (i / 9) * Math.PI * 2 + 0.3;
       if (Math.abs(Math.sin(a)) < 0.15) continue;
-      const r = 15.8 + rand() * 1.5;
+      const r = 21.8 + rand() * 2;
       const s = 0.5 + rand() * 0.8;
       rocks.push({ x: Math.sin(a) * r, y: s * 0.4, z: Math.cos(a) * r, sx: s * 1.3, sy: s, sz: s, ry: rand() * 3 });
     }
@@ -758,7 +785,7 @@ function build(w, ctx, data) {
     instanced(trees, geo(w, "CylinderGeometry", 0.14, 0.2, 1, 6), WOOD_DARK, (t) => { reset(); dummy.position.set(t.x, 0.6 * t.scale, t.z); dummy.scale.set(t.scale, 1.2 * t.scale, t.scale); }),
     instanced(pines, geo(w, "ConeGeometry", 1, 1, 7), mix(near, 0x1f3a2a, look.spruce ? 0.45 : 0.25), (t) => { reset(); dummy.position.set(t.x, 1 + 1.4 * t.scale, t.z); dummy.scale.set(1.1 * t.scale, 2.8 * t.scale, 1.1 * t.scale); }),
     instanced(broad, geo(w, "IcosahedronGeometry", 1, 0), near, (t) => { reset(); dummy.position.set(t.x, 1.3 + 1.1 * t.scale, t.z); dummy.rotation.set(0, t.x, 0); dummy.scale.set(1.3 * t.scale, 1.2 * t.scale, 1.3 * t.scale); })
-  ].forEach((m) => { if (m) w.occluders.push(m); });
+  ].forEach((m, i) => { if (!m) return; w.occluders.push(m); if (i) varyColours(m, 71 + i, 0.05); });
 
   // The section's undergrowth round the clearing, one instanced mesh per kind of plant. Thickets and
   // boulders are solid, so you (and the hikers) walk round them.
@@ -846,7 +873,7 @@ function build(w, ctx, data) {
   });
 
   // The shelter: an open-front lean-to on the trail, facing camp.
-  const shelter = group(w, root, { x: 0, z: -11 });
+  const shelter = group(w, root, propAt("shelter"));
   part(w, shelter, ["BoxGeometry", 4.6, 0.3, 2.8], WOOD_LIGHT, { y: 0.35 });
   part(w, shelter, ["BoxGeometry", 4.6, 2, 0.16], WOOD, { y: 1.3, z: -1.35 });
   part(w, shelter, ["BoxGeometry", 0.16, 2, 2.8], WOOD, { x: -2.3, y: 1.3 });
@@ -908,12 +935,12 @@ function build(w, ctx, data) {
   table.add(map);
 
   // The pump, the bear bag line (one bag per hiker) and the trail signpost.
-  const pump = group(w, root, { x: 4, z: -1.8 });
+  const pump = group(w, root, propAt("pump"));
   part(w, pump, ["CylinderGeometry", 0.35, 0.4, 0.15, 10], STONE, { y: 0.07 });
   part(w, pump, ["CylinderGeometry", 0.11, 0.13, 1, 8], 0x2f5d46, { y: 0.6 });
   part(w, pump, ["BoxGeometry", 0.08, 0.08, 0.35], 0x2f5d46, { y: 0.85, z: 0.2 });
   part(w, pump, ["BoxGeometry", 0.05, 0.05, 0.6], 0x3a3a3a, { y: 1.15, z: -0.2, rx: 0.4 });
-  const line = group(w, root, { x: -10, z: -1 });
+  const line = group(w, root, propAt("bear-bags"));
   [-1.3, 1.3].forEach((z) => part(w, line, ["CylinderGeometry", 0.09, 0.11, 3.4, 6], WOOD_DARK, { y: 1.7, z }));
   part(w, line, ["CylinderGeometry", 0.015, 0.015, 2.6, 4], 0xd8cfb8, { y: 3.2, rx: Math.PI / 2 });
   const bags = Math.min(ctx.scale.bearBags || 0, 12);
@@ -922,7 +949,7 @@ function build(w, ctx, data) {
     part(w, line, ["CylinderGeometry", 0.006, 0.006, 0.4, 3], 0xd8cfb8, { y: 3, z });
     part(w, line, ["SphereGeometry", 0.15, 8, 6], SHIRTS[i % SHIRTS.length], { y: 2.7, z, sy: 1.3 });
   }
-  const sign = group(w, root, { x: 0.9, z: 12 });
+  const sign = group(w, root, { ...propAt("signpost"), x: propAt("signpost").x + 0.9 });
   part(w, sign, ["CylinderGeometry", 0.08, 0.08, 2.2, 6], WOOD_DARK, { y: 1.1 });
   part(w, sign, ["BoxGeometry", 0.9, 0.22, 0.05], WOOD_LIGHT, { y: 1.85, x: -0.25 });
   part(w, sign, ["BoxGeometry", 0.9, 0.22, 0.05], WOOD_LIGHT, { y: 1.5, x: 0.25 });
@@ -945,17 +972,17 @@ function build(w, ctx, data) {
   [0, 2.1, 4.2].forEach((a) => part(w, tripod, ["CylinderGeometry", 0.025, 0.025, 1.5, 4], WOOD_DARK, { x: Math.sin(a) * 0.45, y: 0.7, z: Math.cos(a) * 0.45, rx: -Math.cos(a) * 0.3, rz: Math.sin(a) * 0.3 }));
   part(w, tripod, ["CylinderGeometry", 0.006, 0.006, 0.45, 3], 0x3a3a3a, { y: 1.15 });
   part(w, tripod, ["CylinderGeometry", 0.17, 0.13, 0.2, 10], 0x3a3a3a, { y: 0.88 });
-  const woodpile = group(w, root, { x: -8.5, z: 1.2, ry: 0.5 });
+  const woodpile = group(w, root, { ...propAt("woodpile"), ry: 0.5 });
   [[0, 0.11, -0.25], [0, 0.11, 0], [0, 0.11, 0.25], [0, 0.31, -0.13], [0, 0.31, 0.13], [0, 0.5, 0]].forEach(([x, y, z]) =>
     part(w, woodpile, ["CylinderGeometry", 0.11, 0.11, 1, 7], WOOD, { x, y, z, rz: Math.PI / 2 }));
-  const block = group(w, root, { x: -7.4, z: -0.8 });
+  const block = group(w, root, propAt("chopping-block"));
   part(w, block, ["CylinderGeometry", 0.3, 0.33, 0.45, 9], WOOD_LIGHT, { y: 0.22 });
   const axe = group(w, block, { y: 0.45 });
   part(w, axe, ["CylinderGeometry", 0.025, 0.025, 0.6, 5], WOOD_LIGHT, { y: 0.26, rz: 0.3 });
   part(w, axe, ["BoxGeometry", 0.05, 0.12, 0.18], 0x8a8a8a, { x: 0.02, y: 0.06, rz: 0.3 });
   anim.blockAxe = axe;
   axe.userData.moving = true;
-  const crates = group(w, root, { x: 3.2, z: -7.4, ry: 0.4 });
+  const crates = group(w, root, { ...propAt("supply-crates"), ry: 0.4 });
   part(w, crates, ["BoxGeometry", 0.55, 0.45, 0.45], WOOD_LIGHT, { x: -0.25, y: 0.22 });
   part(w, crates, ["BoxGeometry", 0.45, 0.4, 0.4], WOOD, { x: -0.2, y: 0.65, ry: 0.3 });
   part(w, crates, ["CylinderGeometry", 0.22, 0.22, 0.6, 10], 0x6a4a2c, { x: 0.38, y: 0.3 });
@@ -1012,6 +1039,40 @@ function build(w, ctx, data) {
   part(w, blaze, ["BoxGeometry", 0.12, 0.3, 0.02], 0xf6f6f0, { y: 1.65, z: 0.21 });
   [kitchen, blaze].forEach((g) => w.occluders.push(g));
 
+  // A picnic table at the shelter, the trail register on its post, a supply cache of bear canisters and
+  // water jugs, and a junction sign pointing the way to the shelter, water and the overlook.
+  const table2 = at("picnic-table", 0.15);
+  part(w, table2, ["BoxGeometry", 1.6, 0.07, 0.7], WOOD_LIGHT, { y: 0.74 });
+  [-0.55, 0.55].forEach((z) => part(w, table2, ["BoxGeometry", 1.6, 0.06, 0.26], WOOD, { y: 0.45, z }));
+  [-0.6, 0.6].forEach((x) => [-0.32, 0.32].forEach((z) => part(w, table2, ["BoxGeometry", 0.07, 0.74, 0.07], WOOD_DARK, { x, y: 0.37, z, rx: z * 0.5 })));
+  part(w, table2, ["CylinderGeometry", 0.07, 0.07, 0.16, 8], 0x3a6ea5, { x: -0.3, y: 0.86 });
+  part(w, table2, ["BoxGeometry", 0.32, 0.03, 0.24], 0xb5452f, { x: 0.25, y: 0.79, ry: 0.3 });
+  shadow(w, table2, 0.9);
+  const register = at("trail-register");
+  part(w, register, ["CylinderGeometry", 0.05, 0.05, 1.1, 6], WOOD_DARK, { y: 0.55 });
+  part(w, register, ["BoxGeometry", 0.36, 0.28, 0.24], 0x6a4a2c, { y: 1.22 });
+  part(w, register, ["BoxGeometry", 0.42, 0.04, 0.32], WOOD_DARK, { y: 1.38, rx: -0.15 });
+  const cache = at("supply-cache");
+  [[-0.2, 0, 0x2b2b2b], [0.12, 0.18, 0x2b2b2b], [0.08, -0.2, 0x2f5d46]].forEach(([x, z, color]) => part(w, cache, ["CylinderGeometry", 0.13, 0.13, 0.32, 10], color, { x, y: 0.16, z }));
+  part(w, cache, ["BoxGeometry", 0.22, 0.32, 0.16], 0x3a6ea5, { x: 0.36, y: 0.16, z: -0.02, ry: 0.4 });
+  part(w, cache, ["CylinderGeometry", 0.03, 0.03, 0.06, 6], 0xd8cfb8, { x: 0.36, y: 0.35, z: -0.02 });
+  shadow(w, cache, 0.55);
+  const junction = at("junction-sign", 0);
+  part(w, junction, ["CylinderGeometry", 0.06, 0.07, 1.7, 6], WOOD_DARK, { y: 0.85 });
+  [[1.55, Math.PI / 2], [1.3, 0.98], [1.05, -0.05]].forEach(([y, ry]) => { // to the shelter, the pump and the overlook
+    const arm = group(w, junction, { y, ry });
+    part(w, arm, ["BoxGeometry", 0.7, 0.16, 0.04], WOOD_LIGHT, { x: 0.3 });
+    part(w, arm, ["ConeGeometry", 0.1, 0.12, 3], WOOD_LIGHT, { x: 0.7, rz: -Math.PI / 2, sz: 0.3 });
+  });
+  shadow(w, junction, 0.3);
+  // The shelter's name board and a lantern hung under the eave, lit after dark.
+  part(w, shelter, ["BoxGeometry", 1.6, 0.26, 0.05], 0x5a4636, { y: 2.22, z: 1.42 });
+  const eave = group(w, shelter, { x: -1.6, y: 1.95, z: 1.2 });
+  part(w, eave, ["CylinderGeometry", 0.006, 0.006, 0.3, 3], 0x3a3a3a, { y: 0.15 });
+  part(w, eave, ["BoxGeometry", 0.15, 0.2, 0.15], light.lanterns ? 0xffe28a : 0x8a8a7a, { basic: light.lanterns });
+  if (light.lanterns) eave.add(glowSprite(w, 0xffc85a, 1.6, 0.55));
+  [table2, register, junction].forEach((g) => w.occluders.push(g));
+
   // Gold rings and signs mark the places you can visit.
   CAMP_LOCATIONS.forEach((l) => {
     const ring = part(w, root, ["RingGeometry", l.radius + 0.3, l.radius + 0.45, 32], GOLD, { x: l.x, y: 0.035, z: l.z, rx: -Math.PI / 2, basic: true, opacity: 0.45 });
@@ -1028,7 +1089,7 @@ function build(w, ctx, data) {
   if (light.fireflies) {
     const n = w.tier.fireflies;
     const pos = new Float32Array(n * 3);
-    const seeds = Array.from({ length: n }, (_, i) => ({ a: rand() * Math.PI * 2, r: 4 + rand() * 10, y: 0.6 + rand() * 1.8, s: 0.2 + rand() * 0.5, i }));
+    const seeds = Array.from({ length: n }, (_, i) => ({ a: rand() * Math.PI * 2, r: 4 + rand() * 15, y: 0.6 + rand() * 1.8, s: 0.2 + rand() * 0.5, i }));
     const geometry = new T.BufferGeometry();
     geometry.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
     const points = new T.Points(geometry, new T.PointsMaterial({ color: 0xfff27a, size: 0.14, transparent: true, opacity: 0.9, blending: T.AdditiveBlending, depthWrite: false }));

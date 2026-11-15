@@ -53,6 +53,12 @@ Visiting a place (E, a tap, or its Camp Locations button) calls `focusCamp3d(id)
 
 - Each of the eight sections has a pine share and a ground-plant mix. `campFlora` scatters plants (seeded) away from the paths, colliders and activity spots. Thickets and boulders are solid.
 
+**Scale** (Sprint 10)
+
+- The camp is about 42 m across (`WORLD_RADIUS` 21, up from 15). The places and props were spread about ?1.4 from the fire, which keeps its cozy bench ring; walking (3.6 m/s) and jogging (6 m/s) were sped up so crossing camp still takes seconds.
+- Activity spots, perches and paths are defined relative to their props and places (`near(key, p, dx, dz)` in `camp-life.js`) and props are positioned with `propAt(id)` in `camp-3d.js`, so moving something in `CAMP_LOCATIONS`/`CAMP_PROPS` carries everything that belongs to it.
+- Tree, plant and firefly counts, fog distances, the ground and the shadow camera grew with it (`QUALITY`, `campLighting`). The extra scenery (knolls, a picnic table, a trail register box, a supply cache, a junction sign, the shelter's name board and eave lantern) adds a handful of draw calls; the knolls are one instanced mesh and trees take per-instance colour (`varyColours`), so the High tier stays within budget.
+
 ## 3. The photo camera
 
 - C or the 📷 shutter button (bottom centre of the scene, 72 px, the camera app's place for it) switches to first person at eye height. Drag, arrows or WASD aim; the wheel or +/− zoom (field of view); Space, Enter, a tap or the shutter takes the photo; Escape or C puts it away.

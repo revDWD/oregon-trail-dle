@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { APPALACHIAN_TRAIL as TRAIL } from "../../assets/js/at/trail/appalachian-trail.js";
 import { computeProgress } from "../../assets/js/at/engine/progress.js";
 import {
-  project, mapViewBox, MIN_ZOOM, MAX_ZOOM, defaultView, clampView, viewBoxOf, zoomView, panView, fitView, routeSlice, landmarkStatus, clusterPoints,
+  project, mapViewBox, MIN_ZOOM, MAX_ZOOM, defaultView, clampView, viewBoxOf, zoomView, panView, fitView, routeSlice, landmarkStatus, layoutPatches,
   patchIconSize
 } from "../../assets/js/at/ui/map.js";
 
@@ -78,25 +78,35 @@ test("landmark status reads as passed, next, or distance ahead", () => {
   assert.equal(landmarkStatus(zero.landmarks[0], zero), "Starting point");
 });
 
-test("patch icons cluster when they would overlap and split apart as the map zooms in", () => {
+test("every earned patch stays individually visible: crowded patches nudge apart instead of hiding behind a count", () => {
   const pts = TRAIL.landmarks.map((l) => ({ id: l.id, ...project(l.lat, l.lon) }));
-  const wide = clusterPoints(pts, 17);
-  const close = clusterPoints(pts, 17 / MAX_ZOOM);
-  assert.equal(wide.flatMap((g) => g.members).length, pts.length, "every patch is in exactly one group");
-  assert.ok(wide.length < pts.length, "dense landmarks cluster at the default zoom");
-  assert.ok(close.length > wide.length, "zooming in separates them");
-  wide.forEach((g) => {
-    const mx = g.members.reduce((s, m) => s + m.x, 0) / g.members.length;
-    assert.ok(Math.abs(g.x - mx) < 1e-9, "a cluster sits at its members' centre");
-  });
-  assert.deepEqual(clusterPoints([{ x: 0, y: 0 }, { x: 50, y: 0 }], 10).map((g) => g.members.length), [1, 1]);
-  assert.deepEqual(clusterPoints([], 10), []);
+  const minGap = (placed, size) => {
+    let gap = Infinity;
+    placed.forEach((a, i) => placed.slice(i + 1).forEach((b) => { gap = Math.min(gap, Math.hypot(a.cx - b.cx, a.cy - b.cy)); }));
+    return gap / size;
+  };
+  for (const zoom of [1, 2, 4, MAX_ZOOM]) {
+    const size = patchIconSize(zoom);
+    const placed = layoutPatches(pts, size);
+    assert.deepEqual(placed.map((p) => p.id), pts.map((p) => p.id), "one icon per patch, in trail order");
+    assert.ok(minGap(placed, size) > 0.8, `patches overlap at most slightly at ${zoom}×`);
+    placed.forEach((p) => assert.ok(Math.hypot(p.cx - p.x, p.cy - p.y) < size * 4, `${p.id} stays near its landmark at ${zoom}×`));
+  }
+  const moved = (zoom) => layoutPatches(pts, patchIconSize(zoom)).filter((p) => p.moved).length;
+  assert.ok(moved(1) > 0, "the crowded southern sections need nudging across the whole trail");
+  assert.ok(moved(MAX_ZOOM) < moved(1), "zooming in lets patches settle back beside their landmarks");
+  const [alone] = layoutPatches([{ x: 100, y: 100 }], 10);
+  assert.deepEqual([alone.cx, alone.cy, alone.moved], [106, 94, false], "a lone patch sits up and to the right of its landmark");
+  const twins = layoutPatches([{ x: 0, y: 0 }, { x: 0, y: 0 }], 10);
+  assert.ok(Math.hypot(twins[0].cx - twins[1].cx, twins[0].cy - twins[1].cy) > 8, "patches on the same spot still separate");
+  assert.deepEqual(layoutPatches(pts, 16), layoutPatches(pts, 16), "the layout is deterministic");
+  assert.deepEqual(layoutPatches([], 10), []);
 });
-test("patch icons are larger than before and grow on screen as you zoom, within the zoom limits", () => {
-  assert.equal(patchIconSize(1), 24, "about 40% larger than the old 17-unit icon");
+test("patch icons are small across the whole trail and grow on screen as you zoom, within the zoom limits", () => {
+  assert.equal(patchIconSize(1), 16, "small at 1× so crowded sections fit");
   const onScreen = (z) => patchIconSize(z) * z;
   assert.ok(onScreen(2) > onScreen(1) && onScreen(MAX_ZOOM) > onScreen(2), "grows on screen");
-  assert.ok(onScreen(MAX_ZOOM) < 24 * MAX_ZOOM / 2, "but far less than the map itself, so the trail stays readable");
+  assert.ok(onScreen(MAX_ZOOM) > 36 && onScreen(MAX_ZOOM) < 16 * MAX_ZOOM / 2, "large up close, but far less than the map itself");
   assert.equal(patchIconSize(MAX_ZOOM * 10), patchIconSize(MAX_ZOOM));
   assert.equal(patchIconSize(undefined), patchIconSize(1));
 });

@@ -39,14 +39,15 @@ export function mapViewBox() {
 // ---- Pure view maths (tested) ----------------------------------------------------------------------
 export const MIN_ZOOM = 1;
 export const MAX_ZOOM = 8;
-// On-screen size of a map patch icon, in base map units (about a pixel each on a phone).
-const PATCH_ICON = 24;
+// On-screen size of a map patch icon at 1×, in base map units (about a pixel each on a phone).
+const PATCH_ICON = 16;
 
-// Map-unit size of a patch icon at this zoom: it grows gently as you zoom in (about 24px at 1× and
-// 40px at 8× on screen), so patches stand out without hiding the trail.
+// Map-unit size of a patch icon at this zoom: small across the whole trail (about 16px at 1×) and
+// growing as you zoom in (about 26px at 3× and 41px at 8× on screen), so crowded sections still show
+// every patch and a close look shows them large.
 export function patchIconSize(zoom) {
   const z = Math.min(Math.max(Number(zoom) || 1, MIN_ZOOM), MAX_ZOOM);
-  return (PATCH_ICON * z ** 0.25) / z;
+  return (PATCH_ICON * z ** 0.45) / z;
 }
 
 export function defaultView(base = mapViewBox()) {
@@ -99,8 +100,6 @@ export function fitView(points, base = mapViewBox(), pad = 30) {
   return clampView({ zoom, cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2 }, base);
 }
 
-// Groups map points closer than `minDist` (map units) so earned patches never pile up on each other.
-// Points keep their order; a group sits at the average position of its members.
 // A four-point sparkle centred on (x, y), for freshly earned patches.
 function sparkle(x, y, r) {
   const k = r * 0.28;
@@ -108,16 +107,38 @@ function sparkle(x, y, r) {
   return `M${f(x)} ${f(y - r)} L${f(x + k)} ${f(y - k)} L${f(x + r)} ${f(y)} L${f(x + k)} ${f(y + k)} L${f(x)} ${f(y + r)} L${f(x - k)} ${f(y + k)} L${f(x - r)} ${f(y)} L${f(x - k)} ${f(y - k)}Z`;
 }
 
-export function clusterPoints(points, minDist) {
-  const groups = [];
-  points.forEach((pt) => {
-    const near = groups.find((g) => Math.hypot(g.x - pt.x, g.y - pt.y) < minDist);
-    if (!near) { groups.push({ x: pt.x, y: pt.y, members: [pt] }); return; }
-    near.members.push(pt);
-    near.x += (pt.x - near.x) / near.members.length;
-    near.y += (pt.y - near.y) / near.members.length;
+// Where each earned patch sits on the map. Every patch is shown on its own (no count markers): it
+// starts up and to the right of its landmark, then crowded patches nudge each other apart while a
+// gentle pull keeps them near home, like patches sewn edge to edge on a passport page. Patches may
+// overlap a little (`overlap` of their size) so dense sections stay compact; a patch pushed well
+// away gets `moved: true` so a thread can lead back to its landmark. Pure and deterministic.
+export function layoutPatches(points, size, { overlap = 0.15, iterations = 120 } = {}) {
+  const gap = size * (1 - overlap);
+  const nodes = points.map((pt, i) => {
+    const hx = pt.x + size * 0.6;
+    const hy = pt.y - size * 0.6;
+    return { ...pt, hx, hy, cx: hx, cy: hy, i };
   });
-  return groups;
+  for (let step = 0; step < iterations; step += 1) {
+    // Separation only for the last steps, so overlaps are settled rather than pulled back.
+    const pull = step < iterations - 30 ? 0.06 : 0;
+    for (let a = 0; a < nodes.length; a += 1) {
+      for (let b = a + 1; b < nodes.length; b += 1) {
+        const A = nodes[a];
+        const B = nodes[b];
+        let dx = B.cx - A.cx;
+        let dy = B.cy - A.cy;
+        let d = Math.hypot(dx, dy);
+        if (d >= gap) continue;
+        if (d < 1e-6) { const ang = (b * 2.399963) % (Math.PI * 2); dx = Math.cos(ang); dy = Math.sin(ang); d = 1; } // golden-angle split for exact ties
+        const push = (gap - d) / 2;
+        A.cx -= (dx / d) * push; A.cy -= (dy / d) * push;
+        B.cx += (dx / d) * push; B.cy += (dy / d) * push;
+      }
+    }
+    if (pull) nodes.forEach((n) => { n.cx += (n.hx - n.cx) * pull; n.cy += (n.hy - n.cy) * pull; });
+  }
+  return nodes.map(({ hx, hy, i, ...n }) => ({ ...n, moved: Math.hypot(n.cx - hx, n.cy - hy) > size * 0.35 }));
 }
 
 // Route points (and interpolated ends) inside a northbound mile range.
@@ -284,7 +305,8 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     svg("circle", { cx: here.x.toFixed(1), cy: here.y.toFixed(1), r: 5, class: "map-hiker-dot" })));
 
   // Earned landmark patches: a sewn-on patch beside each landmark, like a passport filling in. Icons
-  // grow gently with zoom and gather into a numbered cluster when they crowd. Hovering with a mouse
+  // grow with zoom; where landmarks crowd, patches nudge apart (with a thread back to their landmark)
+  // rather than hiding behind a count, so each stays visible. Hovering with a mouse
   // previews a patch; a click, tap or Enter pins the card open.
   const patchLayer = svg("g", { class: "map-patches" });
   const pop = h("div", { class: "patch-pop", role: "dialog", "aria-label": "Landmark patch details", hidden: "" });
@@ -311,29 +333,20 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     h("dt", {}, "State"), h("dd", {}, pt.stateNames.join(" / ") || pt.state),
     h("dt", {}, "Mile"), h("dd", {}, `${Number(pt.mile).toLocaleString("en-US")} of ${Number(trail.totalMiles).toLocaleString("en-US")}`),
     h("dt", {}, "Earned"), h("dd", {}, `${pt.earnedOn ? formatDay(pt.earnedOn) : "Yes"} · unlocked by the Expedition`));
-  const openPatches = (list, from, { hover = false } = {}) => {
+  const openPatch = (pt, from, { hover = false } = {}) => {
     clearTimeout(hoverTimer);
     returnFocus = from;
     hovering = hover;
-    const single = list.length === 1;
     fill(pop,
       h("div", { class: "patch-pop-head" },
-        h("p", { class: "patch-pop-title" }, single ? list[0].name : `${list.length} landmark patches`),
+        h("p", { class: "patch-pop-title" }, pt.name),
         h("button", { class: "btn small", type: "button", "aria-label": "Close patch details", onClick: () => closePop() }, "Close")),
-      single
-        ? h("div", { class: "patch-pop-card" },
-          patchArt(list[0], { shadow: true }),
-          h("div", {}, patchFacts(list[0]), h("p", { class: "patch-pop-desc" }, list[0].description)))
-        : h("ul", { class: "patch-pop-list" }, list.map((pt) => h("li", { class: "patch-pop-item" },
-          patchArt(pt, { shadow: true }),
-          h("div", {},
-            h("strong", {}, pt.name),
-            h("p", { class: "hint" }, `${pt.stateNames.join(" / ") || pt.state} · Mile ${pt.mile} · ${earnedText(pt)}`),
-            h("p", {}, pt.description))))));
-    pop.classList.toggle("single", single);
+      h("div", { class: "patch-pop-card" },
+        patchArt(pt, { shadow: true }),
+        h("div", {}, patchFacts(pt), h("p", { class: "patch-pop-desc" }, pt.description))));
     pop.hidden = false;
     if (!hover) pop.querySelector("button")?.focus();
-    live.textContent = single ? `${list[0].name}. ${earnedText(list[0])}.` : `${list.length} landmark patches: ${list.map((pt) => pt.landmarkName).join(", ")}.`;
+    live.textContent = `${pt.name}. ${earnedText(pt)}.`;
   };
   pop.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); closePop(); } });
   pop.addEventListener("pointerenter", () => clearTimeout(hoverTimer));
@@ -346,45 +359,27 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
   }, ...children);
   const sparkles = (cx, cy, size) => svg("g", { class: "patch-sparkles", "aria-hidden": "true" }, [[-0.62, -0.5], [0.6, -0.58], [0.66, 0.42]].map(([dx, dy]) =>
     svg("path", { d: sparkle(cx + dx * size, cy + dy * size, size * 0.16) })));
-  const patchIcon = (group, size) => {
-    // Up and to the right of the landmark dot, so the dot stays visible.
-    const cx = group.x + size * 0.6;
-    const cy = group.y - size * 0.6;
-    if (group.members.length === 1) {
-      const pt = group.members[0].patch;
-      const art = patchArt(pt, { mini: true, decorative: true, shadow: true });
-      art.setAttribute("x", (cx - size / 2).toFixed(2));
-      art.setAttribute("y", (cy - size / 2).toFixed(2));
-      art.setAttribute("width", size.toFixed(2));
-      art.setAttribute("height", size.toFixed(2));
-      art.setAttribute("overflow", "visible");
-      const isFresh = fresh.has(pt.id);
-      const icon = asButton({ class: `map-patch${isFresh ? " fresh" : ""}`, "data-patch": pt.landmarkId, "aria-label": `${pt.name}, earned${pt.earnedOn ? ` ${formatDay(pt.earnedOn)}` : ""}. Show patch.` },
-        (el) => openPatches([pt], el),
-        svg("title", {}, `${pt.name} · ${earnedText(pt)}`),
-        svg("circle", { class: "hit", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.8).toFixed(2) }),
-        svg("g", { class: "map-patch-body" }, art),
-        isFresh ? sparkles(cx, cy, size) : null);
-      icon.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse" && (pop.hidden || hovering)) openPatches([pt], icon, { hover: true }); });
-      icon.addEventListener("pointerleave", (e) => { if (hovering && e.pointerType === "mouse") hoverTimer = setTimeout(() => closePop({ restoreFocus: false }), 250); });
-      return icon;
-    }
-    const list = group.members.map((m) => m.patch);
-    const names = list.map((pt) => pt.landmarkName).join(", ");
-    const hasFresh = list.some((pt) => fresh.has(pt.id));
-    return asButton({ class: `map-patch cluster${hasFresh ? " fresh" : ""}`, "aria-label": `${list.length} landmark patches here: ${names}. Zoom in to see them.` },
-      (el) => {
-        if (view.zoom >= MAX_ZOOM - 0.01) { openPatches(list, el); return; }
-        setView({ zoom: Math.min(view.zoom * 2.5, MAX_ZOOM), cx: group.x, cy: group.y }, `Showing ${list.length} landmark patches: ${names}.`);
-        patchLayer.querySelector(`[data-patch="${list[0].landmarkId}"]`)?.focus();
-      },
-      svg("title", {}, `${list.length} patches: ${names}`),
-      svg("circle", { class: "hit", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.8).toFixed(2) }),
-      svg("g", { class: "map-patch-body" },
-        svg("circle", { class: "cluster-bg", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size / 2).toFixed(2) }),
-        svg("circle", { class: "cluster-stitch", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.4).toFixed(2) }),
-        svg("text", { class: "cluster-count", x: cx.toFixed(2), y: (cy + size * 0.17).toFixed(2), "font-size": (size * 0.48).toFixed(2) }, String(list.length))),
-      hasFresh ? sparkles(cx, cy, size) : null);
+  const patchThread = (node) => svg("line", { class: "map-patch-thread", "aria-hidden": "true",
+    x1: node.x.toFixed(2), y1: node.y.toFixed(2), x2: node.cx.toFixed(2), y2: node.cy.toFixed(2) });
+  const patchIcon = (node, size) => {
+    // Up and to the right of the landmark dot (so the dot stays visible), or nudged clear of its neighbours.
+    const { cx, cy, patch: pt } = node;
+    const art = patchArt(pt, { mini: true, decorative: true, shadow: true });
+    art.setAttribute("x", (cx - size / 2).toFixed(2));
+    art.setAttribute("y", (cy - size / 2).toFixed(2));
+    art.setAttribute("width", size.toFixed(2));
+    art.setAttribute("height", size.toFixed(2));
+    art.setAttribute("overflow", "visible");
+    const isFresh = fresh.has(pt.id);
+    const icon = asButton({ class: `map-patch${isFresh ? " fresh" : ""}`, "data-patch": pt.landmarkId, "aria-label": `${pt.name}, earned${pt.earnedOn ? ` ${formatDay(pt.earnedOn)}` : ""}. Show patch.` },
+      (el) => openPatch(pt, el),
+      svg("title", {}, `${pt.name} · ${earnedText(pt)}`),
+      svg("circle", { class: "hit", cx: cx.toFixed(2), cy: cy.toFixed(2), r: (size * 0.6).toFixed(2) }),
+      svg("g", { class: "map-patch-body" }, art),
+      isFresh ? sparkles(cx, cy, size) : null);
+    icon.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse" && (pop.hidden || hovering)) openPatch(pt, icon, { hover: true }); });
+    icon.addEventListener("pointerleave", (e) => { if (hovering && e.pointerType === "mouse") hoverTimer = setTimeout(() => closePop({ restoreFocus: false }), 250); });
+    return icon;
   };
   let drawnZoom = null;
   const drawPatches = () => {
@@ -392,7 +387,10 @@ export function renderTrailMap(trail, progress, { crew = [], crewMiles = null, s
     const first = drawnZoom === null;
     drawnZoom = view.zoom;
     const size = patchIconSize(view.zoom);
-    fill(patchLayer, clusterPoints(earnedPatches, size * 1.1).map((g) => patchIcon(g, size)));
+    const placed = layoutPatches(earnedPatches, size);
+    fill(patchLayer,
+      svg("g", { class: "map-patch-threads" }, placed.filter((n) => n.moved).map(patchThread)),
+      svg("g", { class: "map-patch-stack" }, placed.map((n) => patchIcon(n, size))));
     if (first) fresh = new Set(); // the stitch-pop plays once, not on every zoom
   };
   root.append(patchLayer);

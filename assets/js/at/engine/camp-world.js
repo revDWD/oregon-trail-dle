@@ -2,10 +2,10 @@
 // data, no DOM and no three.js, so all of it is unit-tested. The renderer (ui/camp-3d.js) only draws
 // what this module decides. Units are metres on the ground plane (x east, z south, y up).
 
-export const WORLD_RADIUS = 15; // walkable circle around the fire
+export const WORLD_RADIUS = 21; // walkable circle around the fire
 export const PLAYER_RADIUS = 0.45;
-export const WALK_SPEED = 3.2; // metres per second
-export const RUN_SPEED = 5.2;
+export const WALK_SPEED = 3.6; // metres per second
+export const RUN_SPEED = 6;
 
 // Places you can walk up to. `reach` is how close (from the edge of the object) the prompt appears.
 // Order is the order of the Camp Locations list below the scene. `view` is the close-up the camera
@@ -15,36 +15,42 @@ export const RUN_SPEED = 5.2;
 export const CAMP_LOCATIONS = Object.freeze([
   { id: "roster", name: "Hiker Roster Campfire", x: 0, z: 0, radius: 1.5, reach: 2, verb: "Sit by the fire",
     view: { orbit: 0.05, distance: 3.7, height: 2, look: 0.65 } },
-  { id: "bulletin", name: "Expedition Bulletin Board", x: 5.5, z: -5.5, radius: 0.9, reach: 1.8, verb: "Read the board",
+  { id: "bulletin", name: "Expedition Bulletin Board", x: 7.7, z: -7.7, radius: 0.9, reach: 1.8, verb: "Read the board",
     view: { distance: 2.6, height: 1.55, look: 1.4 } },
-  { id: "journal", name: "Trail Journal Tent", x: -6.5, z: -4.5, radius: 1.5, reach: 1.6, verb: "Open the journal",
+  { id: "journal", name: "Trail Journal Tent", x: -9.1, z: -6.3, radius: 1.5, reach: 1.6, verb: "Open the journal",
     view: { distance: 4.2, height: 1.9, look: 0.9 } },
-  { id: "patches", name: "Patch Collection Display", x: -6, z: 5, radius: 0.9, reach: 1.8, verb: "Look at the patches",
+  { id: "patches", name: "Patch Collection Display", x: -8.4, z: 7, radius: 0.9, reach: 1.8, verb: "Look at the patches",
     view: { distance: 2.6, side: 0.9, height: 1.45, look: 1.5 } },
-  { id: "wildlife", name: "Wildlife Observation Area", x: 8.5, z: 3.5, radius: 1, reach: 2, verb: "Check recent sightings",
+  { id: "wildlife", name: "Wildlife Observation Area", x: 11.9, z: 4.9, radius: 1, reach: 2, verb: "Check recent sightings",
     view: { distance: 2.4, height: 1.75, look: 1.3, ahead: 7 } },
-  { id: "map", name: "Trail Map Table", x: 2.5, z: 7, radius: 1.2, reach: 1.6, verb: "Study the map",
+  { id: "map", name: "Trail Map Table", x: 3.5, z: 9.8, radius: 1.2, reach: 1.6, verb: "Study the map",
     view: { distance: 1.5, height: 2.6, look: 0.86 } }
 ].map((loc) => Object.freeze({ ...loc, view: Object.freeze(loc.view) })));
 
 // Scenery you bump into but can't use. `tall` objects block the camera too.
 export const CAMP_PROPS = Object.freeze([
-  { id: "shelter", x: 0, z: -11, radius: 2.6, tall: true },
-  { id: "pump", x: 4, z: -1.8, radius: 0.35 },
-  { id: "bear-bags", x: -10, z: -1, radius: 0.5, tall: true },
-  { id: "signpost", x: 0, z: 12, radius: 0.3, tall: true },
-  { id: "woodpile", x: -8.5, z: 1.2, radius: 0.7 },
-  { id: "chopping-block", x: -7.4, z: -0.8, radius: 0.35 },
-  { id: "supply-crates", x: 3.2, z: -7.4, radius: 0.6 },
-  { id: "overlook-bench", x: 11.5, z: 6, radius: 0.6, tall: false },
-  { id: "fallen-log", x: -9.5, z: 8.5, radius: 0.8, tall: false },
+  { id: "shelter", x: 0, z: -15.4, radius: 2.6, tall: true },
+  { id: "pump", x: 5.6, z: -2.5, radius: 0.35 },
+  { id: "bear-bags", x: -14, z: -1.4, radius: 0.5, tall: true },
+  { id: "signpost", x: 0, z: 16.8, radius: 0.3, tall: true },
+  { id: "woodpile", x: -11.9, z: 1.7, radius: 0.7 },
+  { id: "chopping-block", x: -10.4, z: -1.1, radius: 0.35 },
+  { id: "supply-crates", x: 5, z: -9.6, radius: 0.6 },
+  { id: "overlook-bench", x: 16.1, z: 8.4, radius: 0.6, tall: false },
+  { id: "fallen-log", x: -13.3, z: 11.9, radius: 0.8, tall: false },
   // Signs of a camp in use: the camp kitchen, folding chairs, packs dropped by the trail, a drying line
   // of socks and a tree with the trail's white blaze.
-  { id: "camp-kitchen", x: -1.8, z: -5, radius: 0.6 },
-  { id: "camp-chairs", x: 7.6, z: 7.2, radius: 0.6, tall: false },
-  { id: "pack-drop", x: -2.2, z: 8.4, radius: 0.5, tall: false },
-  { id: "drying-line", x: 8.2, z: -2.6, radius: 0.4 },
-  { id: "blaze-tree", x: -1.4, z: 13.6, radius: 0.35, tall: true }
+  { id: "camp-kitchen", x: -2.5, z: -7, radius: 0.6 },
+  { id: "camp-chairs", x: 10.6, z: 10.1, radius: 0.6, tall: false },
+  { id: "pack-drop", x: -3.1, z: 11.8, radius: 0.5, tall: false },
+  { id: "drying-line", x: 11.5, z: -3.6, radius: 0.4 },
+  { id: "blaze-tree", x: -2, z: 19, radius: 0.35, tall: true },
+  // A picnic table in front of the shelter, the trail register box by the signpost, a supply cache of
+  // bear canisters and water jugs, and a junction sign where the side paths leave the trail.
+  { id: "picnic-table", x: 3.8, z: -12.6, radius: 0.9, tall: false },
+  { id: "trail-register", x: -1.7, z: 15.6, radius: 0.3, tall: false },
+  { id: "supply-cache", x: 9, z: -11.2, radius: 0.55, tall: false },
+  { id: "junction-sign", x: -1.3, z: 7.6, radius: 0.25, tall: false }
 ]);
 
 // Log benches around the fire, in the gaps between the paths (headings in degrees, atan2(x, z)).
@@ -60,16 +66,16 @@ export const BENCH_SEATS = Object.freeze(FIRE_BENCHES.flatMap((b) => [-0.35, 0.3
   return Object.freeze({ id: `${b.id}-${k ? "b" : "a"}`, bench: b.id, x, z, heading: Math.atan2(-x, -z) });
 })));
 
-export const CAMP_START = Object.freeze({ x: 0, z: 4.2, heading: Math.PI });
+export const CAMP_START = Object.freeze({ x: 0, z: 5.2, heading: Math.PI });
 
 // Lantern posts (campScale adds them as the miles grow), lit in the evening and at night.
-export const LANTERN_SPOTS = Object.freeze([{ x: -3.6, z: -5.6 }, { x: 3, z: -4.8 }, { x: -4.2, z: 3.6 }, { x: 5.4, z: 4.4 }]
+export const LANTERN_SPOTS = Object.freeze([{ x: -5, z: -7.8 }, { x: 4.2, z: -6.7 }, { x: -5.9, z: 5 }, { x: 7.6, z: 6.2 }]
   .map((spot, i) => Object.freeze({ id: `lantern-${i + 1}`, ...spot, radius: 0.15, tall: false })));
 
 // Where the expedition's tents go as the miles grow (up to campScale's 8), clear of every path.
 export const TENT_SPOTS = Object.freeze([
-  { x: -3.8, z: -7.6 }, { x: -11, z: 4.5 }, { x: 10.5, z: -6.5 }, { x: 6.5, z: 10 },
-  { x: -11, z: -6 }, { x: 11.5, z: -0.5 }, { x: -3.5, z: 11 }, { x: 5, z: -10 }
+  { x: -5.3, z: -10.6 }, { x: -15.4, z: 6.3 }, { x: 14.7, z: -9.1 }, { x: 9.1, z: 14 },
+  { x: -15.4, z: -8.4 }, { x: 16.1, z: -0.7 }, { x: -4.9, z: 15.4 }, { x: 7, z: -14 }
 ].map((spot, i) => ({ id: `tent-${i + 1}`, ...spot, radius: 1.3, tall: true })));
 
 // Every circle that blocks walking.
@@ -223,9 +229,9 @@ export function followCamera(target, yaw, pitch, colliders = [], { distance = CA
 // once, `flora` the ground plants (ferns, shrubs, flowers, stones) and `ground` the ground texture size.
 // `shadows` is the sun's shadow map size for the still scenery (0: soft blob shadows only).
 export const QUALITY = Object.freeze({
-  low: { id: "low", pixelRatio: 1, antialias: false, trees: 18, fireflies: 10, smoke: 6, visitors: 1, flora: 40, ground: 512, shadows: 0 },
-  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 28, fireflies: 22, smoke: 10, visitors: 2, flora: 80, ground: 1024, shadows: 1024 },
-  high: { id: "high", pixelRatio: 2, antialias: true, trees: 40, fireflies: 36, smoke: 14, visitors: 3, flora: 130, ground: 1024, shadows: 2048 }
+  low: { id: "low", pixelRatio: 1, antialias: false, trees: 26, fireflies: 12, smoke: 6, visitors: 1, flora: 60, ground: 512, shadows: 0 },
+  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 42, fireflies: 26, smoke: 10, visitors: 2, flora: 130, ground: 1024, shadows: 1024 },
+  high: { id: "high", pixelRatio: 2, antialias: true, trees: 60, fireflies: 42, smoke: 14, visitors: 3, flora: 200, ground: 1024, shadows: 2048 }
 });
 
 export function qualityTier({ dpr = 1, cores = 4, memory = 4, mobile = false, saveData = false } = {}) {
@@ -268,8 +274,8 @@ export function campLighting(time = "day", weather = { id: "clear" }) {
     fog: mix(base.fog, night ? 0x1c2233 : 0x9aa3aa, grey),
     sunIntensity: base.sunIntensity * (1 - grey * 0.6),
     shadow: base.shadow * (1 - grey), // overcast days have no crisp shadows
-    fogNear: weather && weather.id === "fog" ? 6 : 14,
-    fogFar: weather && weather.id === "fog" ? 26 : 48,
+    fogNear: weather && weather.id === "fog" ? 8 : 18,
+    fogFar: weather && weather.id === "fog" ? 32 : 62,
     fireIntensity: night ? 9 : glow ? 6 : 2.5,
     lanterns: glow,
     fireflies: glow && !(weather && ["rain", "storm", "snow"].includes(weather.id)),

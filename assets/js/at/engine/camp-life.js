@@ -32,6 +32,9 @@ const seatsAlong = (key, x, z, heading, offsets, extra = {}) => offsets.map((off
 }));
 const prop = (id) => CAMP_PROPS.find((p) => p.id === id);
 const loc = (id) => CAMP_LOCATIONS.find((l) => l.id === id);
+const xz = (p) => ({ x: p.x, z: p.z });
+// A spot (dx, dz) from a place, facing it, so activity spots follow their place when the layout moves.
+const near = (key, p, dx, dz) => spot(key, round(p.x + dx), round(p.z + dz), p.x, p.z);
 const outward = (p) => headingOf(p.x, p.z);
 const inward = (p) => headingOf(-p.x, -p.z);
 
@@ -59,35 +62,35 @@ export const CAMP_ACTIVITIES = Object.freeze([
   { id: "cook", label: { dawn: "cooking breakfast", day: "making lunch", dusk: "cooking supper", night: "brewing a late cup of tea" }, pose: "cook", weights: [5, 1, 4, 0.5],
     spots: () => [-165, 75].map((d, i) => toFire(`cook-${i + 1}`, 1.85, d)) },
   { id: "water", label: "fetching water from the pump", route: true, carry: ["jug", "jug"], poses: ["pump", "cook"], weights: [4, 2, 1, 0], cover: "outdoor",
-    spots: () => [spot("water-pump", 3.6, -1.2, 4, -1.8), spot("water-fire", 1.9, -0.5, 0, 0)] },
+    spots: () => [near("water-pump", prop("pump"), -0.4, 0.6), spot("water-fire", 1.9, -0.5, 0, 0)] },
   { id: "logs", label: "carrying firewood", route: true, carry: [null, "logs"], poses: ["crouch", "crouch"], weights: [2, 3, 3, 0], cover: "outdoor",
-    spots: () => [spot("logs-pile", -7.5, 1.9, -8.5, 1.2), spot("logs-fire", -1.98, 0.28, 0, 0)] },
+    spots: () => [near("logs-pile", prop("woodpile"), 1, 0.7), spot("logs-fire", -1.98, 0.28, 0, 0)] },
   { id: "chop", label: "splitting kindling", pose: "chop", item: "axe", weights: [1, 4, 1, 0], cover: "outdoor",
-    spots: () => [spot("chop", -7.4, -0.05, -7.4, -0.8)] },
+    spots: () => [near("chop", prop("chopping-block"), 0, 0.75)] },
   { id: "map", label: { dawn: "planning the day's miles", day: "studying the trail map", dusk: "tracing tomorrow's route", night: "studying the trail map" }, pose: "lean", weights: [5, 2, 1, 0],
-    spots: () => [[0.95, 7.1], [4.05, 6.9], [2.5, 8.6]].map(([x, z], i) => spot(`map-${i + 1}`, x, z, loc("map").x, loc("map").z)) },
+    spots: () => [[-1.55, 0.1], [1.55, -0.1], [0, 1.6]].map(([dx, dz], i) => near(`map-${i + 1}`, loc("map"), dx, dz)) },
   { id: "gear", label: { dawn: "packing up gear", day: "airing out gear", dusk: "sorting gear", night: "sorting gear" }, pose: "crouch", weights: [3, 2, 1, 0], cover: "shelter",
     spots: (ctx) => tentSpots(ctx.tents, "gear", 1.8, 0, "tent") },
   { id: "stretch", label: "stretching sore legs", pose: "stretch", weights: [4, 1, 0.5, 0], cover: "outdoor",
-    spots: () => [spot("stretch-1", 6.8, -2.8, 0, 0), spot("stretch-2", -4.4, 8.4, 0, 0)] },
+    spots: () => [spot("stretch-1", 9.5, -3.9, 0, 0), spot("stretch-2", -6.2, 11.4, 0, 0)] },
   { id: "birdwatch", label: "watching birds", pose: "binoculars", weights: [3, 3, 1, 0], cover: "outdoor",
-    spots: () => [[9.6, 4.6], [7.3, 4.6]].map(([x, z], i) => spot(`birdwatch-${i + 1}`, x, z, x * 2, z * 2)) },
+    spots: () => [[1.1, 1.1], [-1.2, 1.1]].map(([dx, dz], i) => { const x = round(loc("wildlife").x + dx); const z = round(loc("wildlife").z + dz); return spot(`birdwatch-${i + 1}`, x, z, x * 2, z * 2); }) },
   { id: "photo", label: "taking photos", pose: "photo", item: "camera", weights: [2, 3, 2, 0.3], cover: "outdoor",
-    spots: () => [[12.6, 2.8], [-12.6, 1.2], [7.5, -12]].map(([x, z], i) => spot(`photo-${i + 1}`, x, z, x * 2, z * 2)) },
+    spots: () => [[17.6, 3.9], [-17.6, 1.7], [10.5, -16.8]].map(([x, z], i) => spot(`photo-${i + 1}`, x, z, x * 2, z * 2)) },
   { id: "overlook", label: { dawn: "watching the sunrise", day: "enjoying the view", dusk: "watching the sunset", night: "stargazing" }, pose: "sit", weights: [2, 3, 3, 0.5], cover: "outdoor",
     spots: () => seatsAlong("overlook", OVERLOOK.x, OVERLOOK.z, OVERLOOK.heading, [-0.35, 0.35]) },
   { id: "journal", label: "writing in the trail journal", pose: "write", weights: [1, 2, 4, 2], cover: "shelter",
-    spots: () => [spot("journal", -4.94, -3.42, loc("journal").x, loc("journal").z)] },
+    spots: () => [near("journal", loc("journal"), 1.56, 1.08)] },
   { id: "board", label: "reading the bulletin board", pose: "look", weights: [2, 3, 2, 0.5],
-    spots: () => [[4.93, -4.23], [4.23, -4.93]].map(([x, z], i) => spot(`board-${i + 1}`, x, z, loc("bulletin").x, loc("bulletin").z)) },
+    spots: () => [[-0.57, 1.27], [-1.27, 0.57]].map(([dx, dz], i) => near(`board-${i + 1}`, loc("bulletin"), dx, dz)) },
   { id: "patches", label: "admiring the Expedition's patches", pose: "look", weights: [1, 2, 2, 0.5],
-    spots: () => [[-4.75, 4.55], [-5.33, 3.85]].map(([x, z], i) => spot(`patches-${i + 1}`, x, z, loc("patches").x, loc("patches").z)) },
+    spots: () => [[1.25, -0.45], [0.67, -1.15]].map(([dx, dz], i) => near(`patches-${i + 1}`, loc("patches"), dx, dz)) },
   { id: "relax", label: "resting on the fallen log", pose: "sit", weights: [0.5, 3, 2, 0], cover: "outdoor",
     spots: () => seatsAlong("relax", FALLEN_LOG.x, FALLEN_LOG.z, FALLEN_LOG.heading, [-0.45, 0.45], { y: -0.05 }) },
   { id: "shelter-read", label: "reading in the shelter", pose: "read", weights: [1, 2, 2, 2], cover: "shelter",
-    spots: () => [-0.8, 0.8].map((x, i) => ({ key: `shelter-read-${i + 1}`, x, z: -9.75, heading: 0, y: 0.1, seat: true })) },
+    spots: () => [-0.8, 0.8].map((x, i) => ({ key: `shelter-read-${i + 1}`, x, z: prop("shelter").z + 1.25, heading: 0, y: 0.1, seat: true })) },
   { id: "sleep", label: "asleep in the shelter", pose: "sleep", weights: [0, 0, 0, 4], cover: "shelter",
-    spots: () => [-1.4, 0, 1.4].map((x, i) => ({ key: `sleep-${i + 1}`, x, z: -11.3, heading: 0, y: 0.5, seat: true })) },
+    spots: () => [-1.4, 0, 1.4].map((x, i) => ({ key: `sleep-${i + 1}`, x, z: prop("shelter").z - 0.3, heading: 0, y: 0.5, seat: true })) },
   { id: "tent-rest", label: { dawn: "waking up by their tent", day: "resting by their tent", dusk: "settling in by their tent", night: "turning in for the night" }, pose: "read", weights: [0.5, 0.5, 1, 3], cover: "shelter",
     spots: (ctx) => tentSpots(ctx.tents, "tent-rest", 1.95, 0.6, "fire") },
   { id: "lantern-read", label: "reading by lantern light", pose: "read", weights: [0, 0, 2, 3],
@@ -96,11 +99,11 @@ export const CAMP_ACTIVITIES = Object.freeze([
       return spot(`lantern-read-${i + 1}`, round(l.x - (l.x / d) * 0.75), round(l.z - (l.z / d) * 0.75), 0, 0, { y: -0.3 });
     }) },
   { id: "mingle", label: "chatting around camp", pose: "look", weights: [0.5, 0.5, 0.5, 0.3],
-    spots: () => Array.from({ length: 12 }, (_, i) => toFire(`mingle-${i + 1}`, 5.4, i * 30))
-      .filter((s) => LANTERN_SPOTS.every((l) => Math.hypot(s.x - l.x, s.z - l.z) > 0.8)) },
+    spots: () => Array.from({ length: 12 }, (_, i) => toFire(`mingle-${i + 1}`, 6.2, i * 30))
+      .filter((s) => [...LANTERN_SPOTS, ...CAMP_PROPS].every((l) => Math.hypot(s.x - l.x, s.z - l.z) > l.radius + 0.8)) },
   // Only for a hiker who logged today, on arrival.
   { id: "arrive", label: "just back from the trail", pose: "wave", weights: [0, 0, 0, 0],
-    spots: () => [spot("arrive-1", -0.6, 10.6, 0, 0), spot("arrive-2", 0.7, 10.4, 0, 0)] }
+    spots: () => [spot("arrive-1", -0.8, 14.6, 0, 0), spot("arrive-2", 1, 14.4, 0, 0)] }
 ].map((a) => Object.freeze(a)));
 
 const ACTIVITY = new Map(CAMP_ACTIVITIES.map((a) => [a.id, a]));
@@ -376,14 +379,14 @@ const speciesById = () => new Map(themeFor("wildlife").species.map((s) => [s.id,
 
 // Where birds land: post tops, the bear line, the shelter, the board, benches and logs.
 export const PERCHES = Object.freeze([
-  { id: "signpost", x: 0.9, z: 12, y: 2.25 },
-  { id: "bear-pole-1", x: -10, z: -2.3, y: 3.45 },
-  { id: "bear-pole-2", x: -10, z: 0.3, y: 3.45 },
-  { id: "shelter-post", x: 2.2, z: -9.65, y: 2.55 },
-  { id: "woodpile", x: -8.5, z: 1.2, y: 0.95 },
-  { id: "board", x: 5.5, z: -5.5, y: 2.1 },
-  { id: "overlook-bench", x: 11.5, z: 6, y: 0.5 },
-  { id: "fallen-log", x: -9.5, z: 8.5, y: 0.5 }
+  { id: "signpost", x: prop("signpost").x + 0.9, z: prop("signpost").z, y: 2.25 },
+  { id: "bear-pole-1", x: prop("bear-bags").x, z: prop("bear-bags").z - 1.3, y: 3.45 },
+  { id: "bear-pole-2", x: prop("bear-bags").x, z: prop("bear-bags").z + 1.3, y: 3.45 },
+  { id: "shelter-post", x: prop("shelter").x + 2.2, z: prop("shelter").z + 1.35, y: 2.55 },
+  { id: "woodpile", ...xz(prop("woodpile")), y: 0.95 },
+  { id: "board", ...xz(loc("bulletin")), y: 2.1 },
+  { id: "overlook-bench", ...xz(prop("overlook-bench")), y: 0.5 },
+  { id: "fallen-log", ...xz(prop("fallen-log")), y: 0.5 }
 ].map((p) => Object.freeze(p)));
 const OWL_PERCHES = ["signpost", "bear-pole-1", "bear-pole-2", "shelter-post"];
 
@@ -416,8 +419,8 @@ function groundPoint(rand, a, rMin, rMax, colliders, spread = 0.6) {
 export function visitorRoute(visitor, rand, colliders = []) {
   const a = rand() * Math.PI * 2;
   const stop = (p, wait) => ({ x: p.x, y: p.y || 0, z: p.z, wait, fly: false });
-  const enter = { ...polar(a, 19), wait: 0, fly: false };
-  const leave = (b) => ({ ...polar(b, 23), wait: 0, fly: false });
+  const enter = { ...polar(a, 26), wait: 0, fly: false };
+  const leave = (b) => ({ ...polar(b, 30), wait: 0, fly: false });
   const w = (lo, hi) => lo + rand() * (hi - lo);
   switch (visitor.place) {
     case "perch": {
@@ -426,30 +429,30 @@ export function visitorRoute(visitor, rand, colliders = []) {
       const first = perches[Math.floor(rand() * perches.length)];
       const second = perches[Math.floor(rand() * perches.length)];
       const tree = polar(a + 0.5, WORLD_RADIUS + 1.2, 3.2);
-      const route = [{ ...polar(a, 21, 7), wait: 0, fly: true }, { ...first, wait: owl ? w(14, 26) : w(4, 9), fly: true }];
+      const route = [{ ...polar(a, 28, 7), wait: 0, fly: true }, { ...first, wait: owl ? w(14, 26) : w(4, 9), fly: true }];
       if (second !== first) route.push({ ...second, wait: owl ? w(10, 18) : w(3, 7), fly: true });
-      route.push({ ...tree, wait: w(2, 5), fly: true }, { ...polar(a + 1, 24, 9), wait: 0, fly: true });
+      route.push({ ...tree, wait: w(2, 5), fly: true }, { ...polar(a + 1, 31, 9), wait: 0, fly: true });
       return route;
     }
     case "trees": {
-      const p1 = groundPoint(rand, a, 12.5, 14.2, colliders, 0.3);
-      const p2 = groundPoint(rand, a + 0.25, 11.5, 14, colliders, 0.3);
-      return [{ ...polar(a, 16.5), wait: 0, fly: false }, stop(p1, w(2, 5)), stop(p2, w(2, 5)), { ...polar(a + 0.4, 17), wait: 0, fly: false }];
+      const p1 = groundPoint(rand, a, 17.5, 19.8, colliders, 0.3);
+      const p2 = groundPoint(rand, a + 0.25, 16, 19.6, colliders, 0.3);
+      return [{ ...polar(a, 23), wait: 0, fly: false }, stop(p1, w(2, 5)), stop(p2, w(2, 5)), { ...polar(a + 0.4, 24), wait: 0, fly: false }];
     }
     case "treeline": {
-      const p1 = groundPoint(rand, a, 13.6, 15, colliders, 0.3);
-      const p2 = groundPoint(rand, a + 0.3, 13.6, 15, colliders, 0.3);
+      const p1 = groundPoint(rand, a, 19, 21, colliders, 0.3);
+      const p2 = groundPoint(rand, a + 0.3, 19, 21, colliders, 0.3);
       return [enter, stop(p1, w(6, 12)), stop(p2, w(5, 10)), leave(a + 0.8)];
     }
     case "outskirts": {
-      const p1 = groundPoint(rand, a + 0.4, 11, 13.8, colliders, 0.2);
-      const p2 = groundPoint(rand, a + 0.9, 11, 13.8, colliders, 0.2);
+      const p1 = groundPoint(rand, a + 0.4, 15.4, 19.3, colliders, 0.2);
+      const p2 = groundPoint(rand, a + 0.9, 15.4, 19.3, colliders, 0.2);
       return [enter, stop(p1, w(1.5, 4)), stop(p2, w(1.5, 4)), leave(a + 1.3)];
     }
     default: { // edge: hops and pecks round the clearing's rim
-      const p1 = groundPoint(rand, a, 9.5, 13, colliders);
+      const p1 = groundPoint(rand, a, 13.3, 18.2, colliders);
       const r1 = Math.hypot(p1.x, p1.z);
-      const p2 = groundPoint(rand, Math.atan2(p1.x, p1.z), Math.max(9, r1 - 1.5), r1 + 1.5, colliders, 0.25);
+      const p2 = groundPoint(rand, Math.atan2(p1.x, p1.z), Math.max(12.6, r1 - 2), Math.min(WORLD_RADIUS - 1, r1 + 2), colliders, 0.25);
       return [enter, stop(p1, w(3, 8)), stop(p2, w(3, 7)), leave(a + (rand() - 0.5) * 2)];
     }
   }
@@ -605,11 +608,13 @@ const SOLID = new Set(["rhododendron", "boulder"]);
 export const CAMP_PATHS = Object.freeze([
   { id: "trail", ax: 0, az: -40, bx: 0, bz: 40, width: 1.2 },
   ...CAMP_LOCATIONS.filter((l) => l.id !== "roster").map((l) => ({ id: `to-${l.id}`, ax: 0, az: 0, bx: l.x, bz: l.z, width: 0.8 })),
-  { id: "to-woodpile", ax: 0, az: 0, bx: -8.5, bz: 1.2, width: 0.6 },
-  { id: "to-pump", ax: 0, az: 0, bx: 4, bz: -1.8, width: 0.6 },
-  { id: "to-overlook", ax: 8.5, az: 3.5, bx: 11.5, bz: 6, width: 0.5 },
-  { id: "to-kitchen", ax: 0, az: 0, bx: -1.8, bz: -5, width: 0.6 },
-  { id: "to-chairs", ax: 8.5, az: 3.5, bx: 7.6, bz: 7.2, width: 0.5 }
+  { id: "to-woodpile", ax: 0, az: 0, bx: -11.9, bz: 1.7, width: 0.6 },
+  { id: "to-pump", ax: 0, az: 0, bx: 5.6, bz: -2.5, width: 0.6 },
+  { id: "to-overlook", ax: 11.9, az: 4.9, bx: 16.1, bz: 8.4, width: 0.5 },
+  { id: "to-kitchen", ax: 0, az: 0, bx: -2.5, bz: -7, width: 0.6 },
+  { id: "to-chairs", ax: 11.9, az: 4.9, bx: 10.6, bz: 10.1, width: 0.5 },
+  { id: "to-bear-line", ax: -11.9, az: 1.7, bx: -13.4, bz: -0.6, width: 0.45 },
+  { id: "to-crates", ax: 7.7, az: -7.7, bx: 5.4, bz: -9.1, width: 0.45 }
 ].map((p) => Object.freeze(p)));
 
 export function pathDistance(x, z, path) {
@@ -633,7 +638,7 @@ export function campFlora(scene, count, { seed = 11, colliders = [], avoid = [] 
     const size = FLORA_SIZE[kind] * scale;
     const a = rand() * Math.PI * 2;
     // Small plants anywhere past the fire ring; thickets and boulders only near the edge.
-    const r = SOLID.has(kind) ? 12.5 + rand() * 3.5 : 3.8 + Math.sqrt(rand()) * 12;
+    const r = SOLID.has(kind) ? 17.5 + rand() * 4.5 : 3.8 + Math.sqrt(rand()) * 17;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
     if (onPath(x, z, size + 0.15)) continue;

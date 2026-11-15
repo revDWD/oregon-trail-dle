@@ -691,3 +691,12 @@ Polish, not new systems. No SQL.
 - *History leads with people.* Panel order is The Hikers, Expedition Patch Collection, Wildlife Discoveries, Expedition Journal, then Statistics, the Trail Register and Your Activities. The Hikers starts open; the rest stay collapsed.
 - *A bigger camp.* `WORLD_RADIUS` 15 ? 21 with places spread about ?1.4 and faster walking. Activity spots, perches and paths now follow their props, so layout changes stay consistent (tests still check every spot is reachable and clear).
 - *Visual polish.* A picnic table, trail register box, supply cache and a junction sign pointing to the shelter, water and overlook; the shelter got a name board and an eave lantern lit at night; low knolls beyond the clearing; per-instance tree colour; two more worn paths (bear line, supply crates). Medium/High shadows and instancing are unchanged.
+
+## 27. A GLB pipeline for hero objects (pilot: the shelter)
+
+Most of the camp stays procedural; a few key points of interest may use a handcrafted model. This sprint evaluated the idea and piloted it on the trail shelter. Details are in `docs/camp-3d.md` §6. No SQL.
+
+- *Evaluation.* Worth it for a handful of hero props whose shape boxes can't give: the shelter first, then the map table and patch board, then rigid bear and moose models. Campfire seating stays procedural (logs already read well). No skinned characters: hikers and visitors keep their pose-driven animation. No Draco (its decoder outweighs any saving); Meshopt only if models outgrow the budget.
+- *Pipeline.* The vendored `GLTFLoader` (three r187, import paths patched, checksums in the vendor README) is lazy-loaded like three.js. `CAMP_MODELS` registers each model with its prop, hooks, credit and licence. Models use named palette materials (`MODEL_MATERIALS`) that the camp swaps for its own, so they light and fog like the rest of the scene and carry no textures.
+- *The shelter.* An original log lean-to (48 KB, 948 triangles, 3 draw calls) built by `scripts/camp-models.mjs`. It keeps the heights hikers sleep, read and perch at, and its hooks hold the camp's own lit lantern and name board. Loaded on Medium and High; Low and any load error keep the procedural shelter.
+- *Guard rails.* `MODEL_BUDGET` (60 KB, 3,000 triangles and 3 draw calls per model; 300 KB total) and `tests/at/camp-models.test.js` check the budget, materials, hooks, bounds and credit, that the generator reproduces the committed file, and that the vendored loader parses it.

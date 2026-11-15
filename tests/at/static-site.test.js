@@ -86,7 +86,7 @@ test("vendored supabase-js matches the documented checksum", () => {
 
 test("vendored three.js matches the documented checksums and is only loaded lazily by the 3D camp", () => {
   const readme = read("assets/vendor/three/README.md");
-  for (const file of ["three.module.js", "three.core.js"]) {
+  for (const file of ["three.module.js", "three.core.js", "GLTFLoader.js", "BufferGeometryUtils.js", "SkeletonUtils.js"]) {
     const sum = createHash("sha256").update(readFileSync(join(root, "assets/vendor/three", file))).digest("hex");
     assert.ok(readme.includes(sum), `README must document the sha256 of ${file}`);
   }
@@ -94,6 +94,8 @@ test("vendored three.js matches the documented checksums and is only loaded lazi
   const camp3d = read("assets/js/at/ui/camp-3d.js");
   assert.match(camp3d, /import\("\.\.\/\.\.\/\.\.\/vendor\/three\/three\.module\.js"\)/);
   assert.doesNotMatch(camp3d, /^import .*three/m, "three.js must be imported dynamically");
+  assert.match(camp3d, /import\("\.\.\/\.\.\/\.\.\/vendor\/three\/GLTFLoader\.js"\)/, "the model loader loads only with the hero models");
+  assert.match(read("assets/vendor/three/GLTFLoader.js"), /from '\.\/three\.module\.js'/, "the loader shares the camp's three.js");
 });
 
 test("stylesheet supports focus, reduced motion, touch targets and responsive layout", () => {

@@ -113,15 +113,28 @@ Camp photos give **no** miles, points or discoveries today. Wildlife Spotting is
 
 - Low is cheaper despite more props: instancing the hills, rocks and stones paid for them.
 - The first shadow pass made 273 of 333 visible meshes casters, so the shadow pass alone nearly doubled the draws, every frame. Filtering small casters barely helped; drawing the map once for still scenery did. Medium and High now cost the same per frame as before, plus the new props and detail.
-- Each hiker is a group of small meshes (body, limbs, head, hat, pack, held item) and the hikers are the largest remaining per-frame cost. That is fine at 12 and is the first thing to batch if the roster grows (§8).
+- Each hiker is a group of small meshes (body, limbs, head, hat, pack, held item) and the hikers are the largest remaining per-frame cost. That is fine at 12 and is the first thing to batch if the roster grows (§9).
 
 **Considered, not needed today**
 
-- *GLB, Draco, Meshopt.* There are no model files to compress: geometry is built from primitives in code, so the payload is three.js alone. Draco also needs a WASM decoder of a few hundred KB, which would cost more than it saves.
+- *Draco, Meshopt.* The only model file is the 48 KB shelter (§6), so there is nothing worth compressing yet. Draco needs a WASM decoder of a few hundred KB, which would cost more than it saves; Meshopt's decoder is far smaller and is the choice if models ever grow.
 - *Texture compression (KTX2/Basis).* Only two or three small canvas textures exist.
 - *LOD.* The clearing is about 40 m across and the far hills are already single cones; there's nothing far enough away to simplify. Frustum culling (three.js default) already skips meshes behind the camera; an instanced kind is culled as a whole, which is fine at this size.
 - *Post-processing.* Bloom, SSAO and FXAA each add one or more full-screen passes. On a phone at pixel ratio 1.5–2 that is the most expensive thing we could add, for a look the tone mapping and vignette mostly give already.
-## 6. Technical review
+## 6. Hero models (GLB)
+
+Most scenery stays procedural. A few key points of interest may use a handcrafted model, loaded only on Medium and High. The pilot is the trail shelter.
+
+- **Registry.** `CAMP_MODELS` in `engine/camp-world.js` lists each model: `id`, the `prop` it dresses, `file` (in `assets/models/camp/`), the `hooks` it provides, `credit` and `licence`. `MODEL_BUDGET` caps one model at 60 KB, 3,000 triangles and 3 draw calls, and all models at 300 KB.
+- **Authoring.** `scripts/camp-models.mjs` builds each model in code and writes the GLB (`node scripts/camp-models.mjs`). A Blender model works too: export glTF Binary, +Y up, transforms applied, metres, base at y 0, centred on the prop, no textures, no compression extensions. Name each material after `MODEL_MATERIALS` (`wood`, `wood-light`, `wood-dark`, `cream`, `stone`): the camp swaps them for its own palette materials, so lighting, fog and colours match the procedural scene.
+- **Hooks.** Empty nodes (e.g. `lantern-hook`, `sign-hook`) mark where the camp's own live parts go: the lit lantern and the name board move onto them.
+- **Keep the working heights.** Hikers sleep, read and perch on the shelter at fixed points in `camp-life.js` (platform top y 0.5, front edge z +1.25, front post top y 2.55). A replacement model must keep them.
+- **Loading.** `heroModel(id)` in `ui/camp-3d.js` lazy-loads the vendored `GLTFLoader` (dynamic import, as for three.js) and caches one promise per model; `dressHeroes` then swaps the procedural body for a clone. Low, a failed fetch or a parse error keep the procedural shelter: the model is a progressive enhancement and never blocks the camp.
+- **Tests.** `tests/at/camp-models.test.js` checks the budget, the palette materials, the hooks, the bounds and the credit, that the generator reproduces the committed file byte for byte, and that the vendored loader parses it.
+
+Next candidates, in order: the trail map table and the patch board, then rigid bear and moose models (no skeletons; they keep their current procedural animation). Campfire seating stays procedural.
+
+## 7. Technical review
 
 What works well:
 
@@ -137,7 +150,7 @@ Known limits, deliberately accepted:
 - Moving things (the player, hikers, visitors, the axe) have soft blob shadows rather than real ones, so the shadow map can be drawn once (§5).
 - `camp-3d.js` is large (about 1,970 lines) because it holds every model. If it grows much further, split the models (`camp-models.js`) from the loop and input.
 
-## 7. Future ideas
+## 8. Future ideas
 
 Each should reuse existing data and be a `CAMP_LOCATIONS` entry, a prop, an activity or a visitor rather than a new system:
 
@@ -147,14 +160,14 @@ Each should reuse existing data and be a `CAMP_LOCATIONS` entry, a prop, an acti
 - Landmark trophies on a shelf, trail trivia at the signpost, a camp pet, shelter upgrades as the miles grow.
 - Download or share a camp photo (a plain download link; no upload).
 
-## 8. Technology roadmap
+## 9. Technology roadmap
 
 Where the camp's tech can reasonably go over the next few sprints, cheapest and most useful first.
 
 | Area | Today | Next step | When it's worth it |
 | --- | --- | --- | --- |
 | Instancing | Trees, plants, hills, rocks, fire stones | `BatchedMesh` (in the vendored three.js) for the hikers' body parts, or merge each still prop (`BufferGeometryUtils.mergeGeometries`) into one mesh per material | A roster above ~20, or props above ~60 |
-| Assets | Procedural primitives | A small GLB pipeline (Blender → glTF → `gltf-transform` with Meshopt, whose decoder is far smaller than Draco's) for a few hero props: shelter, a moose, a bear | When a model needs more shape than boxes and cones give. Keep the procedural fallback, lazy-load per model, and record licences as for photos |
+| Assets | Procedural primitives, plus the shelter GLB on Medium and High (§6) | More hero props: map table, patch board, then rigid bear and moose. Meshopt (`gltf-transform`) only if models outgrow the budget | When a model needs more shape than boxes and cones give. Keep the procedural fallback and the budget |
 | Animation | Hand-posed limbs from pure state (`applyPose`) | Keep state in `camp-life.js`; if GLB characters arrive, drive an `AnimationMixer` from the same `pose`/`gesture` fields | With skinned models only. Mixers cost CPU per character; share clips and pause off-screen actors |
 | LOD | Not needed | `THREE.LOD` for GLB models (full, simple, impostor sprite) | With GLB models or a larger camp map |
 | Wildlife | 1–3 visitors | Up to ~6 on High is safe (each is 5–10 meshes and a few-dozen-line step). Keep rarity, not count, as the thrill | Seasonal events (a flock of turkeys) can instance a herd |

@@ -15,7 +15,7 @@
 import { h, fill } from "./dom.js";
 import { SCENES, SHIRTS, HATS } from "./camp-scene.js";
 import {
-  BENCH_SEATS, CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, FIRE_BENCHES, LANTERN_SPOTS, MOVE_KEYS, PLAYER_RADIUS, QUALITY, RUN_SPEED,
+  BENCH_SEATS, CAMP_LOCATIONS, CAMP_MODELS, CAMP_PROPS, CAMP_START, FIRE_BENCHES, LANTERN_SPOTS, MOVE_KEYS, PLAYER_RADIUS, QUALITY, RUN_SPEED,
   TENT_SPOTS, WALK_SPEED, WORLD_RADIUS, blocksView, campColliders, campLighting, clampPitch, followCamera, forestRing, headingOf,
   joystickVector, keysVector, locationView, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
 } from "../engine/camp-world.js";
@@ -42,6 +42,20 @@ const loadThree = () => {
   return threeModule;
 };
 
+// Hero models (CAMP_MODELS): each GLB is fetched and parsed once per page, on Medium and High only, and
+// resolves to null if it can't load, so the procedural stand-in simply stays.
+const heroModels = new Map();
+function heroModel(id) {
+  if (!heroModels.has(id)) {
+    const entry = CAMP_MODELS.find((m) => m.id === id);
+    heroModels.set(id, import("../../../vendor/three/GLTFLoader.js")
+      .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(new URL(`../../../models/camp/${entry.file}`, import.meta.url).href))
+      .then((gltf) => gltf.scene)
+      .catch((e) => { console.warn(`Camp model ${entry.file} unavailable`, e); return null; }));
+  }
+  return heroModels.get(id);
+}
+
 // Short names for the floating signs (the full names are in the prompt and the text list).
 const SIGN = { roster: "Campfire", bulletin: "Bulletin Board", journal: "Trail Journal", patches: "Patches", wildlife: "Wildlife", map: "Trail Map" };
 const SKIN = 0xe6b98f;
@@ -52,6 +66,8 @@ const STONE = 0x8a8a84;
 const PANTS = 0x3b4a5c;
 const CREAM = 0xf4ead5;
 const GOLD = 0xe0a43a;
+// A hero model's material names (MODEL_MATERIALS) drawn in the camp's palette.
+const MODEL_COLOURS = { wood: WOOD, "wood-light": WOOD_LIGHT, "wood-dark": WOOD_DARK, cream: CREAM, stone: STONE };
 
 const hex = (c) => (typeof c === "number" ? c : parseInt(String(c || "#888888").slice(1), 16));
 function mix(a, b, t) {
@@ -424,6 +440,7 @@ function createWorld(THREE) {
     THREE, renderer, canvas, scene, camera, tier, ui,
     geos: new Map(), mats: new Map(), disposables: [], key: null,
     dynamic: new THREE.Group(),
+    heroes: new Map(),
     player: { x: CAMP_START.x, z: CAMP_START.z, heading: CAMP_START.heading, phase: 0, speed: 0 },
     cam: { yaw: 0, pitch: 0.42, pos: null },
     photo: { on: false, yaw: 0, pitch: 0, fov: FOV },
@@ -600,7 +617,32 @@ function clearDynamic(w) {
   w.occluders = [];
   w.npcViews.clear();
   w.visitorViews.clear();
+  w.heroes = new Map();
   w.lifeKey = null;
+}
+
+// Swap each hero's procedural body for its model once loaded (Medium and High). A newer build or a
+// lower tier leaves the procedural one. Live parts (the shelter's lantern) move to the model's hooks.
+// Done in place, not by rebuilding, so the hikers carry on with what they were doing.
+function dressHeroes(w) {
+  if (!w.tier.models) return;
+  w.heroes.forEach((hero, id) => {
+    heroModel(id).then((scene) => {
+      if (!scene || world !== w || w.heroes.get(id) !== hero || !w.tier.models) return;
+      const model = scene.clone();
+      model.traverse((o) => {
+        if (o.isMesh) o.material = mat(w, MODEL_COLOURS[o.material.name] ?? o.material.color.getHex());
+      });
+      hero.group.remove(hero.body);
+      hero.group.add(model);
+      model.updateMatrixWorld(true);
+      Object.entries(hero.hooks).forEach(([name, part]) => {
+        const hook = model.getObjectByName(name);
+        if (hook) part.position.copy(hero.group.worldToLocal(hook.getWorldPosition(new w.THREE.Vector3())));
+      });
+      castShadows(w, model);
+    });
+  });
 }
 
 // The clearing's ground, painted once per build: grass, a worn centre, worn footpaths (CAMP_PATHS),
@@ -873,14 +915,16 @@ function build(w, ctx, data) {
   });
 
   // The shelter: an open-front lean-to on the trail, facing camp.
+  // Its procedural body gives way to the shelter model on Medium and High (dressHeroes).
   const shelter = group(w, root, propAt("shelter"));
-  part(w, shelter, ["BoxGeometry", 4.6, 0.3, 2.8], WOOD_LIGHT, { y: 0.35 });
-  part(w, shelter, ["BoxGeometry", 4.6, 2, 0.16], WOOD, { y: 1.3, z: -1.35 });
-  part(w, shelter, ["BoxGeometry", 0.16, 2, 2.8], WOOD, { x: -2.3, y: 1.3 });
-  part(w, shelter, ["BoxGeometry", 0.16, 2, 2.8], WOOD, { x: 2.3, y: 1.3 });
-  [-2.2, 2.2].forEach((x) => part(w, shelter, ["CylinderGeometry", 0.09, 0.09, 2.5, 6], WOOD_DARK, { x, y: 1.25, z: 1.35 }));
-  part(w, shelter, ["BoxGeometry", 5.2, 0.14, 3.6], WOOD_DARK, { y: 2.55, z: 0.1, rx: -0.3 });
-  part(w, shelter, ["BoxGeometry", 0.4, 0.06, 0.3], CREAM, { x: 1.4, y: 0.53, z: 0.6 });
+  const shelterBody = group(w, shelter);
+  part(w, shelterBody, ["BoxGeometry", 4.6, 0.3, 2.8], WOOD_LIGHT, { y: 0.35 });
+  part(w, shelterBody, ["BoxGeometry", 4.6, 2, 0.16], WOOD, { y: 1.3, z: -1.35 });
+  part(w, shelterBody, ["BoxGeometry", 0.16, 2, 2.8], WOOD, { x: -2.3, y: 1.3 });
+  part(w, shelterBody, ["BoxGeometry", 0.16, 2, 2.8], WOOD, { x: 2.3, y: 1.3 });
+  [-2.2, 2.2].forEach((x) => part(w, shelterBody, ["CylinderGeometry", 0.09, 0.09, 2.5, 6], WOOD_DARK, { x, y: 1.25, z: 1.35 }));
+  part(w, shelterBody, ["BoxGeometry", 5.2, 0.14, 3.6], WOOD_DARK, { y: 2.55, z: 0.1, rx: -0.3 });
+  part(w, shelterBody, ["BoxGeometry", 0.4, 0.06, 0.3], CREAM, { x: 1.4, y: 0.53, z: 0.6 });
   w.occluders.push(shelter);
 
   // Trail Journal Tent: a canvas wall tent with a lantern by the door.
@@ -1066,8 +1110,9 @@ function build(w, ctx, data) {
   });
   shadow(w, junction, 0.3);
   // The shelter's name board and a lantern hung under the eave, lit after dark.
-  part(w, shelter, ["BoxGeometry", 1.6, 0.26, 0.05], 0x5a4636, { y: 2.22, z: 1.42 });
+  const nameBoard = part(w, shelter, ["BoxGeometry", 1.6, 0.26, 0.05], 0x5a4636, { y: 2.22, z: 1.42 });
   const eave = group(w, shelter, { x: -1.6, y: 1.95, z: 1.2 });
+  w.heroes.set("shelter", { group: shelter, body: shelterBody, hooks: { "lantern-hook": eave, "sign-hook": nameBoard } });
   part(w, eave, ["CylinderGeometry", 0.006, 0.006, 0.3, 3], 0x3a3a3a, { y: 0.15 });
   part(w, eave, ["BoxGeometry", 0.15, 0.2, 0.15], light.lanterns ? 0xffe28a : 0x8a8a7a, { basic: light.lanterns });
   if (light.lanterns) eave.add(glowSprite(w, 0xffc85a, 1.6, 0.55));
@@ -1129,6 +1174,7 @@ function build(w, ctx, data) {
   w.renderer.shadowMap.needsUpdate = true;
   placeSelection(w);
   w.near = undefined;
+  dressHeroes(w);
 }
 
 // A camp location's group, turned to face the fire ("in") or away from it ("out").

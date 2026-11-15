@@ -228,11 +228,25 @@ export function followCamera(target, yaw, pitch, colliders = [], { distance = CA
 // to enjoy camp. `fps` (measured) can lower a tier later. `visitors` caps the wildlife in camp at
 // once, `flora` the ground plants (ferns, shrubs, flowers, stones) and `ground` the ground texture size.
 // `shadows` is the sun's shadow map size for the still scenery (0: soft blob shadows only).
+// `models` swaps the hand-made hero models (CAMP_MODELS) in for their procedural stand-ins.
 export const QUALITY = Object.freeze({
-  low: { id: "low", pixelRatio: 1, antialias: false, trees: 26, fireflies: 12, smoke: 6, visitors: 1, flora: 60, ground: 512, shadows: 0 },
-  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 42, fireflies: 26, smoke: 10, visitors: 2, flora: 130, ground: 1024, shadows: 1024 },
-  high: { id: "high", pixelRatio: 2, antialias: true, trees: 60, fireflies: 42, smoke: 14, visitors: 3, flora: 200, ground: 1024, shadows: 2048 }
+  low: { id: "low", pixelRatio: 1, antialias: false, trees: 26, fireflies: 12, smoke: 6, visitors: 1, flora: 60, ground: 512, shadows: 0, models: false },
+  medium: { id: "medium", pixelRatio: 1.5, antialias: true, trees: 42, fireflies: 26, smoke: 10, visitors: 2, flora: 130, ground: 1024, shadows: 1024, models: true },
+  high: { id: "high", pixelRatio: 2, antialias: true, trees: 60, fireflies: 42, smoke: 14, visitors: 3, flora: 200, ground: 1024, shadows: 2048, models: true }
 });
+
+// Hero models: a few hand-made GLB models for key places, in assets/models/camp/. Everything else stays
+// procedural. Each model replaces a prop's procedural body on Medium and High once it has loaded; the
+// procedural one stays on Low, while loading and if the file fails. Models carry no textures: each
+// material is named after a camp palette colour (MODEL_MATERIALS) and drawn with the camp's own
+// materials, so time of day, weather and shadows light it like the rest of camp. `hooks` are empty
+// nodes where live parts attach (the shelter's lantern and name board). Budgets are test-enforced.
+export const MODEL_MATERIALS = Object.freeze(["wood", "wood-light", "wood-dark", "cream", "stone"]);
+export const MODEL_BUDGET = Object.freeze({ bytes: 60000, totalBytes: 300000, drawCalls: 3, triangles: 3000 });
+export const CAMP_MODELS = Object.freeze([
+  { id: "shelter", prop: "shelter", file: "shelter.glb", hooks: ["lantern-hook", "sign-hook"],
+    credit: "Original model made for this project (scripts/camp-models.mjs)", licence: "Same licence as this repository" }
+]);
 
 export function qualityTier({ dpr = 1, cores = 4, memory = 4, mobile = false, saveData = false } = {}) {
   if (saveData || cores <= 2 || memory <= 2) return QUALITY.low;

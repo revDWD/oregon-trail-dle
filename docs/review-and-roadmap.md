@@ -700,3 +700,12 @@ Most of the camp stays procedural; a few key points of interest may use a handcr
 - *Pipeline.* The vendored `GLTFLoader` (three r187, import paths patched, checksums in the vendor README) is lazy-loaded like three.js. `CAMP_MODELS` registers each model with its prop, hooks, credit and licence. Models use named palette materials (`MODEL_MATERIALS`) that the camp swaps for its own, so they light and fog like the rest of the scene and carry no textures.
 - *The shelter.* An original log lean-to (48 KB, 948 triangles, 3 draw calls) built by `scripts/camp-models.mjs`. It keeps the heights hikers sleep, read and perch at, and its hooks hold the camp's own lit lantern and name board. Loaded on Medium and High; Low and any load error keep the procedural shelter.
 - *Guard rails.* `MODEL_BUDGET` (60 KB, 3,000 triangles and 3 draw calls per model; 300 KB total) and `tests/at/camp-models.test.js` check the budget, materials, hooks, bounds and credit, that the generator reproduces the committed file, and that the vendored loader parses it.
+
+## 28. A camp on a hillside: terrain and composition
+
+The camp sat on a flat disc. This sprint reviewed Three.js Journey's Stylized Nature Scene, Procedural Terrain, Environment Maps and Realistic Render lessons (concepts only, no course code) and gave the camp real ground. Details are in `docs/camp-3d.md` §10. No SQL.
+
+- *Terrain.* `groundHeight` (pure, deterministic, tested) shapes a clearing on a wooded hillside: the camp rises gently toward the shelter, wooded banks climb past a ragged edge, the trail notches through north and south, the ground drops away below the overlook, and a pond lies in a hollow to the west. Pads keep everything usable level, and the fire stays at height 0, so every seat, pose and shelter height still holds.
+- *Forest.* Trees grow in groves on the banks, thinning to stragglers at the edge, with the trail, the vista and the pond kept open.
+- *Drawing.* One displaced, vertex-tinted terrain mesh (one draw call), slope-following trail ribbons and a gradient sky dome. Every prop, actor, camera and photo subject is grounded; cameras stay above the slope.
+- *Deferred.* Environment maps (the camp's Lambert materials don't use them; the sky dome stands in) and shader-side terrain (gameplay needs the heights on the CPU).

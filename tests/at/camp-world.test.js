@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   BENCH_SEATS, CAMP_LOCATIONS, CAMP_PROPS, CAMP_START, CAMERA, FIRE_BENCHES, PLAYER_RADIUS, QUALITY, TENT_SPOTS, WORLD_RADIUS,
   bulletinBoard, blocksView, campColliders, campLighting, followCamera, forestRing, joystickVector, keysVector,
+  POND_SURFACE, TERRAIN, TERRAIN_PADS, clearingEdge, groundHeight,
   locationView, lowerQuality, moveActor, nearestLocation, qualityTier, rosterCampfire, stepFromInput, turnToward
 } from "../../assets/js/at/engine/camp-world.js";
 
@@ -205,4 +206,73 @@ test("the roster campfire lists everyone's contribution and friendly totals", ()
   assert.equal(r.onTrailThisWeek, 1);
   assert.equal(r.activities, 7);
   assert.equal(rosterCampfire([], {}).weekStar, null);
+});
+
+test("the terrain: a level camp on a gentle rise, wooded banks beyond, the trail notch and the vista open", () => {
+  assert.equal(groundHeight(0, 0), 0, "the fire's pad is the zero");
+  assert.equal(groundHeight(12.3, -7.1), groundHeight(12.3, -7.1), "deterministic");
+  const spread = (p) => {
+    const hs = [];
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) for (const k of [0, 0.5, 1]) hs.push(groundHeight(p.x + Math.sin(a) * p.radius * k, p.z + Math.cos(a) * p.radius * k));
+    return Math.max(...hs) - Math.min(...hs);
+  };
+  for (const p of TERRAIN_PADS) {
+    const s = spread({ ...p, radius: p.flat ? p.radius : p.radius * 0.6 });
+    assert.ok(s < (p.flat ? 0.02 : 0.2), `pad at ${p.x.toFixed(1)},${p.z.toFixed(1)} is level enough (${s.toFixed(3)})`);
+  }
+  // Walkable everywhere inside camp: no step steeper than 1 in 5.
+  for (let x = -WORLD_RADIUS; x <= WORLD_RADIUS; x += 0.5) {
+    for (let z = -WORLD_RADIUS; z <= WORLD_RADIUS; z += 0.5) {
+      if (Math.hypot(x, z) > WORLD_RADIUS - 0.5) continue;
+      const slope = Math.hypot(groundHeight(x + 0.25, z) - groundHeight(x - 0.25, z), groundHeight(x, z + 0.25) - groundHeight(x, z - 0.25)) / 0.5;
+      assert.ok(slope < 0.2, `gentle at ${x},${z} (${slope.toFixed(3)})`);
+    }
+  }
+  assert.ok(groundHeight(CAMP_PROPS.find((p) => p.id === "shelter").x, CAMP_PROPS.find((p) => p.id === "shelter").z) > 0.3, "the shelter sits up on the rise");
+  // Banks climb past the clearing, except straight out over the vista, where the ground falls away.
+  const ring = (r, keep) => {
+    const hs = [];
+    for (let a = 0; a < Math.PI * 2; a += 0.05) if (keep(a)) hs.push(groundHeight(Math.sin(a) * r, Math.cos(a) * r));
+    return hs.reduce((s, h) => s + h, 0) / hs.length;
+  };
+  const off = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  const banks = ring(45, (a) => off(a, TERRAIN.vista.angle) > 0.8 && Math.abs(Math.sin(a)) > 0.3);
+  assert.ok(banks > 2, `the banks rise (${banks.toFixed(2)})`);
+  const vista = groundHeight(Math.sin(TERRAIN.vista.angle) * 40, Math.cos(TERRAIN.vista.angle) * 40);
+  assert.ok(vista < groundHeight(CAMP_PROPS.find((p) => p.id === "overlook-bench").x, CAMP_PROPS.find((p) => p.id === "overlook-bench").z) - 2, `the view falls away below the overlook (${vista.toFixed(2)})`);
+  // The trail's corridor through the woods stays a gentle walk.
+  for (const s of [-1, 1]) for (let z = WORLD_RADIUS; z < 60; z += 1) {
+    const step = Math.abs(groundHeight(0, s * (z + 1)) - groundHeight(0, s * z));
+    assert.ok(step < 0.6, `trail at z ${s * z} (${step.toFixed(2)})`);
+  }
+  for (let a = 0; a < Math.PI * 2; a += 0.1) assert.ok(clearingEdge(a) > WORLD_RADIUS, "the clearing's ragged edge never cuts into camp");
+  const pond = TERRAIN.pond;
+  assert.ok(POND_SURFACE > groundHeight(pond.x, pond.z), "the pond's bed is under water");
+  assert.ok(POND_SURFACE < groundHeight(pond.x + pond.radius + 6, pond.z), "the pond sits in a hollow");
+});
+
+test("the forest grows in groves on the banks, leaving the trail corridor, the vista and the pond clear", () => {
+  const trees = forestRing(120, 7, 0.6);
+  assert.equal(trees.length, 120, "rejection sampling still fills the count");
+  const pond = TERRAIN.pond;
+  for (const t of trees) {
+    assert.ok(Math.hypot(t.x, t.z) > clearingEdge(Math.atan2(t.x, t.z)), "outside the clearing");
+    assert.ok(Math.abs(t.x) > 2.4, `the trail corridor stays open (${t.x.toFixed(2)})`);
+    assert.ok(Math.hypot(t.x - pond.x, t.z - pond.z) > pond.radius + 0.5, "not in the pond");
+    for (const o of trees) if (o !== t) assert.ok(Math.hypot(o.x - t.x, o.z - t.z) >= 1.6, "trees keep their distance");
+  }
+  const inVista = trees.filter((t) => Math.abs(Math.atan2(Math.sin(Math.atan2(t.x, t.z) - TERRAIN.vista.angle), Math.cos(Math.atan2(t.x, t.z) - TERRAIN.vista.angle))) < 0.15).length;
+  assert.ok(inVista <= 3, `the overlook keeps its view (${inVista} trees in it)`);
+});
+
+test("camera views follow the ground and never dip under it", () => {
+  for (const loc of CAMP_LOCATIONS) {
+    const v = locationView(loc);
+    assert.ok(v.y > groundHeight(v.x, v.z) + 0.5, `${loc.id} view clears the ground`);
+    assert.ok(v.look.y > groundHeight(loc.x, loc.z), `${loc.id} looks at the place, not into the ground`);
+  }
+  const target = { x: 0, y: groundHeight(0, 8), z: 8 };
+  const low = followCamera(target, Math.PI, -0.5, [], { ground: groundHeight });
+  assert.ok(low.y >= groundHeight(low.x, low.z) + 0.5 - 1e-9, "the follow camera rides over the slope");
+  close(low.look.y, target.y + CAMERA.height);
 });

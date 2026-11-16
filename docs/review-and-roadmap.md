@@ -709,3 +709,12 @@ The camp sat on a flat disc. This sprint reviewed Three.js Journey's Stylized Na
 - *Forest.* Trees grow in groves on the banks, thinning to stragglers at the edge, with the trail, the vista and the pond kept open.
 - *Drawing.* One displaced, vertex-tinted terrain mesh (one draw call), slope-following trail ribbons and a gradient sky dome. Every prop, actor, camera and photo subject is grounded; cameras stay above the slope.
 - *Deferred.* Environment maps (the camp's Lambert materials don't use them; the sky dome stands in) and shader-side terrain (gameplay needs the heights on the CPU).
+## 29. Strategic review and the next ten enhancements
+
+A planning sprint: no code and no SQL. The full review is in `docs/strategic-review.md` (product review, Camp evaluation, realism, the wildlife photography roadmap, the Wildlife Trail concept, photography integration and the roadmap).
+
+- *Verdict.* The shared trail, Landmark Patches and the derived data model are the strongest systems. The weakest point is two wildlife systems where only the 2D outing counts, and a Camera Roll that is lost on refresh.
+- *Camp's role.* The emotional centre, not the source of progress. Logging stays the single source of truth; Camp never gates it or adds miles. No new tabs.
+- *The ten, in priority order.* (1) Camp photos count toward the field guide (one migration); (2) keep the Camera Roll on the device; (3) atmosphere pass (fog, light, wind, opt-in sound); (4) the camp remembers (trophies, pennants, arrival celebration); (5) split `camp-3d.js`; (6) living camp (path-following hikers, wildlife cues and groups); (7) Wildlife Trail v1, a seeded corridor saved as an outing, with the 2D outing as its fallback (small migration); (8) landmark arrival moments; (9) photo goals and species of the week; (10) seasonal camp and section showpieces.
+- *Limits.* No eighth History panel, no fourth collectible type, no speed or streak rewards, no miles from play, no larger open world.
+- *Open decision before item 1.* Whether a camp sighting is a full discovery that unlocks the species badge (recommended, for common and uncommon species) or a separate "seen at camp" mark.

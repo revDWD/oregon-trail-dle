@@ -274,6 +274,8 @@ The app must keep working when a migration hasn't been applied yet.
 
 ## 10. Future vision (see `docs/review-and-roadmap.md` §13–14)
 
+The prioritized roadmap (ten enhancements, with the reasoning, the Wildlife Trail concept and the plan for crediting camp photos) is in `docs/strategic-review.md`; roadmap §29 summarizes it. Check it before starting a Camp or wildlife sprint.
+
 - Landmark arrival moments: a one-time celebration card or postcard with the photo.
 - Auto-dispatch when a rare species is photographed (the journal already records these).
 - A weekly "species of the week".

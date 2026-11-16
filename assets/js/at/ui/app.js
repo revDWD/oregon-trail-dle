@@ -32,7 +32,7 @@ const PAGE = 50;
 
 const state = {
   user: null, rules: DEFAULT_RULES, activities: [], hasMore: false, editingId: null, today: localDateString(),
-  expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], fieldGuide: [], fieldGuideUnavailable: false, selectedHiker: null, lastHiker: null, flash: null,
+  expeditionUnavailable: false, expeditionError: false, deviceSummary: null, hikers: [], marks: [], fieldGuide: [], fieldGuideUnavailable: false, selectedHiker: null, hikerChosen: false, lastHiker: null, flash: null,
   dispatches: [], dispatchesUnavailable: false, isOrganizer: false, dispatchEditing: null
 };
 let game = null; // the running expedition, stopped whenever the page re-renders
@@ -220,7 +220,7 @@ async function afterActivityChange() {
 
 const actions = {
   edit(id) { state.editingId = id; render(); },
-  selectHiker(id) { if (id) state.selectedHiker = id; },
+  selectHiker(id) { if (id) { state.selectedHiker = id; state.hikerChosen = true; } },
   rememberHiker(id) { if (id) { state.lastHiker = id; saveHiker(id); } },
   async createActivity(value) {
     try {
@@ -289,8 +289,41 @@ const actions = {
       const note = saved && saved.discoveriesSaved === false ? " The field guide fills in once the latest database update is applied." : "";
       return `Saved to ${who}'s field guide and the photo board: ${summary.score} photo points.${unlocked.length ? ` 🎉 ${unlocked.join(" ")}` : ""}${note}`;
     } catch (e) { return friendly(e); }
+  },
+  // A wildlife photo taken in camp counts as a discovery for the chosen hiker. Returns a message for
+  // the photo's review card; never re-renders (the camp stays as it is).
+  async recordCampSighting({ species, name } = {}) {
+    const hiker = campSpotter();
+    if (!hiker) return "Choose your hiker (tap them in camp, or in History) so wildlife photos count toward their field guide.";
+    const who = hiker.name;
+    const key = [hiker.id, species, localDateString()].join(":");
+    if (campSightingsSent.has(key)) return `Already in ${who}'s field guide today.`;
+    try {
+      const before = earnedSnapshot();
+      const status = await layer.expedition.campSighting({ hikerId: hiker.id, species });
+      if (status === "limit") return `${who}'s field guide has taken in today's camp finds; this one stays in the Camera Roll.`;
+      campSightingsSent.add(key);
+      if (status === "seen") return `Already in ${who}'s field guide today.`;
+      actions.rememberHiker(hiker.id);
+      await loadExpedition(false);
+      if (status !== "new") return `Added to ${who}'s field guide.`;
+      const fresh = before.size ? newlyEarned(before) : { lines: [], patchLines: [] };
+      const text = `New in ${who}'s field guide: ${name || "a new species"}! 🎉 ${fresh.lines.join(" ")}`.trim();
+      announce(text);
+      return text;
+    } catch (e) {
+      return isMissingFunction(e) ? "Camp photos will count once the latest database update is applied." : friendly(e);
+    }
   }
 };
+
+// Camp photos are credited only to a hiker somebody picked (here or when logging), never to the
+// roster's first name by default.
+const campSightingsSent = new Set();
+function campSpotter() {
+  const chosen = state.hikerChosen || (state.lastHiker && state.selectedHiker === state.lastHiker);
+  return (chosen && state.hikers.find((x) => x.id === state.selectedHiker)) || null;
+}
 
 function onAuth(event, user) {
   if (!user || user.id === state.user?.id) return;

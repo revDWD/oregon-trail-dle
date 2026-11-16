@@ -40,5 +40,14 @@ select pg_temp.ok((select photos from public.at_field_guide() where hiker_id = :
 reset role;
 select pg_temp.ok((select count(*) from public.at_wildlife_observations where is_first) = 3, 'each is a first discovery for its hiker');
 
+-- Camp sightings arrive on top of saved discoveries.
+\ir 20261110000000_at_camp_sightings.sql
+\ir 20261110000000_at_camp_sightings.sql
+select pg_temp.ok((select count(*) from public.at_wildlife_observations where source = 'outing') = 3, 'saved discoveries become outing observations');
+set role authenticated;
+select pg_temp.ok(public.at_camp_sighting(:'david', 'deer') = 'added' and public.at_camp_sighting(:'david', 'fox') = 'new', 'camp photos join the guide');
+select pg_temp.ok((select sum(camp_sightings) from public.at_field_guide() where hiker_id = :'david') = 2, 'and the field guide counts them');
+reset role;
+
 \o
 \echo WILDLIFE UPGRADE TESTS PASSED

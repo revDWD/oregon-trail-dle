@@ -214,7 +214,7 @@ test("expedition roster: hikers and marks map from the aggregate RPCs (no joinin
     }
   });
   const data = createDataLayer(client);
-  assert.deepEqual(Object.keys(data.expedition).sort(), ["fieldGuide", "hikers", "marks"], "no join or invite calls");
+  assert.deepEqual(Object.keys(data.expedition).sort(), ["campSighting", "fieldGuide", "hikers", "marks"], "no join or invite calls");
   const [david] = await data.expedition.hikers("2026-11-02");
   assert.deepEqual(client.calls.at(-1).args, { p_week_start: "2026-11-02" });
   assert.deepEqual(david, { id: "h1", name: "David", sortOrder: 1, active: true, totalMiles: 12.5, weekMiles: 2, activityCount: 3,
@@ -250,14 +250,14 @@ test("field guide: outings save each species with its photo count; the guide map
   const saved = await data.expeditions.record({ theme: "wildlife", score: 10, hits: 3, shots: 3, hikerId: "h1", species: ["turkey", "Bad id", "deer"], caught: { turkey: 1, deer: 2, "Bad id": 1 }, habitat: "blue-ridge" });
   assert.deepEqual(client.calls[0].payload, { theme: "wildlife", score: 10, hits: 3, shots: 3, hiker_id: "h1", species: ["deer", "turkey"], habitat: "blue-ridge", photos: [2, 1] });
   assert.equal(saved.discoveriesSaved, true);
-  assert.deepEqual(await data.expedition.fieldGuide(), [{ hikerId: "h1", species: "deer", habitat: "blue-ridge", firstSeen: "2026-11-02", lastSeen: "2026-11-09", sightings: 3, photos: 5, thisExpedition: false }]);
+  assert.deepEqual(await data.expedition.fieldGuide(), [{ hikerId: "h1", species: "deer", habitat: "blue-ridge", firstSeen: "2026-11-02", lastSeen: "2026-11-09", sightings: 3, photos: 5, thisExpedition: false, campSightings: 0 }]);
   assert.equal(client.calls.at(-1).name, "at_field_guide");
 });
 
 test("field guide: older at_field_guide rows count one photo per sighting, all this expedition", async () => {
   const { sightingFromRow } = await import("../../assets/js/at/data/mappers.js");
   assert.deepEqual(sightingFromRow({ hiker_id: "h1", species: "deer", habitat: "lakes", first_seen: "2026-11-02", sightings: "2" }),
-    { hikerId: "h1", species: "deer", habitat: "lakes", firstSeen: "2026-11-02", lastSeen: "2026-11-02", sightings: 2, photos: 2, thisExpedition: true });
+    { hikerId: "h1", species: "deer", habitat: "lakes", firstSeen: "2026-11-02", lastSeen: "2026-11-02", sightings: 2, photos: 2, thisExpedition: true, campSightings: 0 });
 });
 
 test("field guide: species without a photo count are one photo each", async () => {
@@ -301,4 +301,20 @@ test("isMissingFunction: only a missing RPC means the migration isn't applied", 
   assert.equal(isMissingFunction(toDataError({ code: "42501", message: "permission denied" })), false);
   assert.equal(isMissingFunction(toDataError({ message: "Failed to fetch" })), false);
   assert.equal(isMissingFunction(null), false);
+});
+
+test("camp sightings: one RPC with the hiker and species; the server decides what counts", async () => {
+  const client = createFakeClient({ session: signedIn, respond: () => ({ data: "new", error: null }) });
+  const data = createDataLayer(client);
+  assert.equal(await data.expedition.campSighting({ hikerId: "h1", species: "blue-jay" }), "new");
+  assert.equal(client.calls.length, 1);
+  assert.equal(client.calls[0].name, "at_camp_sighting");
+  assert.deepEqual(client.calls[0].args, { p_hiker: "h1", p_species: "blue-jay" });
+  for (const bad of [{ species: "deer" }, { hikerId: "h1" }, { hikerId: "h1", species: "Bad id" }]) {
+    await assert.rejects(() => data.expedition.campSighting(bad), (e) => e instanceof DataError && e.code === "validation");
+  }
+  assert.equal(client.calls.length, 1, "nothing invalid reaches the database");
+  const out = createFakeClient({ session: null });
+  await assert.rejects(() => createDataLayer(out).expedition.campSighting({ hikerId: "h1", species: "deer" }), (e) => e.code === "auth");
+  assert.equal(out.calls.length, 0);
 });

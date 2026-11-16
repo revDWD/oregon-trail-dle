@@ -66,29 +66,37 @@ Visiting a place (E, a tap, or its Camp Locations button) calls `focusCamp3d(id)
 - `photoCaption` turns that into "Close-up: …", "Nicely framed: …" or "Snapshot: …", with a scenery caption when nothing is in frame.
 - **Feedback.** A shot always answers: a white flash, the viewfinder corners snap in and the shutter button presses (all skipped with reduced motion), a short shutter click (WebAudio noise, no file; "Shutter sound" in Controls and Settings turns it off for the session), then a **review card** (a polaroid with the picture, its caption, "Taken at 8:23 AM" and "Wildlife identified: …" when an animal is the subject). Focus moves to **Continue**, which returns to the viewfinder and shows a toast ("📸 Saved to the Camp Camera Roll (3)"); **Return to camp** puts the camera away. Escape is Continue. The shutter does nothing while the card is open.
 - The picture is rendered and read back in the same task (the drawing buffer isn't preserved), scaled to 960 px wide, JPEG at 0.8 (about 60–120 KB as a data URL).
-- The **Camp Camera Roll** (under Around Camp Now) keeps the 12 newest, with caption, time and a 🐾 tag for wildlife. They live in memory for the session; nothing is uploaded or stored (`localStorage` holds only the hiker).
+- The **Camp Camera Roll** (under Around Camp Now) keeps the 12 newest, with caption, time and a 🐾 tag for wildlife. They are kept on the device in IndexedDB (`ui/photo-store.js`, database `at-camp`), so they survive a reload; nothing is uploaded, and "Clear camera roll" removes them. Without IndexedDB the roll simply lasts for the session.
 
-**Where camera roll photos could live later**
+**Where camera roll photos can live**
 
 | Option | Fit | Notes |
 | --- | --- | --- |
-| In memory (today) | ✓ | Survives re-renders and tab switches, not a reload. No quota, no privacy questions. |
+| In memory | Fallback | Survives re-renders and tab switches, not a reload. No quota, no privacy questions. |
 | `sessionStorage` | ✗ | Strings only, about 5 MB per origin: a dozen data URLs is 1–1.5 MB, plus base64 overhead, and it shares the quota with everything else. Would also break the "`localStorage` holds only the hiker" spirit. |
-| IndexedDB (Blobs) | Best next step | Store `canvas.toBlob` JPEGs (no base64), keep the last 24–50, show "Photos stay on this device". Survives reloads; per device. Add a tiny `data/photo-store.js` and a test that nothing else touches it. |
+| IndexedDB | ✓ Today | `ui/photo-store.js` keeps the 12 newest (data URLs for now; Blobs and a larger roll are an easy follow-up). Survives reloads; per device, shared by everyone using that device. |
 | Supabase Storage | Later | Needed only for sharing (photo of the week, dispatch pictures). Needs a bucket with RLS per hiker, size limits, an owner-only delete, moderation, and a migration plus RLS tests (AGENTS.md §6). |
 | Download | Small win | An `<a download>` on each roll photo saves it to the device with no storage at all. |
 - "Aim camera" (Around Camp Now) is the text route to the same photo. `vantagePoints` lists free spots 1–5 m beyond the animal's comfort zone on the player's side (the current spot first if it already works). The renderer takes the first with a clear line of sight, aims, zooms so the animal fills about a fifth of the frame, and follows it until the player aims by hand.
 
 ## 4. Photo recognition: crediting camp photos
 
-Camp photos give **no** miles, points or discoveries today. Wildlife Spotting is the only way into the field guide, and its outings are checked by the database (daily cap, species per outing ≤ photos, trigger-written observations). `framePhoto` already returns `speciesId`, so crediting is a small client change. The hard part is trust. Options, simplest first:
+Camp photos give no miles or points. Until `20261110000000_at_camp_sightings.sql`, Wildlife Spotting was the only way into the field guide; its outings are checked by the database (daily cap, species per outing ≤ photos, trigger-written observations). `framePhoto` already returns `speciesId`, so crediting is a small client change. The hard part is trust. Options, simplest first:
 
-1. **Keepsake only (today).** No credit, no risk.
+1. **Keepsake only.** No credit, no risk.
 2. **Client-side recognition, server-side limits.** Record a camp sighting through a new SECURITY DEFINER RPC (say `at_camp_sighting(hiker, species)`) that writes an observation with `source = 'camp'`. It would allow only species in `CAMP_VISITORS`, at most a few per hiker per day, and never mark `is_first` for a rare tier. Cheap, but a determined user could call it directly. That is acceptable for a friends' game, *if* it only adds sightings and never badges.
 3. **Signed encounters.** The server decides which visitor appears (an RPC returns a signed encounter id with a species and expiry). The client can only claim an encounter it was given, once. Honest and still simple, but camp then needs the network to spawn wildlife.
 4. **Image recognition** (a model checking the picture). Not worth it: the scene is synthetic, so the renderer already knows exactly what is in frame, and uploading images would break the "nothing stored" rule.
 
-**Recommendation:** if wanted, choose option 2 for common and uncommon visitors only, shown in the field guide as "seen at camp" (not a first photo, and no badge). Any of these needs a new idempotent migration plus RLS tests, per AGENTS.md §6.
+**Decision (owner, `docs/strategic-review.md`):** option 2 for common and uncommon visitors, as a full discovery: a camp photo counts as the hiker's first photo of the species and unlocks its badge.
+
+**Built** (`20261110000000_at_camp_sightings.sql`):
+
+- `at_camp_sighting(p_hiker, p_species)` writes an observation with `source = 'camp'` and returns `new`, `added`, `seen` (already counted today) or `limit`.
+- Limits: only the eight common and uncommon camp visitors (`CAMP_SIGHTING_SPECIES`; a test keeps the SQL list equal), one row per hiker, species and day, 5 a day per hiker, 40 a day per device. Rare visitors stay outing-only and the review card says so.
+- The client (`creditSighting` → `actions.recordCampSighting` → `expedition.campSighting`) credits only a hiker the user chose, sends each hiker and species once per page, and answers in the review card and status line. If the migration is missing, the photo is still kept and a quiet note shows.
+- Camp rows have no habitat, so they never complete a trail section; the field guide shows "Camp" under where it was spotted and counts camp days (`camp_sightings`).
+- A determined user could still call the RPC directly. The limits keep that to eight ordinary species; anything rare still needs an outing.
 
 ## 5. Performance
 

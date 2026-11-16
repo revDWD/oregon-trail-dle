@@ -418,5 +418,44 @@ set role authenticated;
 select t.ok((select count(*) from public.at_field_guide() where hiker_id = :'david') = 2, 'and stays in the shared field guide');
 reset role;
 
+-- Camp sightings (20261110): a wildlife photo at camp is a full discovery, through one checked RPC.
+select t.ok(not has_function_privilege('anon', 'public.at_camp_sighting(uuid, text)', 'execute')
+        and has_function_privilege('authenticated', 'public.at_camp_sighting(uuid, text)', 'execute'), 'only signed-in devices can record camp sightings');
+select t.ok((select count(*) from public.at_wildlife_observations where source <> 'outing') = 0, 'every earlier observation is an outing');
+set role authenticated;
+select t.ok(public.at_camp_sighting(:'kevin', 'fox') = 'new', 'a species new to the hiker is a new discovery');
+select t.ok(public.at_camp_sighting(:'kevin', 'deer') = 'added', 'a species already in the guide is added');
+select t.ok(public.at_camp_sighting(:'kevin', 'deer') = 'seen' and public.at_camp_sighting(:'kevin', 'fox') = 'seen', 'a second photo the same day changes nothing');
+select t.fails($$select public.at_camp_sighting('$$ || :'kevin' || $$', 'bear')$$, '23514', 'rare camp visitors are refused');
+select t.fails($$select public.at_camp_sighting('$$ || :'kevin' || $$', 'black-bear')$$, '23514', 'species that never visit camp are refused');
+select t.fails($$select public.at_camp_sighting('$$ || :'kevin' || $$', null)$$, '23514', 'a species is required');
+select t.fails($$select public.at_camp_sighting('99999999-0000-4000-8000-000000000009', 'deer')$$, '23503', 'the hiker must be on the roster');
+select t.fails($$select public.at_camp_sighting(null, 'deer')$$, '23503', 'a hiker is required');
+select t.fails($$insert into public.at_wildlife_observations (hiker_id, expedition_id, species, source) select '$$ || :'kevin' || $$', id, 'fox', 'camp' from public.at_expeditions$$, '42501', 'devices still cannot write observations directly');
+select t.ok(public.at_camp_sighting(:'kevin', 'turkey') = 'added' and public.at_camp_sighting(:'kevin', 'chipmunk') = 'new'
+        and public.at_camp_sighting(:'kevin', 'chickadee') = 'new', 'up to five camp sightings a day');
+select t.ok(public.at_camp_sighting(:'kevin', 'blue-jay') = 'limit', 'then the day''s limit is reached');
+select t.ok(public.at_camp_sighting(:'david', 'chipmunk') = 'new', 'another hiker has their own limit and discoveries');
+select t.ok((select camp_sightings = 1 and sightings = 1 and photos = 1 and habitat = '' and this_expedition
+               from public.at_field_guide() where hiker_id = :'kevin' and species = 'fox'), 'the field guide shows the camp sighting');
+select t.ok((select sum(camp_sightings) = 1 and sum(sightings) = 3 from public.at_field_guide() where hiker_id = :'kevin' and species = 'deer'), 'next to the outings');
+select t.ok((select count(*) from public.at_field_guide() where hiker_id = :'david' and species = 'fox') = 0
+        and (select count(*) from public.at_field_guide() where hiker_id = :'kevin' and species = 'blue-jay') = 0, 'refused and other hikers'' sightings are not recorded');
+reset role;
+select t.ok((select count(*) from public.at_wildlife_observations where source = 'camp' and hiker_id = :'kevin') = 5
+        and (select count(*) from public.at_wildlife_observations where source = 'camp' and (run_id is not null or habitat is not null or photos <> 1)) = 0, 'camp rows have no outing, habitat or extra photos');
+select t.ok((select is_first from public.at_wildlife_observations where hiker_id = :'kevin' and species = 'fox')
+        and (select count(*) from public.at_wildlife_observations where hiker_id = :'kevin' and species = 'deer' and is_first) = 1, 'first discoveries are still marked once');
+select t.fails($$insert into public.at_wildlife_observations (hiker_id, expedition_id, species, source) select '$$ || :'kevin' || $$', id, 'fox', 'camp' from public.at_expeditions$$, '23505', 'one camp sighting per hiker, species and day');
+select t.fails($$insert into public.at_wildlife_observations (hiker_id, expedition_id, species, source) select '$$ || :'kevin' || $$', id, 'fox', 'picnic' from public.at_expeditions$$, '23514', 'only known sources are stored');
+-- One device cannot fill everyone's guide: 40 camp sightings a day.
+select set_config('request.jwt.claim.sub', 'cccccccc-0000-4000-8000-000000000003', false) \gset
+select t.ok((select count(*) from (select public.at_camp_sighting(h.id, s.species) as r
+                                     from public.at_hikers h
+                                    cross join unnest(array['gray-squirrel','chipmunk','cottontail','chickadee','blue-jay','turkey','fox','deer']) as s(species)
+                                    where h.active and h.name not in ('David', 'Kevin')) x where r in ('new', 'added')) = 40, 'a device records at most 40 camp sightings a day');
+select t.ok((select count(*) from public.at_wildlife_observations where source = 'camp' and user_id = 'cccccccc-0000-4000-8000-000000000003') = 40, 'and no more are stored');
+select set_config('request.jwt.claim.sub', 'bbbbbbbb-0000-4000-8000-000000000002', false) \gset
+
 \o
 \echo RLS TESTS PASSED

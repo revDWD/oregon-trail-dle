@@ -709,3 +709,22 @@ The camp sat on a flat disc. This sprint reviewed Three.js Journey's Stylized Na
 - *Forest.* Trees grow in groves on the banks, thinning to stragglers at the edge, with the trail, the vista and the pond kept open.
 - *Drawing.* One displaced, vertex-tinted terrain mesh (one draw call), slope-following trail ribbons and a gradient sky dome. Every prop, actor, camera and photo subject is grounded; cameras stay above the slope.
 - *Deferred.* Environment maps (the camp's Lambert materials don't use them; the sky dome stands in) and shader-side terrain (gameplay needs the heights on the CPU).
+## 29. Strategic review and the next ten enhancements
+
+A planning sprint: no code and no SQL. The full review is in `docs/strategic-review.md` (product review, Camp evaluation, realism, the wildlife photography roadmap, the Wildlife Trail concept, photography integration and the roadmap).
+
+- *Verdict.* The shared trail, Landmark Patches and the derived data model are the strongest systems. The weakest point is two wildlife systems where only the 2D outing counts, and a Camera Roll that is lost on refresh.
+- *Camp's role.* The emotional centre, not the source of progress. Logging stays the single source of truth; Camp never gates it or adds miles. No new tabs.
+- *The ten, in priority order.* (1) Camp photos count toward the field guide (one migration); (2) keep the Camera Roll on the device; (3) atmosphere pass (fog, light, wind, opt-in sound); (4) the camp remembers (trophies, pennants, arrival celebration); (5) split `camp-3d.js`; (6) living camp (path-following hikers, wildlife cues and groups); (7) Wildlife Trail v1, a seeded corridor saved as an outing, with the 2D outing as its fallback (small migration); (8) landmark arrival moments; (9) photo goals and species of the week; (10) seasonal camp and section showpieces.
+- *Limits.* No eighth History panel, no fourth collectible type, no speed or streak rewards, no miles from play, no larger open world.
+- *Decided for item 1.* A photograph of wildlife at camp is a full discovery: it goes in the hiker's field guide and unlocks the species badge, for common and uncommon species. There is no separate "seen at camp" mark.
+
+## 30. Camp photos count, and the Camera Roll is kept
+
+Items 1 and 2 of the strategic review.
+
+- *Camp photos count.* A camp photo of a common or uncommon visitor is a full discovery for the chosen hiker: it enters their field guide and unlocks the species badge. Migration `20261110000000_at_camp_sightings.sql` adds `source` to `at_wildlife_observations`, the `at_camp_sighting` RPC (eight species, one row per hiker, species and day, 5 a day per hiker, 40 per device) and `camp_sightings` on `at_field_guide()`. Rare visitors stay outing-only. No miles or points.
+- *Honest feedback.* The review card adds a field guide line (new, counted, already counted today, limit reached, choose a hiker, or waiting for the database update). Only an explicitly chosen hiker is credited.
+- *The Camera Roll is kept.* `ui/photo-store.js` stores the 12 newest photos in IndexedDB on the device, never uploaded, with a Clear button. `localStorage` still holds only the hiker.
+- *Not done.* A download button and per-hiker rolls (the roll is per device).
+- *Checked.* Unit tests, the SQL suites on an embedded PostgreSQL, and the photo flow in a headless browser (photo of a fox credited; roll survives reload; Clear empties it).

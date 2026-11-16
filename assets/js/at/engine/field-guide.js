@@ -53,6 +53,8 @@ export function buildFieldGuide(sightings = [], { hikerId = null, theme = THEMES
       sightings: mine.reduce((sum, r) => sum + (Number(r.sightings) || 0), 0),
       photos: mine.reduce((sum, r) => sum + (Number(r.photos ?? r.sightings) || 0), 0),
       habitats: [...new Set(mine.map((r) => r.habitat).filter((id) => theme.habitats[id]))],
+      // Days it was photographed in camp (those rows have no habitat, so they never count toward a section).
+      campSightings: mine.reduce((sum, r) => sum + (Number(r.campSightings) || 0), 0),
       // Hikers who have photographed it, first finder first.
       finders,
       firstBy: finders[0] || null,
@@ -144,7 +146,7 @@ export function speciesBadges(sightings = [], { hikerId = null, theme = THEMES.w
       id: `species-${e.spec.id}`, kind: "species", spec: e.spec, group: e.spec.group, rarity: e.spec.rarity || "common",
       bonus: isLegend(e.spec), title: speciesTitle(e.spec.name),
       description: isLegend(e.spec) ? "A Trail Legend, caught on camera. Nobody will believe it."
-        : `Photograph ${withArticle(e.spec.name)} in Wildlife Spotting.`,
+        : `Photograph ${withArticle(e.spec.name)} on a photo outing or in camp.`,
       // Locked badges keep the name secret but say where to look (the best place only, to stay compact).
       hint: e.found ? null : lookHint(e.spec, theme),
       earned: e.found, earnedOn: e.found ? e.firstSeen : null,

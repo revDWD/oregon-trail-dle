@@ -147,8 +147,8 @@ test("every regular species has a badge; legends appear only once photographed",
   assert.equal(new Set(fresh.map((b) => b.id)).size, fresh.length);
   assert.deepEqual(fresh.map((b) => b.id), regular.map((sp) => `species-${sp.id}`));
   assert.equal(fresh.find((b) => b.id === "species-deer").title, "White-tailed Deer");
-  assert.equal(fresh.find((b) => b.id === "species-deer").description, "Photograph a white-tailed deer in Wildlife Spotting.");
-  assert.equal(fresh.find((b) => b.id === "species-elk").description, "Photograph an elk in Wildlife Spotting.");
+  assert.equal(fresh.find((b) => b.id === "species-deer").description, "Photograph a white-tailed deer on a photo outing or in camp.");
+  assert.equal(fresh.find((b) => b.id === "species-elk").description, "Photograph an elk on a photo outing or in camp.");
   assert.ok(fresh.every((b) => b.spec && Array.isArray(b.spec.parts) && b.spec.parts.length), "every species badge has the sprite as art");
 });
 
@@ -218,4 +218,22 @@ test("species badges earned the same day are grouped into one story line", () =>
   const days = speciesBadgeDays(speciesBadges(rows, { hikerId: "h1" }));
   assert.deepEqual(days.map((d) => [d.date, d.titles]), [["2026-11-03", ["Black Bear", "Elk"]], ["2026-11-09", ["Moose"]]]);
   assert.deepEqual(days[0].ids, ["species-bear", "species-elk"], "ids line up with titles");
+});
+
+test("camp sightings join the field guide: they discover the species but complete no trail section", async () => {
+  const fg = await import("../../assets/js/at/engine/field-guide.js");
+  const rows = [
+    { hikerId: "h1", species: "chickadee", habitat: "", firstSeen: "2026-11-03", lastSeen: "2026-11-04", sightings: 2, photos: 2, thisExpedition: true, campSightings: 2 },
+    { hikerId: "h1", species: "chickadee", habitat: "blue-ridge", firstSeen: "2026-11-05", lastSeen: "2026-11-05", sightings: 1, photos: 3, thisExpedition: true, campSightings: 0 }
+  ];
+  const guide = fg.buildFieldGuide(rows, { hikerId: "h1" });
+  const entry = guide.entries.find((e) => e.spec.id === "chickadee");
+  assert.equal(entry.found, true);
+  assert.equal(entry.campSightings, 2);
+  assert.equal(entry.photos, 5);
+  assert.equal(entry.firstSeen, "2026-11-03", "the camp photo was the first");
+  const campOnly = fg.buildFieldGuide(rows.slice(0, 1), { hikerId: "h1" });
+  assert.equal(campOnly.entries.find((e) => e.spec.id === "chickadee").found, true, "a camp photo alone is a full discovery");
+  const badge = fg.speciesBadges(rows.slice(0, 1), { hikerId: "h1" }).find((b) => b.id === "species-chickadee");
+  assert.equal(badge.earned, true, "and unlocks the species badge");
 });

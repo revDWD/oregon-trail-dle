@@ -291,3 +291,13 @@ test("Aim camera finds a free spot outside the animal's comfort zone, preferring
   const skittish = { species: { behavior: { wary: 1.6 } } };
   assert.ok(waryDistance(skittish) > waryDistance({ species: {} }));
 });
+
+test("camp photos credit only common and uncommon visitors; rare ones and legends are for photo outings", async () => {
+  const { CAMP_SIGHTING_SPECIES, CAMP_SIGHTING_TIERS, campSightingCounts, CAMP_VISITORS } = await import("../../assets/js/at/engine/camp-life.js");
+  assert.deepEqual(CAMP_SIGHTING_TIERS, ["common", "uncommon"]);
+  assert.ok(CAMP_SIGHTING_SPECIES.length >= 4);
+  assert.equal(new Set(CAMP_SIGHTING_SPECIES).size, CAMP_SIGHTING_SPECIES.length);
+  for (const v of CAMP_VISITORS) assert.equal(campSightingCounts(v.id), CAMP_SIGHTING_TIERS.includes(v.tier), v.id);
+  assert.equal(campSightingCounts("bigfoot"), false);
+  assert.equal(campSightingCounts(""), false);
+});

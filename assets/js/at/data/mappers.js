@@ -38,7 +38,8 @@ export function isMissingFunction(error) {
 
 // One at_field_guide() row: a hiker's saved observations of one species in one habitat, during this
 // expedition or an earlier one. photos/lastSeen/thisExpedition arrive with 20261109; before that a
-// sighting is one photo and everything belongs to the current expedition.
+// sighting is one photo and everything belongs to the current expedition. campSightings (20261110)
+// counts the days it was photographed in camp; those rows have no habitat.
 export function sightingFromRow(row) {
   const sightings = Number(row.sightings) || 0;
   return {
@@ -49,7 +50,8 @@ export function sightingFromRow(row) {
     lastSeen: row.last_seen || row.first_seen || null,
     sightings,
     photos: row.photos === undefined || row.photos === null ? sightings : Number(row.photos) || 0,
-    thisExpedition: row.this_expedition !== false
+    thisExpedition: row.this_expedition !== false,
+    campSightings: Number(row.camp_sightings) || 0
   };
 }
 

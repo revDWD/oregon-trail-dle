@@ -453,7 +453,7 @@ function hikerPanel(s, hk) {
     h("details", { class: "timeline-wrap species-badges" },
       h("summary", {}, `Species Badges (${all.species.earned} of ${all.species.total})`),
       collectionStats(wildlifeCollection(s.fieldGuide, { hikerId: hk.id })),
-      h("p", { class: "hint" }, "Photograph a species for the first time on a photo outing at Camp to earn its badge. Finds are saved for good, across expeditions."),
+      h("p", { class: "hint" }, "Photograph a species for the first time at Camp, on a photo outing or with the camp camera, to earn its badge. Finds are saved for good, across expeditions."),
       h("ul", { class: "badge-grid species-grid" }, species.map(speciesBadge))),
     h("h4", {}, "Milestones Reached"),
     ms.landmarks.length || ms.groupMilestones.length
@@ -656,12 +656,13 @@ function campPlaceBody(s, id, { choose, outing }) {
     return [
       h("p", { class: "outing-call" }, h("button", { type: "button", class: "btn primary camp-outing-btn", onClick: outing }, "Go on a photo outing"),
         h("span", { class: "hint" }, " Choose a hiker and photograph the wildlife in this section. Finds are saved to their field guide.")),
+      h("p", { class: "hint" }, "Wildlife you photograph here in camp counts too: a first photo goes into your hiker's field guide and earns its species badge."),
       h("h4", {}, "Camp Photos"),
       photos.length
         ? h("ul", { class: "polaroids" }, photos.map((p) => h("li", {}, h("figure", { class: "polaroid" },
           p.src ? h("img", { src: p.src, alt: "" }) : h("span", { class: "polaroid-blank", "aria-hidden": "true" }, "📷"),
           h("figcaption", {}, p.caption)))))
-        : h("p", { class: "hint" }, "No camp photos yet this visit. Use the camera to photograph a visitor or a friend; your photos are pinned here."),
+        : h("p", { class: "hint" }, "No camp photos yet. Use the camera to photograph a visitor or a friend; your photos are pinned here."),
       h("h4", {}, "Wildlife Discoveries"),
       !c ? h("p", { class: "hint" }, "The field guide fills in once wildlife records are reachable.")
         : !c.found && !c.legendsFound ? h("p", { class: "hint" }, "No species photographed yet. Go on a photo outing to take the first photo.")
@@ -839,6 +840,7 @@ function campExplorer(s, ctx, { scene, caption, captions, choose, a }) {
   const mount = () => {
     const going = mountCamp3d(holder, ctx, {
       settings,
+      onSighting: (x) => a.recordCampSighting(x),
       life,
       data: {
         fraction: (Number(s.progress.percent) || 0) / 100,
@@ -993,7 +995,9 @@ function guideEntry(s, theme, e, filtered) {
   const name = (id) => (s.hikers || []).find((x) => x.id === id)?.name;
   const by = filtered ? null : name(e.firstBy);
   const finders = e.finders.map(name).filter(Boolean);
-  const places = e.habitats.map((id) => theme.habitats[id].label).join(", ");
+  const places = [...e.habitats.map((id) => theme.habitats[id].label), e.campSightings ? "Camp" : null].filter(Boolean).join(", ");
+  const outings = Math.max(0, e.sightings - e.campSightings);
+  const where = [outings ? `on ${plural(outings, "outing")}` : null, e.campSightings ? `${plural(e.campSightings, "day")} in camp` : null].filter(Boolean).join(" and ");
   return h("li", { class: `guide-entry found${sp.rarity === "rare" || sp.rarity === "legend" ? ` ${sp.rarity}` : ""}` },
     h("details", {},
       h("summary", {}, speciesArt(sp, true), h("strong", {}, titleCase(sp.name)),
@@ -1002,7 +1006,7 @@ function guideEntry(s, theme, e, filtered) {
       h("dl", { class: "guide-facts" },
         h("dt", {}, "First photographed"), h("dd", {}, `${e.firstSeen ? day(e.firstSeen) : "Unknown"}${by ? ` by ${by}` : ""}`),
         e.lastSeen && e.lastSeen !== e.firstSeen ? [h("dt", {}, "Last photographed"), h("dd", {}, day(e.lastSeen))] : null,
-        h("dt", {}, "Photos"), h("dd", {}, e.sightings ? `${plural(e.photos, "photo")} on ${plural(e.sightings, "outing")}` : String(e.photos)),
+        h("dt", {}, "Photos"), h("dd", {}, where ? `${plural(e.photos, "photo")} ${where}` : String(e.photos)),
         !filtered && finders.length > 1 ? [h("dt", {}, "Found by"), h("dd", {}, `${finders.length} hikers: ${finders.join(", ")}`)] : null,
         h("dt", {}, "Range"), h("dd", {}, sp.range),
         SEASON_TEXT[sp.season] ? [h("dt", {}, "Season"), h("dd", {}, SEASON_TEXT[sp.season])] : null,

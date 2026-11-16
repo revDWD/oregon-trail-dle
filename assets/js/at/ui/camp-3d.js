@@ -14,20 +14,33 @@
 // background refresh never rebuilds the GPU state or moves the hiker.
 import { h, fill } from "./dom.js";
 import { SCENES, SHIRTS, HATS } from "./camp-scene.js";
+import { clearPhotos, loadPhotos, savePhotos } from "./photo-store.js";
 import {
   BENCH_SEATS, CAMP_LOCATIONS, CAMP_MODELS, CAMP_PROPS, CAMP_START, FIRE_BENCHES, LANTERN_SPOTS, MOVE_KEYS, PLAYER_RADIUS, QUALITY, RUN_SPEED,
   POND_SURFACE, TENT_SPOTS, TERRAIN, WALK_SPEED, WORLD_RADIUS, blocksView, campColliders, campLighting, clampPitch, followCamera, forestRing, groundHeight, headingOf,
   joystickVector, keysVector, locationView, lowerQuality, moveActor, nearestLocation, qualityTier, seededRandom, stepFromInput, turnToward
 } from "../engine/camp-world.js";
 import {
-  CAMP_PATHS, FALLEN_LOG, HIKER_GESTURES, NPC_RADIUS, OVERLOOK, activityLabel, allActivitySpots, campFlora, createCampLife, createVisitors,
+  CAMP_PATHS, FALLEN_LOG, campSightingCounts, HIKER_GESTURES, NPC_RADIUS, OVERLOOK, activityLabel, allActivitySpots, campFlora, createCampLife, createVisitors,
   describeNpc, describeVisitor, floraFor, framePhoto, photoCaption, projectPoint, stepCampLife, stepVisitors, vantagePoints, waryDistance
 } from "../engine/camp-life.js";
 
-// Session-only preferences and the camera roll (localStorage holds only the last-chosen hiker; camp
-// photos live in memory until the page closes and are never uploaded).
+// Session-only preferences, and the camera roll: kept on this device (IndexedDB, see photo-store.js)
+// and never uploaded. localStorage still holds only the last-chosen hiker.
 const session = { webgl: null, degraded: false, optOut: false, quality: "auto", sensitivity: 1, sound: true, photos: [] };
 const MAX_PHOTOS = 12;
+let rollLoaded = null;
+// Read the saved roll once per page; photos taken before it arrives are kept.
+function loadRoll() {
+  rollLoaded = rollLoaded || loadPhotos(MAX_PHOTOS).then((saved) => {
+    const have = new Set(session.photos.map((p) => p.id));
+    session.photos.push(...saved.filter((p) => !have.has(p.id)));
+    session.photos.sort((a, b) => b.at - a.at);
+    if (session.photos.length > MAX_PHOTOS) session.photos.length = MAX_PHOTOS;
+    if (world) renderLife(world);
+  });
+  return rollLoaded;
+}
 const PHOTO_WIDTH = 960; // camera roll pictures are scaled down to this width to keep memory small
 const EYE = 1.55; // the photo camera's height above the ground
 const eyeAt = (p) => groundHeight(p.x, p.z) + EYE;
@@ -118,6 +131,7 @@ const chosenTier = () => (session.quality === "auto" ? autoTier() : QUALITY[sess
  * @param opts.focus              the location whose close-up is showing (its sheet is open), or null
  * @param opts.focusInset()       { right, bottom }: px of the camp covered by that sheet, so the place stays in view
  * @param opts.onLeave()          Escape (or the photo camera) asked to leave the close-up
+ * @param opts.onSighting({ species, name })  wildlife was photographed; resolves to a line for the review card
  */
 export function mountCamp3d(holder, ctx, opts = {}) {
   const token = ++mountToken;
@@ -159,7 +173,7 @@ export function focusCamp3d(id) {
   if (world) setFocus(world, id);
 }
 
-// This session's camp photos, newest first (they live in memory only).
+// The camp photos, newest first (kept on this device, never uploaded).
 export function campPhotos() {
   return session.photos.slice();
 }
@@ -180,6 +194,7 @@ function attach(THREE, token, holder, ctx, opts, tries = 0) {
     holder.classList.add("is-3d");
     if (opts.settings) fill(opts.settings, settingsPanel(world));
     if (opts.life) fill(opts.life, lifePanel(world));
+    loadRoll();
     resize(world);
     setFocus(world, opts.focus || null, { instant: true });
     start(world);
@@ -423,13 +438,14 @@ function createWorld(THREE) {
   ui.reviewCaption = h("p", { class: "camp3d-review-caption" });
   ui.reviewMeta = h("p", { class: "camp3d-review-meta" });
   ui.reviewWild = h("p", { class: "camp3d-review-wild" });
+  ui.reviewGuide = h("p", { class: "camp3d-review-guide", hidden: true });
   ui.reviewContinue = h("button", { type: "button", class: "btn small primary", onClick: () => closeReview(w) }, "Continue");
   ui.review = h("div", { class: "camp3d-review", role: "dialog", "aria-modal": "false", "aria-labelledby": "camp3d-review-title", hidden: true,
     onKeydown: (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeReview(w); } } },
   h("div", { class: "camp3d-review-card" },
     h("p", { class: "camp3d-review-title", id: "camp3d-review-title" }, "Photo Saved"),
     h("div", { class: "camp3d-review-frame" }, ui.reviewImg),
-    ui.reviewCaption, ui.reviewMeta, ui.reviewWild,
+    ui.reviewCaption, ui.reviewMeta, ui.reviewWild, ui.reviewGuide,
     h("div", { class: "camp3d-review-actions" }, ui.reviewContinue,
       h("button", { type: "button", class: "btn small", onClick: () => exitCamera(w, { focus: true }) }, "Return to camp"))));
   ui.finder = h("div", { class: "camp3d-finder", hidden: true, "aria-hidden": "true" },
@@ -1605,11 +1621,17 @@ function lifePanel(w) {
   const list = h("ul", { class: "camp3d-life-list", "aria-labelledby": "camp-life-title" });
   const photos = h("div", { class: "camp3d-photos" });
   const count = h("span", { class: "camp3d-photo-count" });
-  w.lifeUi = { list, photos, count, sig: null, photoSig: null };
+  const clear = h("button", { type: "button", class: "btn small", hidden: true, onClick: () => {
+    session.photos.length = 0;
+    clearPhotos();
+    renderLife(w);
+    w.ui.status.textContent = "The Camp Camera Roll is empty.";
+  } }, "Clear camera roll");
+  w.lifeUi = { list, photos, count, clear, sig: null, photoSig: null };
   const roll = h("details", { class: "timeline-wrap camp3d-roll", open: Boolean(w.rollOpen), onToggle: (e) => { w.rollOpen = e.target.open; } },
     h("summary", {}, "Camp Camera Roll", count),
-    h("p", { class: "hint" }, `Your last ${MAX_PHOTOS} camp photos. They stay on this device and disappear when you close the page.`),
-    photos);
+    h("p", { class: "hint" }, `Your last ${MAX_PHOTOS} camp photos. They are kept on this device only and never uploaded.`),
+    photos, clear);
   renderLife(w);
   return h("div", { class: "camp3d-life" }, h("h3", { id: "camp-life-title" }, "Around Camp Now"), list, roll);
 }
@@ -1638,6 +1660,7 @@ function renderLife(w) {
   if (photoSig !== ui.photoSig) {
     ui.photoSig = photoSig;
     ui.count.textContent = session.photos.length ? `(${session.photos.length})` : "";
+    ui.clear.hidden = !session.photos.length;
     fill(ui.photos, session.photos.length
       ? session.photos.map((p) => h("figure", { class: "camp3d-photo" },
         p.src ? h("img", { src: p.src, alt: p.caption, width: "320", height: "180", loading: "lazy" }) : null,
@@ -1815,6 +1838,7 @@ function takePhoto(w) {
   const photo = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, src, caption, at: Date.now(), species: wild ? wild.name : null };
   session.photos.unshift(photo);
   if (session.photos.length > MAX_PHOTOS) session.photos.length = MAX_PHOTOS;
+  savePhotos(session.photos, MAX_PHOTOS);
   shutterSound();
   if (!reducedMotion()) {
     restartClass(w.ui.flash, "is-on");
@@ -1823,6 +1847,21 @@ function takePhoto(w) {
   }
   renderLife(w);
   openReview(w, photo);
+  if (wild) creditSighting(w, photo, wild);
+}
+
+// A wildlife photo counts toward the hiker's field guide (common and uncommon visitors; rare species
+// are found on photo outings). The app answers with a line for the review card.
+function creditSighting(w, photo, wild) {
+  const show = (text) => {
+    if (!text || w.reviewPhoto !== photo.id) return;
+    w.ui.reviewGuide.textContent = `📖 ${text}`;
+    w.ui.reviewGuide.hidden = false;
+    w.ui.status.textContent = text;
+  };
+  if (!campSightingCounts(wild.id)) { show("A rare visitor! Rare species join the field guide on a photo outing."); return; }
+  if (!w.opts || !w.opts.onSighting) return;
+  Promise.resolve(w.opts.onSighting({ species: wild.id, name: wild.name })).then(show, () => {});
 }
 
 // Render the frame and read it back in the same task (the drawing buffer isn't preserved), scaled down
@@ -1847,6 +1886,9 @@ function restartClass(el, name) {
 function openReview(w, photo) {
   const ui = w.ui;
   w.reviewing = true;
+  w.reviewPhoto = photo.id;
+  ui.reviewGuide.hidden = true;
+  ui.reviewGuide.textContent = "";
   ui.reviewImg.hidden = !photo.src;
   if (photo.src) { ui.reviewImg.src = photo.src; ui.reviewImg.alt = photo.caption; }
   ui.reviewCaption.textContent = photo.caption;

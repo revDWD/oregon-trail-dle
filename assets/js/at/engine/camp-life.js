@@ -375,6 +375,13 @@ export const CAMP_VISITORS = Object.freeze([
   { id: "moose", tier: "very-rare", model: "moose", place: "treeline", size: 2.2, times: [1, 0.6, 1, 0.2], scenes: ["alpine", "north-woods"] }
 ].map((v) => Object.freeze(v)));
 
+// A camp photo of these visitors is a full discovery: it joins the hiker's field guide and unlocks the
+// species badge. Rarer visitors stay a keepsake and are found on photo outings. The same list is checked
+// by at_camp_sighting() in SQL (test-enforced).
+export const CAMP_SIGHTING_TIERS = Object.freeze(["common", "uncommon"]);
+export const CAMP_SIGHTING_SPECIES = Object.freeze(CAMP_VISITORS.filter((v) => CAMP_SIGHTING_TIERS.includes(v.tier)).map((v) => v.id));
+export const campSightingCounts = (id) => CAMP_SIGHTING_SPECIES.includes(id);
+
 const speciesById = () => new Map(themeFor("wildlife").species.map((s) => [s.id, s]));
 
 // Where birds land: post tops, the bear line, the shelter, the board, benches and logs.

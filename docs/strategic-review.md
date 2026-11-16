@@ -142,8 +142,8 @@ Rules that hold throughout: no miles from photos, daily caps, no speed rewards, 
 
 | # | Enhancement | Pillars | Depends on | SQL? |
 | --- | --- | --- | --- | --- |
-| 1 | **Camp photos count**: camp sightings credited to the field guide (common and uncommon) | Wildlife, photography, collection | none | Yes, one migration |
-| 2 | **Keep the Camera Roll**: on-device storage per hiker, download button | Photography | none | No |
+| 1 | ✓ Done. **Camp photos count**: camp sightings credited to the field guide (common and uncommon) | Wildlife, photography, collection | none | Yes, one migration |
+| 2 | ✓ Done (one roll per device; no download button yet). **Keep the Camera Roll**: on-device storage per hiker, download button | Photography | none | No |
 | 3 | **Atmosphere pass**: fog, light, wind, pond mist, opt-in ambient sound | Immersion | none | No |
 | 4 | **The camp remembers**: landmark trophies, state pennants, latest patch, arrival celebration at the fire | Camp, AT identity, collection | none | No |
 | 5 | **Split `camp-3d.js`** into scene, actors, camera and photo modules with shared helpers | Enabler | none | No |

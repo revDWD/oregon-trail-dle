@@ -352,6 +352,7 @@ main:has(.camp-page) { max-width: 76rem; }
 .camp3d-review-caption { margin: .45rem 0 .15rem; font-weight: 600; line-height: 1.3; }
 .camp3d-review-meta, .camp3d-review-wild { margin: 0; font-size: .85rem; color: var(--muted); }
 .camp3d-review-wild.is-wild { color: var(--forest-dark); font-weight: 700; }
+.camp3d-review-guide { margin: 0; font-size: .9rem; font-weight: 700; color: var(--forest-dark); }
 .camp3d-review-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .55rem; }
 .camp3d-review-actions .btn { flex: 1 1 8rem; }
 @keyframes camp3d-print { from { transform: translateY(18px) rotate(-3deg); opacity: 0; } to { transform: rotate(-1deg); opacity: 1; } }

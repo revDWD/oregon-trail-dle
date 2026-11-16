@@ -54,6 +54,22 @@ test("the wildlife discoveries migration is pasteable, private and never duplica
   assert.match(code, /security_invoker/, "the discoveries view never bypasses RLS");
 });
 
+test("the camp sightings migration is pasteable, private and limits what a camp photo can credit", async () => {
+  const sql = await readFile(`${root}supabase/migrations/20261110000000_at_camp_sightings.sql`, "utf8");
+  const code = sql.replace(/--.*$/gm, "");
+  assert.doesNotMatch(code, /\$\$|\$[A-Za-z_]+\$/, "no dollar quoting");
+  assert.doesNotMatch(code, /grant[^;]*\bto\b[^;]*\banon\b/i);
+  assert.match(code, /revoke all on function public\.at_camp_sighting\(uuid, text\) from public, anon/i);
+  assert.match(code, /grant execute on function public\.at_camp_sighting\(uuid, text\) to authenticated/i);
+  assert.doesNotMatch(code, /grant[^;]*on (table )?public\.at_wildlife_observations/i, "observations are still written only by the server");
+  assert.match(code, /create unique index if not exists at_wildlife_observations_camp_daily[\s\S]*?where source = 'camp'/, "one camp sighting per hiker, species and day");
+  const { CAMP_SIGHTING_SPECIES } = await import("../../assets/js/at/engine/camp-life.js");
+  const list = code.match(/p_species not in \(([^)]*)\)/i) || code.match(/p_species\s*<>\s*all\s*\(array\[([^\]]*)\]/i) || code.match(/array\[([^\]]*)\]/i);
+  assert.ok(list, "the allowed species are listed in the function");
+  assert.deepEqual([...list[1].matchAll(/'([a-z0-9-]+)'/g)].map((m) => m[1]).sort(), [...CAMP_SIGHTING_SPECIES].sort(),
+    "the database allows exactly the camp visitors that count (common and uncommon)");
+});
+
 test("RLS and privilege tests pass against a real PostgreSQL (skipped when PostgreSQL is not installed)", (t) => {
   const result = spawnSync("bash", [`${root}supabase/tests/run-rls-tests.sh`], { encoding: "utf8" });
   if (result.status === 3) {

@@ -208,6 +208,14 @@ export function createDataLayer(client, { newId = () => globalThis.crypto.random
     async fieldGuide() {
       await requireUser();
       return (await run(client.rpc("at_field_guide"))).map(sightingFromRow);
+    },
+    // A wildlife photo taken in camp, for a hiker. The database decides whether it counts and answers
+    // "new" (first ever), "added", "seen" (already today) or "limit" (enough for today).
+    async campSighting({ hikerId, species } = {}) {
+      await requireUser();
+      if (!hikerId) throw new DataError("Choose a hiker first.", "validation");
+      if (!/^[a-z][a-z0-9-]{1,30}$/.test(String(species || ""))) throw new DataError("That species can't be recorded.", "validation");
+      return String((await run(client.rpc("at_camp_sighting", { p_hiker: hikerId, p_species: species }))) || "");
     }
   };
 

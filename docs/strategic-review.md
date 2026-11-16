@@ -160,4 +160,4 @@ Rules that hold throughout: no miles from photos, daily caps, no speed rewards, 
 ## Notes
 - Every item keeps the principles: logging is the source of truth, encouraging not punitive, text parity, no build step, no new tabs, fail-soft.
 - Only items 1 and 7 touch the database. Each needs a new idempotent migration, the RLS suite, and SQL given to the owner as plain text.
-- Open decision for the owner before item 1: whether camp sightings should be full discoveries (recommended, for common and uncommon species) or a separate "seen at camp" mark that does not unlock the species badge.
+- Decided by the owner for item 1: a photograph of wildlife at camp is a full discovery. It goes in the hiker's field guide and unlocks the species badge, for common and uncommon species. There is no separate "seen at camp" mark.

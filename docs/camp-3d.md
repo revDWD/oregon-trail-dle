@@ -88,7 +88,7 @@ Camp photos give **no** miles, points or discoveries today. Wildlife Spotting is
 3. **Signed encounters.** The server decides which visitor appears (an RPC returns a signed encounter id with a species and expiry). The client can only claim an encounter it was given, once. Honest and still simple, but camp then needs the network to spawn wildlife.
 4. **Image recognition** (a model checking the picture). Not worth it: the scene is synthetic, so the renderer already knows exactly what is in frame, and uploading images would break the "nothing stored" rule.
 
-**Recommendation:** if wanted, choose option 2 for common and uncommon visitors only, shown in the field guide as "seen at camp" (not a first photo, and no badge). Any of these needs a new idempotent migration plus RLS tests, per AGENTS.md §6.
+**Decision (owner, `docs/strategic-review.md`):** option 2 for common and uncommon visitors, as a full discovery: a camp photo counts as the hiker's first photo of the species and unlocks its badge. Not built yet. Any of these needs a new idempotent migration plus RLS tests, per AGENTS.md §6.
 
 ## 5. Performance
 
